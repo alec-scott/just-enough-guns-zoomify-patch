@@ -104,7 +104,13 @@ public abstract class VehicleCameraMixin implements VehicleCameraHandler.Vehicle
 
     @Inject(method = "calculateFov", at = @At("RETURN"), cancellable = true)
     private void jeg$adjustVehicleFov(float partialTick, CallbackInfoReturnable<Float> cir) {
-        cir.setReturnValue(VehicleCameraHandler.adjustFov(cir.getReturnValueF()));
+        float fov = cir.getReturnValueF();
+        float adjusted = VehicleCameraHandler.adjustFov(fov);
+        // Only override when JEG's vehicle zoom actually changes the FOV. Calling setReturnValue
+        // cancels the method and skips other mods' return-value modifiers (e.g. Zoomify).
+        if (adjusted != fov) {
+            cir.setReturnValue(adjusted);
+        }
     }
 
     @ModifyVariable(method = "getMaxZoom", at = @At("HEAD"), argsOnly = true)
