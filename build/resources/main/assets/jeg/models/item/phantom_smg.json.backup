@@ -1,7 +1,0 @@
-{
-  "parent": "jeg:item/custom_smg",
-  "textures": {
-    "gun": "jeg:item/custom_smg",
-    "particle": "jeg:item/custom_smg"
-  }
-}

@@ -1,8 +1,0 @@
-[rendering]
-	crosshair = "jeg:dynamic"
-	legacyBulletTrailEnabled = true
-	showTimersHud = true
-	showHitmarker = true
-	dynamicCrosshairDotThreshold = 0.8
-	showAmmoHud = true
-	dynamicCrosshairDotMode = "at_min_spread"
