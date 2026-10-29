@@ -1,7 +1,9 @@
 name: Release
 on:
   push:
+    branches: ['yftm/zoomify-fov-fix-26.1']
     tags: ['*']
+  workflow_dispatch:
 permissions:
   contents: write
 jobs:
@@ -9,11 +11,40 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      # Branch pushes release once per version: bump yftm_build in gradle.properties to publish a new one.
+      - name: Resolve release tag
+        id: tag
+        run: |
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            tag="${GITHUB_REF_NAME}"
+          else
+            mod_version=$(grep '^mod_version=' gradle.properties | cut -d= -f2 | tr -d '\r')
+            yftm_build=$(grep '^yftm_build=' gradle.properties | cut -d= -f2 | tr -d '\r')
+            tag="v${mod_version}-yftm.${yftm_build}"
+            if git rev-parse -q --verify "refs/tags/${tag}" >/dev/null; then
+              echo "Release ${tag} already exists; bump yftm_build to publish a new one."
+              echo "skip=true" >> "$GITHUB_OUTPUT"
+            fi
+          fi
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
       - uses: actions/setup-java@v4
+        if: steps.tag.outputs.skip != 'true'
         with:
           distribution: temurin
           java-version: 25
-      - run: chmod +x gradlew && ./gradlew build
+      - name: Build
+        if: steps.tag.outputs.skip != 'true'
+        run: |
+          chmod +x gradlew && ./gradlew build
+          rm -f build/libs/*-sources.jar
       - uses: softprops/action-gh-release@v2
+        if: steps.tag.outputs.skip != 'true'
         with:
+          tag_name: ${{ steps.tag.outputs.tag }}
+          name: ${{ steps.tag.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          generate_release_notes: true
+          make_latest: true
           files: build/libs/*.jar
