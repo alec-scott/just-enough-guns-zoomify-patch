@@ -354,6 +354,7 @@ public final class FabricClientBootstrap {
         });
 
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
+            Config.setSyncedMagazineFeedEnabled(null);
             BulletTrailRenderer.clear();
             MUZZLE_FLASHES.clear();
             VEHICLE_FIRE_SOUNDS.clear();

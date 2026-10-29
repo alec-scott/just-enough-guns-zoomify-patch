@@ -448,6 +448,11 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
             minZ = Math.min(minZ, box.z() - box.halfDepth());
             maxZ = Math.max(maxZ, box.z() + box.halfDepth());
         }
+        if (this.usesVehiclePoseTransform()) {
+            // Aircraft hitboxes cover the fuselage but not the skids or landing gear, which reach down to the
+            // entity origin; without this the vehicle settles until the fuselage box touches the ground.
+            minY = Math.min(minY, 0.0D);
+        }
         return new BlockCollisionBounds(
                 (minX + maxX) * 0.5D,
                 minY,
@@ -1340,8 +1345,8 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         }
         this.needsSync = true;
 
+        // Both hurt paths play the strike sound once health actually drops, so armor-absorbed bumps stay silent.
         DamageSource source = this.vehicleStrikeDamageSource();
-        this.playVehicleStrikeSound();
         if (vehicleType == VehicleType.HELICOPTER && this.lastTickSpeed >= HELICOPTER_FATAL_IMPACT_SPEED) {
             this.hurtVehicleIgnoringArmor(source, Math.max(damageAmount, this.maxVehicleHealth() + 1.0F));
             return;

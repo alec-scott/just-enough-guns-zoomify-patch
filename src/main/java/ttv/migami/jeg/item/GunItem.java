@@ -398,6 +398,31 @@ public class GunItem extends Item {
         return usesLoadedAmmo() ? getAmmo(stack) : 0;
     }
 
+    /** Trims loaded ammo to the current capacity (e.g. after removing a larger magazine) and returns the rest as loose ammo. */
+    public void returnAmmoOverCapacity(ItemStack stack, Player player) {
+        if (!usesLoadedAmmo() || !stack.has(ModDataComponents.GUN_AMMO.get())) {
+            return;
+        }
+        int ammo = stack.getOrDefault(ModDataComponents.GUN_AMMO.get(), 0);
+        int excess = ammo - modifiedMagazineSize(stack);
+        if (excess <= 0) {
+            return;
+        }
+        stack.set(ModDataComponents.GUN_AMMO.get(), ammo - excess);
+        Identifier ammoId = getCompatibleAmmoId();
+        if (player.level().isClientSide() || ammoId == null) {
+            return;
+        }
+        BuiltInRegistries.ITEM.getOptional(ammoId).ifPresent(item -> {
+            int remaining = excess;
+            while (remaining > 0) {
+                int count = Math.min(remaining, item.getDefaultMaxStackSize());
+                player.getInventory().placeItemBackInInventory(new ItemStack(item, count));
+                remaining -= count;
+            }
+        });
+    }
+
     public MagazineInventorySummary getMagazineInventorySummary(Player player) {
         MagazineInventoryScan scan = scanCompatibleMagazines(player);
         return new MagazineInventorySummary(scan.loadedMagazineCount(), scan.emptyMagazineCount());
@@ -512,6 +537,11 @@ public class GunItem extends Item {
 
             MagazineItem baseMagazine = getCompatibleMagazineItemUnchecked();
             return baseMagazine != null ? baseMagazine.getCapacity() : baseCapacity;
+        }
+
+        MagazineItem attachedMagazine = getAttachedMagazineItem(stack);
+        if (attachedMagazine != null) {
+            return attachedMagazine.getCapacity();
         }
 
         double multiplier = GunAttachments.modifiers(stack).magazineCapacityMultiplier();
@@ -2053,6 +2083,38 @@ public class GunItem extends Item {
             return ModItems.MACHINE_GUN_MAGAZINE.get();
         }
         return null;
+    }
+
+    /**
+     * Base magazine of the family this gun takes in its magazine attachment slot when magazine-fed reloads are
+     * disabled. The attached magazine only sets capacity; reloads still draw loose ammo from the inventory.
+     */
+    @Nullable
+    public MagazineItem getAttachableMagazineItem() {
+        if (!usesLoadedAmmo()) {
+            return null;
+        }
+        if ("phantom_smg".equals(stats.id().getPath())) {
+            return ModItems.SMG_MAGAZINE.get();
+        }
+        return getCompatibleMagazineItemUnchecked();
+    }
+
+    public boolean acceptsMagazineAttachment(ItemStack magazineStack) {
+        return magazineStack.getItem() instanceof MagazineItem magazine && isAttachableMagazine(magazine);
+    }
+
+    private boolean isAttachableMagazine(MagazineItem magazine) {
+        MagazineItem baseMagazine = getAttachableMagazineItem();
+        return baseMagazine != null && magazine.type().isVariantOf(baseMagazine.type());
+    }
+
+    @Nullable
+    private MagazineItem getAttachedMagazineItem(ItemStack gunStack) {
+        Item item = GunAttachments.id(gunStack, AttachmentType.MAGAZINE)
+                .flatMap(BuiltInRegistries.ITEM::getOptional)
+                .orElse(null);
+        return item instanceof MagazineItem magazine && isAttachableMagazine(magazine) ? magazine : null;
     }
 
     @Nullable

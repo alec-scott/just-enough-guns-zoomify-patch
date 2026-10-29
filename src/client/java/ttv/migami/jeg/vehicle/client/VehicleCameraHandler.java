@@ -52,6 +52,13 @@ public final class VehicleCameraHandler {
         }
     }
 
+    public static boolean isFreeLookActive(VehicleEntity vehicle) {
+        return VehicleClientState.isRidingVehicle()
+                && VehicleClientState.vehicleId() == vehicle.getId()
+                && VehicleClientState.freeLookDown()
+                && vehicle.vehicleData().defaults().allowFreeCam();
+    }
+
     public static boolean shouldHideHand() {
         LocalPlayer player = Minecraft.getInstance().player;
         if (player == null || !(player.getVehicle() instanceof VehicleEntity vehicle)) {

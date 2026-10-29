@@ -81,6 +81,23 @@ public abstract class VehicleCameraMixin implements VehicleCameraHandler.Vehicle
                 return;
             }
             Vec3 cameraPosition = vehicle.detachedPoseCameraPositionFor(player, partialTick);
+            if (VehicleCameraHandler.isFreeLookActive(vehicle)) {
+                // Orbit the vehicle at the normal chase-camera height and distance, following the player's view.
+                Vec3 vehiclePosition = vehicle.getPosition(partialTick);
+                Vec3 offset = cameraPosition.subtract(vehiclePosition);
+                Vec3 pivot = vehiclePosition.add(0.0D, offset.y, 0.0D);
+                float yaw = player.getViewYRot(partialTick);
+                float pitch = player.getViewXRot(partialTick);
+                if (thirdPersonReverse) {
+                    yaw += 180.0F;
+                    pitch = -pitch;
+                }
+                Vec3 look = Vec3.directionFromRotation(pitch, yaw);
+                cameraPosition = pivot.subtract(look.scale(offset.horizontalDistance()));
+                this.jeg$setCameraRotation(new Vec3(yaw, pitch, 0.0D));
+                this.setPosition(cameraPosition.x, cameraPosition.y, cameraPosition.z);
+                return;
+            }
             Vec3 cameraRotation = vehicle.aircraftCameraRotationFor(partialTick);
             float yaw = (float) cameraRotation.x;
             float pitch = (float) cameraRotation.y;

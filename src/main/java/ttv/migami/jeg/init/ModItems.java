@@ -650,7 +650,7 @@ public final class ModItems {
             default -> 512;
         };
         int durability = Math.max(1, (int) Math.round(baseDurability * 3.75D));
-        return baseProperties(id).stacksTo(1).durability(durability).repairable(REPAIR_KIT.get());
+        return baseProperties(id).stacksTo(1).durability(durability).repairable(REPAIR_KIT.get()).enchantable(10);
     }
 
     private static Item.Properties baseProperties(Identifier id) {

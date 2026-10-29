@@ -376,6 +376,13 @@ public final class VehicleHudOverlay {
         int x = (guiGraphics.guiWidth() - size) / 2;
         int y = (guiGraphics.guiHeight() - size) / 2;
         Identifier texture = reticleTexture(vehicle);
+        if (texture == CROSSHAIR_THIRD_CAMERA) {
+            // 64x64 icon that fills its canvas, unlike the 512x512 full-screen reticles; draw it at crosshair size.
+            float centerX = guiGraphics.guiWidth() / 2.0F;
+            float centerY = guiGraphics.guiHeight() / 2.0F;
+            preciseBlit(guiGraphics, texture, centerX - 12.0F, centerY - 12.0F, 24, 24, 0.0F, 0.0F, 64.0F, 64.0F, 64.0F, 64.0F);
+            return;
+        }
         preciseBlit(guiGraphics, texture, x, y, size, size, 0.0F, 0.0F, 512.0F, 512.0F, 512.0F, 512.0F);
     }
 

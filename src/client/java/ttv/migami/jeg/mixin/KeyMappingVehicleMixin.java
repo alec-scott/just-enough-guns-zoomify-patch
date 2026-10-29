@@ -15,10 +15,26 @@ public class KeyMappingVehicleMixin {
     @Shadow
     private int clickCount;
 
+    // Zoomify binds zoom to C by default, the same key as vehicle free look, and its scroll zoom
+    // fights the vehicle camera, so its zoom keys are ignored while riding a vehicle.
+    private static final String ZOOMIFY_KEY_PREFIX = "zoomify.key.zoom";
+
+    @Inject(method = "isDown()Z", at = @At("HEAD"), cancellable = true)
+    private void jeg$suppressZoomifyInVehicle(CallbackInfoReturnable<Boolean> callback) {
+        if (this.jeg$isZoomifyKeyInVehicle()) {
+            callback.setReturnValue(false);
+        }
+    }
+
     @Inject(method = "consumeClick()Z", at = @At("HEAD"), cancellable = true)
     private void jeg$consumeVehicleHotbarClick(CallbackInfoReturnable<Boolean> callback) {
         Player player = Minecraft.getInstance().player;
         if (player == null || !(player.getVehicle() instanceof VehicleEntity vehicle)) {
+            return;
+        }
+        if (this.jeg$isZoomifyKeyInVehicle()) {
+            this.clickCount = 0;
+            callback.setReturnValue(false);
             return;
         }
         for (KeyMapping hotbarKey : Minecraft.getInstance().options.keyHotbarSlots) {
@@ -30,5 +46,12 @@ public class KeyMappingVehicleMixin {
                 return;
             }
         }
+    }
+
+    private boolean jeg$isZoomifyKeyInVehicle() {
+        Player player = Minecraft.getInstance().player;
+        return player != null
+                && player.getVehicle() instanceof VehicleEntity
+                && ((KeyMapping) (Object) this).getName().startsWith(ZOOMIFY_KEY_PREFIX);
     }
 }

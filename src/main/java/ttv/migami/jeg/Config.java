@@ -566,7 +566,15 @@ public final class Config {
     }
 
     public static boolean magazineFeedEnabled() {
-        return MAGAZINE_FEED_ENABLED.get();
+        Boolean synced = syncedMagazineFeedEnabled;
+        return synced != null ? synced : MAGAZINE_FEED_ENABLED.get();
+    }
+
+    // Set on the client from the connected server's config so shared code (attachment slots, reload HUD) agrees with the server.
+    private static volatile Boolean syncedMagazineFeedEnabled;
+
+    public static void setSyncedMagazineFeedEnabled(Boolean enabled) {
+        syncedMagazineFeedEnabled = enabled;
     }
 
     public static boolean gunnerTerrainPlacementEnabled() {

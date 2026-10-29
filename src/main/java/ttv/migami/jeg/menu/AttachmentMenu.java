@@ -30,6 +30,7 @@ public final class AttachmentMenu extends AbstractContainerMenu {
     private static final int PLAYER_INVENTORY_END = PLAYER_INVENTORY_START + 27;
     private static final int HOTBAR_END = PLAYER_INVENTORY_END + 9;
 
+    private final Player player;
     private final ItemStack weapon;
     private final int selectedSlot;
     private final Container attachments = new SimpleContainer(ATTACHMENT_SLOT_COUNT) {
@@ -43,6 +44,7 @@ public final class AttachmentMenu extends AbstractContainerMenu {
 
     public AttachmentMenu(int containerId, Inventory playerInventory) {
         super(ModMenuTypes.ATTACHMENT_MENU.get(), containerId);
+        this.player = playerInventory.player;
         this.weapon = playerInventory.getSelectedItem();
         this.selectedSlot = playerInventory.getSelectedSlot();
         this.loadAttachments();
@@ -136,6 +138,9 @@ public final class AttachmentMenu extends AbstractContainerMenu {
             } else {
                 GunAttachments.set(this.weapon, type, stack);
             }
+        }
+        if (this.weapon.getItem() instanceof GunItem gun) {
+            gun.returnAmmoOverCapacity(this.weapon, this.player);
         }
     }
 

@@ -224,6 +224,15 @@ public final class GunAttachmentVisibility {
         if (Config.magazineFeedEnabled() && isMagazineBone(boneName)) {
             return magazineItemVisibility(stack, boneName);
         }
+        if (isMagazineBone(boneName)) {
+            // Loose-ammo mode: a gun magazine fitted in the attachment slot picks the matching magazine model.
+            MagazineVisualType attachedType = GunAttachments.id(stack, AttachmentType.MAGAZINE)
+                    .map(id -> magazineVisualType(id.toString()))
+                    .orElse(null);
+            if (attachedType != null) {
+                return magazineBoneVisibility(attachedType, boneName);
+            }
+        }
         if (isInstalled(stack, AttachmentType.STOCK, boneName)) {
             return false;
         }
@@ -307,7 +316,10 @@ public final class GunAttachmentVisibility {
             return null;
         }
 
-        MagazineVisualType type = currentMagazineVisualType(stack, boneName);
+        return magazineBoneVisibility(currentMagazineVisualType(stack, boneName), boneName);
+    }
+
+    private static boolean magazineBoneVisibility(MagazineVisualType type, String boneName) {
         return switch (type) {
             case DEFAULT -> !isDefaultMagazineBone(boneName);
             case EXTENDED -> !isExtendedMagazineBone(boneName);

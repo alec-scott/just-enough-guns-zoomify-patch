@@ -3,6 +3,7 @@ package ttv.migami.jeg.network;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.InteractionHand;
+import ttv.migami.jeg.Config;
 import ttv.migami.jeg.client.ClientUiConfig;
 import ttv.migami.jeg.client.CrosshairHandler;
 import ttv.migami.jeg.client.FabricClientBootstrap;
@@ -68,7 +69,10 @@ public final class ClientNetworkHandler {
         });
 
         ClientPlayNetworking.registerGlobalReceiver(UiConfigPayload.TYPE, (payload, context) -> {
-            context.client().execute(() -> ClientUiConfig.update(payload.showCrosshair(), payload.showHitFeedback(), payload.hideMedals()));
+            context.client().execute(() -> {
+                ClientUiConfig.update(payload.showCrosshair(), payload.showHitFeedback(), payload.hideMedals());
+                Config.setSyncedMagazineFeedEnabled(payload.magazineFeedEnabled());
+            });
         });
 
         ClientPlayNetworking.registerGlobalReceiver(VehicleDataSyncPayload.TYPE, (payload, context) -> {

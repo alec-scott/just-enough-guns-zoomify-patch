@@ -26,6 +26,7 @@ import ttv.migami.jeg.Reference;
 import ttv.migami.jeg.init.ModDataComponents;
 import ttv.migami.jeg.item.AttachmentItem;
 import ttv.migami.jeg.item.GunItem;
+import ttv.migami.jeg.item.MagazineItem;
 
 public final class GunAttachments {
     public static final int FLASHLIGHT_MAX_BATTERY = 600;
@@ -253,6 +254,9 @@ public final class GunAttachments {
         if (type == AttachmentType.STOCK && isMakeshiftStock(item) && canUseMakeshiftStock(gunStack)) {
             return true;
         }
+        if (type == AttachmentType.MAGAZINE && item instanceof MagazineItem) {
+            return canUseMagazineItemAttachment(gunStack) && ((GunItem) gunStack.getItem()).acceptsMagazineAttachment(attachmentStack);
+        }
         if (!GunAttachmentRules.canAttach(gunStack, type)) {
             return false;
         }
@@ -274,7 +278,17 @@ public final class GunAttachments {
         if (type == AttachmentType.STOCK && canUseMakeshiftStock(gunStack)) {
             return true;
         }
+        if (type == AttachmentType.MAGAZINE && canUseMagazineItemAttachment(gunStack)) {
+            return true;
+        }
         return GunAttachmentRules.canAttach(gunStack, type);
+    }
+
+    // With loose-ammo reloads, gun magazines double as capacity upgrades for every gun in their family.
+    private static boolean canUseMagazineItemAttachment(ItemStack gunStack) {
+        return !Config.magazineFeedEnabled()
+                && gunStack.getItem() instanceof GunItem gun
+                && gun.getAttachableMagazineItem() != null;
     }
 
     public static boolean isCosmeticStack(AttachmentType type, ItemStack stack) {

@@ -159,6 +159,9 @@ public final class VehicleInputHandler {
                 && VehicleClientState.vehicleId() == vehicle.getId()
                 && VehicleClientState.zoomDown()) {
             sensitivity = seat.sensitivityX();
+        } else if (VehicleCameraHandler.isFreeLookActive(vehicle)) {
+            // Pilot seats use zero sensitivity because the mouse steers; free look needs normal mouse look.
+            sensitivity = 1.0F;
         }
         return Math.max(0.0F, base * sensitivity);
     }
@@ -209,6 +212,12 @@ public final class VehicleInputHandler {
     private static float aircraftBoundYaw(LocalPlayer player, VehicleEntity vehicle, ttv.migami.jeg.vehicle.data.subdata.SeatInfo seat) {
         if (isAircraftDriver(player, vehicle) && seat.sensitivityY() == 0.0F && seat.sensitivityZ() == 0.0F && !VehicleClientState.freeLookDown()) {
             return vehicle.getYRot();
+        }
+        if (vehicle.usesVehiclePoseTransform()
+                && !Minecraft.getInstance().options.getCameraType().isFirstPerson()
+                && VehicleCameraHandler.isFreeLookActive(vehicle)) {
+            // Third-person free look orbits the whole aircraft, so skip the seat's head-turn limits.
+            return player.getYRot();
         }
         float relativeYaw = Mth.wrapDegrees(player.getYRot() - vehicle.getYRot());
         float clampedYaw = Mth.clamp(relativeYaw, seat.minYaw(), seat.maxYaw());

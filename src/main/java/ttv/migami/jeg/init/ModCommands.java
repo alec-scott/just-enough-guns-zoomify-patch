@@ -401,7 +401,7 @@ public final class ModCommands {
         boolean oldValue = (Boolean) Config.getConfigValue(key);
         Config.setConfigValue(key, value);
         Config.saveServerConfig();
-        if (key.startsWith("ui.")) {
+        if (key.startsWith("ui.") || key.equals("combat.magazineFeed")) {
             NetworkHandler.broadcastUiConfig(source.getServer());
         }
         source.sendSuccess(() -> Component.translatable("commands.jeg.config_set", displayName, oldValue, value), true);

@@ -429,7 +429,11 @@ public final class NetworkHandler {
     }
 
     public static void sendUiConfig(ServerPlayer player) {
-        ServerPlayNetworking.send(player, new UiConfigPayload(Config.showCrosshair(), Config.showHitFeedback(), Config.hideMedals()));
+        ServerPlayNetworking.send(player, uiConfigPayload());
+    }
+
+    private static UiConfigPayload uiConfigPayload() {
+        return new UiConfigPayload(Config.showCrosshair(), Config.showHitFeedback(), Config.hideMedals(), Config.magazineFeedEnabled());
     }
 
     public static void sendVehicleData(ServerPlayer player) {
@@ -438,7 +442,7 @@ public final class NetworkHandler {
     }
 
     public static void broadcastUiConfig(MinecraftServer server) {
-        UiConfigPayload payload = new UiConfigPayload(Config.showCrosshair(), Config.showHitFeedback(), Config.hideMedals());
+        UiConfigPayload payload = uiConfigPayload();
         for (ServerPlayer player : PlayerLookup.all(server)) {
             ServerPlayNetworking.send(player, payload);
         }
