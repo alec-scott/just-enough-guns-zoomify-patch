@@ -91,6 +91,7 @@ import ttv.migami.jeg.vehicle.data.subdata.CameraPos;
 import ttv.migami.jeg.vehicle.data.subdata.CollisionLevel;
 import ttv.migami.jeg.vehicle.data.subdata.DismountInfo;
 import ttv.migami.jeg.vehicle.data.subdata.EngineInfo;
+import ttv.migami.jeg.vehicle.data.subdata.EngineType;
 import ttv.migami.jeg.vehicle.data.subdata.OBBInfo;
 import ttv.migami.jeg.vehicle.data.subdata.SeatInfo;
 import ttv.migami.jeg.vehicle.data.subdata.SeekInfo;
@@ -237,6 +238,9 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     private static final double HELICOPTER_DANGEROUS_DESCENT_WARNING_MIN_ALTITUDE = 8.0D;
     // Below this horizontal speed a fast descent is dangerous; with forward airspeed it is a normal descent.
     private static final double HELICOPTER_LOW_AIRSPEED_THRESHOLD = 0.2D;
+    // Tracked vehicles: minimum turn rate (degrees per tick per unit of steering), about 40 degrees a second on the spot.
+    private static final double TRACK_PIVOT_TURN_RATE = 6.0D;
+    private static final double TRACK_PIVOT_POWER_THRESHOLD = 0.05D;
     // Player pilots fly on demand: holding ascend/descend sets a vertical speed, releasing holds altitude.
     private static final double HELICOPTER_CLIMB_SPEED = 0.3D;
     private static final double HELICOPTER_COMMANDED_DESCENT_SPEED = 0.3D;
@@ -4198,7 +4202,16 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
 
         if (Math.abs(this.wheelSteering) > 1.0E-4D) {
             float previousYaw = this.getYRot();
-            double yawDelta = Math.max(12.0D * horizontalSpeed, 0.0D) * this.wheelSteering * (this.enginePower > 0.0D ? 1.0D : -1.0D);
+            double turnRate = Math.max(12.0D * horizontalSpeed, 0.0D);
+            double turnDirection = this.enginePower > 0.0D ? 1.0D : -1.0D;
+            if (engine.type() == EngineType.TRACK && turnRate < TRACK_PIVOT_TURN_RATE) {
+                // Tracks counter-rotate, so tracked vehicles can pivot on the spot instead of needing speed to steer.
+                turnRate = TRACK_PIVOT_TURN_RATE;
+                if (Math.abs(this.enginePower) < TRACK_PIVOT_POWER_THRESHOLD) {
+                    turnDirection = 1.0D;
+                }
+            }
+            double yawDelta = turnRate * this.wheelSteering * turnDirection;
             if (this.setVehicleYawIfUnblocked(previousYaw + (float) yawDelta)) {
                 this.yRotO = previousYaw;
             } else {
