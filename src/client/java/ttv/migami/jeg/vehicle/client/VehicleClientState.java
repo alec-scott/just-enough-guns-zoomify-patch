@@ -16,6 +16,8 @@ public final class VehicleClientState {
     private static float mouseLerpY;
     private static double lastMouseX = Double.NaN;
     private static double lastMouseY = Double.NaN;
+    private static long lastMouseSampleNanos;
+    private static final double NANOS_PER_TICK = 50_000_000.0D;
 
     private VehicleClientState() {}
 
@@ -27,12 +29,17 @@ public final class VehicleClientState {
     }
 
     public static void setMousePosition(double mouseX, double mouseY) {
+        long now = System.nanoTime();
         if (!Double.isNaN(lastMouseX) && !Double.isNaN(lastMouseY)) {
-            mouseDeltaX = (float) (mouseX - lastMouseX);
-            mouseDeltaY = (float) (mouseY - lastMouseY);
+            // Ticks land on frame boundaries, so each one covers an uneven slice of real time.
+            // Scale the movement to one 50 ms tick so turn speed doesn't jitter with frame timing.
+            double ticksElapsed = lastMouseSampleNanos == 0L ? 1.0D : Mth.clamp((now - lastMouseSampleNanos) / NANOS_PER_TICK, 0.25D, 3.0D);
+            mouseDeltaX = (float) ((mouseX - lastMouseX) / ticksElapsed);
+            mouseDeltaY = (float) ((mouseY - lastMouseY) / ticksElapsed);
         }
         lastMouseX = mouseX;
         lastMouseY = mouseY;
+        lastMouseSampleNanos = now;
     }
 
     public static void updateAircraftMouse(float sensitivity, float smoothingX, float smoothingY, boolean invertY, boolean freeLook) {
@@ -59,6 +66,7 @@ public final class VehicleClientState {
     public static void syncMousePosition(double mouseX, double mouseY) {
         lastMouseX = mouseX;
         lastMouseY = mouseY;
+        lastMouseSampleNanos = System.nanoTime();
         clearFrameDeltas();
         mouseLerpX = 0.0F;
         mouseLerpY = 0.0F;

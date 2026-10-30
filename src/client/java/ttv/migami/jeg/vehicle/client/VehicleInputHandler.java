@@ -1,5 +1,6 @@
 package ttv.migami.jeg.vehicle.client;
 
+import net.minecraft.client.CameraType;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
 import net.minecraft.client.player.LocalPlayer;
@@ -19,18 +20,35 @@ public final class VehicleInputHandler {
     private static boolean vehicleInventoryWasDown;
     private static int vehicleInventoryInputBlockTicks;
 
+    private static boolean autoForward;
+    private static boolean wasRidingVehicle;
+
     private VehicleInputHandler() {}
+
+    private static void setAutoForward(Minecraft minecraft, boolean enabled) {
+        autoForward = enabled;
+        minecraft.gui.setOverlayMessage(net.minecraft.network.chat.Component.translatable(enabled
+                ? "message.jeg.vehicle.auto_forward_on"
+                : "message.jeg.vehicle.auto_forward_off"), false);
+    }
 
     public static void tick(Minecraft minecraft) {
         LocalPlayer player = minecraft.player;
         if (player == null || minecraft.getConnection() == null || !(player.getVehicle() instanceof VehicleEntity vehicle)) {
             VehicleClientState.clear();
+            autoForward = false;
             ignorePlayerInventoryUntilRelease = false;
             ignoreVehicleInventoryUntilRelease = false;
             vehicleInventoryWasDown = false;
             vehicleInventoryInputBlockTicks = 0;
+            if (wasRidingVehicle && player != null && !minecraft.options.getCameraType().isFirstPerson()) {
+                // Leaving a vehicle drops a third-person chase view back to first person.
+                minecraft.options.setCameraType(CameraType.FIRST_PERSON);
+            }
+            wasRidingVehicle = false;
             return;
         }
+        wasRidingVehicle = true;
 
         boolean vehicleInventoryDown = minecraft.options.keyInventory.isDown();
         if (vehicleInventoryInputBlockTicks > 0) {
@@ -110,8 +128,17 @@ public final class VehicleInputHandler {
                 minecraft.setScreen(new InventoryScreen(player));
             }
         }
+        boolean helicopterPilot = aircraftControls && vehicle.vehicleData().defaults().vehicleType() == ttv.migami.jeg.vehicle.data.subdata.VehicleType.HELICOPTER;
+        boolean autoForwardToggled = KeyBindings.VEHICLE_AUTO_FORWARD.consumeClick();
+        if (!helicopterPilot) {
+            autoForward = false;
+        } else if (autoForwardToggled) {
+            setAutoForward(minecraft, !autoForward);
+        } else if (autoForward && minecraft.options.keyDown.isDown()) {
+            setAutoForward(minecraft, false);
+        }
         VehicleInput input = new VehicleInput(
-                minecraft.options.keyUp.isDown(),
+                minecraft.options.keyUp.isDown() || autoForward,
                 minecraft.options.keyDown.isDown(),
                 minecraft.options.keyLeft.isDown(),
                 minecraft.options.keyRight.isDown(),
@@ -199,14 +226,25 @@ public final class VehicleInputHandler {
     private static void clampSeatView(LocalPlayer player, VehicleEntity vehicle, ttv.migami.jeg.vehicle.data.subdata.SeatInfo seat) {
         float targetYaw = aircraftBoundYaw(player, vehicle, seat);
         float targetPitch = aircraftBoundPitch(player, vehicle, seat);
+        float previousYaw = targetYaw;
+        float previousPitch = targetPitch;
+        if (isViewLockedToAircraft(player, vehicle, seat)) {
+            // Interpolate the pilot with the aircraft; pinning both values to the latest tick makes the model step while turning.
+            previousYaw = vehicle.yRotO;
+            previousPitch = Mth.clamp(vehicle.xRotO, seat.minPitch(), seat.maxPitch());
+        }
         player.setYRot(targetYaw);
-        player.yRotO = targetYaw;
+        player.yRotO = previousYaw;
         player.yHeadRot = targetYaw;
-        player.yHeadRotO = targetYaw;
+        player.yHeadRotO = previousYaw;
         player.yBodyRot = targetYaw;
-        player.yBodyRotO = targetYaw;
+        player.yBodyRotO = previousYaw;
         player.setXRot(targetPitch);
-        player.xRotO = targetPitch;
+        player.xRotO = previousPitch;
+    }
+
+    private static boolean isViewLockedToAircraft(LocalPlayer player, VehicleEntity vehicle, ttv.migami.jeg.vehicle.data.subdata.SeatInfo seat) {
+        return isAircraftDriver(player, vehicle) && seat.sensitivityY() == 0.0F && seat.sensitivityZ() == 0.0F && !VehicleClientState.freeLookDown();
     }
 
     private static float aircraftBoundYaw(LocalPlayer player, VehicleEntity vehicle, ttv.migami.jeg.vehicle.data.subdata.SeatInfo seat) {

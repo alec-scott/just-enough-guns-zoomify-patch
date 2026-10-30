@@ -305,12 +305,12 @@ public final class VehicleHudOverlay {
                 : Component.literal(Math.ceilDiv(vehicle.vehicleDecoyCooldown(), 20) + "s");
     }
 
-    private static int vehicleSpeedKmh(VehicleEntity vehicle) {
-        return (int) Math.round(Math.sqrt(vehicle.distanceToSqr(vehicle.xOld, vehicle.getY(), vehicle.zOld)) * 72.0D);
+    private static double vehicleSpeedBlocksPerSecond(VehicleEntity vehicle) {
+        return Math.sqrt(vehicle.distanceToSqr(vehicle.xOld, vehicle.getY(), vehicle.zOld)) * 20.0D;
     }
 
     private static void renderSpeedIndicator(GuiGraphicsExtractor guiGraphics, Minecraft minecraft, VehicleEntity vehicle) {
-        Component speed = Component.literal(vehicleSpeedKmh(vehicle) + " km/h");
+        Component speed = Component.literal(String.format(java.util.Locale.ROOT, "%.1f m/s", vehicleSpeedBlocksPerSecond(vehicle)));
         int x = guiGraphics.guiWidth() - minecraft.font.width(speed) - 16;
         int y = 16;
         guiGraphics.text(minecraft.font, speed, x, y, 0xFF66FF00);

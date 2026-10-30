@@ -235,6 +235,30 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     private static final double HELICOPTER_VERTICAL_IMPACT_MAX_DAMAGE_RATIO = 0.70D;
     private static final float HELICOPTER_DESCENT_ROTOR_SPEED = 0.035F;
     private static final double HELICOPTER_DANGEROUS_DESCENT_WARNING_MIN_ALTITUDE = 8.0D;
+    // Below this horizontal speed a fast descent is dangerous; with forward airspeed it is a normal descent.
+    private static final double HELICOPTER_LOW_AIRSPEED_THRESHOLD = 0.2D;
+    // Player pilots fly on demand: holding ascend/descend sets a vertical speed, releasing holds altitude.
+    private static final double HELICOPTER_CLIMB_SPEED = 0.3D;
+    private static final double HELICOPTER_COMMANDED_DESCENT_SPEED = 0.3D;
+    private static final double HELICOPTER_VERTICAL_RESPONSE = 0.2D;
+    // Landing assist: below this height a commanded descent slows down so the skids touch down gently.
+    private static final double HELICOPTER_LANDING_ASSIST_ALTITUDE = 8.0D;
+    private static final double HELICOPTER_TOUCHDOWN_SPEED = 0.05D;
+    private static final double HELICOPTER_HOVER_POWER = 0.085D;
+    private static final double HELICOPTER_CLIMB_POWER = 0.105D;
+    private static final double HELICOPTER_DESCENT_POWER = 0.06D;
+    private static final double HELICOPTER_POWER_RESPONSE = 0.004D;
+    private static final double HELICOPTER_PLAYER_TURN_RESPONSE = 1.75D;
+    // Player flight: WASD set a target velocity relative to the heading; no input settles back to a hover.
+    private static final double HELICOPTER_STRAFE_SPEED_RATIO = 0.6D;
+    private static final double HELICOPTER_PLAYER_SPEED_MULTIPLIER = 2.0D;
+    private static final double HELICOPTER_ACCELERATION_RESPONSE = 0.06D;
+    private static final double HELICOPTER_BRAKING_RESPONSE = 0.1D;
+    private static final float HELICOPTER_MAX_AIM_PITCH = 25.0F;
+    private static final float HELICOPTER_MAX_FORWARD_TILT = 15.0F;
+    private static final float HELICOPTER_MAX_BANK = 30.0F;
+    private static final float HELICOPTER_TURN_BANK = 1.5F;
+    private static final float HELICOPTER_ATTITUDE_RESPONSE = 0.2F;
     private static final float HELICOPTER_DANGEROUS_DESCENT_WARNING_VOLUME = 14.0F;
     private static final double LAND_VEHICLE_BODY_IMPACT_MIN_SPEED = 0.22D;
     private static final double LAND_VEHICLE_BODY_IMPACT_MAX_MOVED_RATIO = 0.75D;
@@ -299,6 +323,9 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     private float turretPitchO;
     private float propellerRotO;
     private float rollO;
+    // Roll predicted locally for the pilot; the synced DATA_ROLL lags behind it and would jitter the chase camera.
+    private float predictedRoll;
+    private boolean hasPredictedRoll;
     private int holdTick;
     private int holdPowerTick;
     private boolean engineStart;
@@ -306,6 +333,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     private Vec3 preExplosionKnockbackVelocity;
     private int preExplosionKnockbackTick = -1;
     private float destroyRot;
+    private float pilotAimPitch;
     private int dismountLerpSuppressionTicks;
     private UUID recentDismountSyncPlayerId;
     private int recentDismountSyncTicks;
@@ -922,6 +950,9 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     }
 
     public float roll() {
+        if (this.hasPredictedRoll && this.level().isClientSide() && this.shouldRunClientPrediction()) {
+            return this.predictedRoll;
+        }
         return this.entityData.get(DATA_ROLL);
     }
 
@@ -965,7 +996,12 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     }
 
     private void setRoll(float roll) {
-        this.entityData.set(DATA_ROLL, Mth.wrapDegrees(roll));
+        float wrapped = Mth.wrapDegrees(roll);
+        this.entityData.set(DATA_ROLL, wrapped);
+        if (this.level().isClientSide()) {
+            this.predictedRoll = wrapped;
+            this.hasPredictedRoll = true;
+        }
     }
 
     public boolean hasBuiltInDecoy() {
@@ -1195,6 +1231,9 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         this.turretYawO = this.turretYaw();
         this.turretPitchO = this.turretPitch();
         this.propellerRotO = this.propellerRot();
+        if (this.level().isClientSide() && !this.shouldRunClientPrediction()) {
+            this.hasPredictedRoll = false;
+        }
         this.rollO = this.roll();
         this.updateLastTickMovementSpeed();
         super.tick();
@@ -4279,7 +4318,8 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         if (!active) {
             active = switch (type) {
                 case LAND, BOAT -> movement.x * movement.x + movement.z * movement.z > 0.0025D;
-                case HELICOPTER -> movement.lengthSqr() > 0.0025D || (!this.onGround() && movement.y < -1.0E-4D);
+                // A steady hover has no movement, so keep the engine audible while the rotor is powered in the air.
+                case HELICOPTER -> movement.lengthSqr() > 0.0025D || (!this.onGround() && (movement.y < -1.0E-4D || this.propellerSpeed() > HELICOPTER_DESCENT_ROTOR_SPEED));
                 case AIRCRAFT -> movement.lengthSqr() > 0.0025D;
                 case ARTILLERY -> false;
             };
@@ -4344,11 +4384,14 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
 
     private void tickHelicopterMovement(EngineInfo engine, boolean consumeEnergy) {
         Vec3 velocity = this.getDeltaMovement();
+        Vec3 velocityAtTickStart = velocity;
         double verticalSpeedBeforeDrag = velocity.y;
         int forwardAxis = this.input.forwardAxis();
         int verticalAxis = this.input.verticalAxis();
         int steeringAxis = this.steeringAxis();
-        boolean up = verticalAxis > 0 || forwardAxis > 0;
+        boolean playerPilot = this.getControllingPassenger() instanceof Player;
+        // Player pilots fly forward with W, so only the ascend key climbs; AI pilots keep forward-as-collective.
+        boolean up = verticalAxis > 0 || (!playerPilot && forwardAxis > 0);
         boolean down = verticalAxis < 0;
         boolean back = forwardAxis < 0 || this.input.brake();
         double mobility = this.mobilityMultiplier();
@@ -4393,6 +4436,27 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         if (altitudeLimited) {
             up = false;
         }
+        boolean playerVerticalControl = playerPilot
+                && hasEnergy
+                && !lowHealthDescent
+                && !forcedDescent
+                && this.engineStartOver
+                && this.vehicleHealth() > 0.1F * this.maxVehicleHealth()
+                && (!this.onGround() || up);
+        double targetVerticalSpeed = up ? HELICOPTER_CLIMB_SPEED : down ? -HELICOPTER_COMMANDED_DESCENT_SPEED : 0.0D;
+        if (down && !up && altitude < HELICOPTER_LANDING_ASSIST_ALTITUDE) {
+            double landingFactor = Mth.clamp(altitude / HELICOPTER_LANDING_ASSIST_ALTITUDE, 0.0D, 1.0D);
+            targetVerticalSpeed = -Mth.lerp(landingFactor, HELICOPTER_TOUCHDOWN_SPEED, HELICOPTER_COMMANDED_DESCENT_SPEED);
+        }
+        double turnResponse = playerPilot ? HELICOPTER_PLAYER_TURN_RESPONSE : 1.0D;
+        if (!playerVerticalControl) {
+            this.pilotAimPitch = 0.0F;
+        }
+        if (playerPilot && !playerVerticalControl && this.onGround()) {
+            // Settle any flight attitude left over from touchdown.
+            this.setXRot(this.getXRot() * 0.8F);
+            this.setRoll(this.roll() * 0.8F);
+        }
 
         if (this.onGround()) {
             velocity = velocity.multiply(0.8D, 1.0D, 0.8D);
@@ -4423,7 +4487,13 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
                 this.setXRot(this.getXRot() * 0.98F);
                 velocity = velocity.multiply(0.96D, hasPlayerPassenger ? 0.98D : 0.94D, 0.96D);
             } else {
-                if (this.input.right()) {
+                if (playerVerticalControl) {
+                    // A/D strafe and the attitude follows movement, so the mouse only turns and aims the nose.
+                    this.holdTick = 0;
+                    if (!this.isFreeLookInputDown()) {
+                        this.pilotAimPitch = Mth.clamp(this.pilotAimPitch + (float) (1.5D * pitchSpeed * turnResponse * HELICOPTER_HOVER_POWER) * this.input.mouseY(), -HELICOPTER_MAX_AIM_PITCH, HELICOPTER_MAX_AIM_PITCH);
+                    }
+                } else if (this.input.right()) {
                     this.holdTick++;
                     this.wheelSteering -= 2.0D * Math.min(this.holdTick, 7) * this.enginePower;
                 } else if (this.input.left()) {
@@ -4433,17 +4503,19 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
                     this.holdTick = 0;
                 }
 
-                if (!this.isFreeLookInputDown()) {
+                if (!this.isFreeLookInputDown() && !playerVerticalControl) {
                     float mousePitch = this.input.mouseY();
                     float mouseYaw = this.input.mouseX();
-                    this.xRotO = this.getXRot();
-                    this.setXRot(Mth.clamp(this.getXRot() + (this.onGround() ? 0.0F : 1.5F) * (float) pitchSpeed * mousePitch * currentRotorSpeed, -50.0F, 40.0F));
+                    if (!playerPilot) {
+                        this.xRotO = this.getXRot();
+                    }
+                    this.setXRot(Mth.clamp(this.getXRot() + (this.onGround() ? 0.0F : 1.5F) * (float) (pitchSpeed * turnResponse) * mousePitch * currentRotorSpeed, -50.0F, 40.0F));
                     this.setRoll((float) (this.roll() - rollSpeed * (this.wheelSteering + (this.onGround() ? 0.0D : 0.25D) * mouseYaw * currentRotorSpeed)));
                 }
 
                 float mouseYaw = this.input.mouseX();
                 this.yRotO = this.getYRot();
-                this.setYRot(this.getYRot() + (float) (yawSpeed * Mth.clamp((this.onGround() ? 0.1D : 2.0D) * mouseYaw * currentRotorSpeed + (this.isSubEngineDamaged() ? 25.0D : 0.0D) * currentRotorSpeed, -10.0D, 10.0D)));
+                this.setYRot(this.getYRot() + (float) (yawSpeed * Mth.clamp((this.onGround() ? 0.1D : 2.0D * turnResponse) * mouseYaw * currentRotorSpeed + (this.isSubEngineDamaged() ? 25.0D : 0.0D) * currentRotorSpeed, -10.0D * turnResponse, 10.0D * turnResponse)));
                 this.updateVehicleBoundingBox();
             }
 
@@ -4461,11 +4533,16 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
                         }
                     }
                 }
-                if (up && this.engineStartOver) {
+                if (playerVerticalControl) {
+                    // Rotor power follows the commanded climb/hover/descent; vertical speed itself is set below.
+                    double targetPower = up ? HELICOPTER_CLIMB_POWER : down ? HELICOPTER_DESCENT_POWER : HELICOPTER_HOVER_POWER;
+                    this.enginePower += Mth.clamp(targetPower - this.enginePower, -HELICOPTER_POWER_RESPONSE, HELICOPTER_POWER_RESPONSE);
+                    this.holdPowerTick = 0;
+                } else if (up && this.engineStartOver) {
                     this.holdPowerTick++;
                     this.enginePower = Math.min(this.enginePower + 0.00045D * powerAdd * Math.min(this.holdPowerTick, 8), 0.105D);
                 }
-                if (this.engineStartOver) {
+                if (this.engineStartOver && !playerVerticalControl) {
                     if (down) {
                         this.holdPowerTick++;
                         this.enginePower = Math.max(this.enginePower - 0.001D * powerReduce * Math.min(this.holdPowerTick, 5), this.onGround() ? 0.0D : 0.025D / liftSpeed);
@@ -4474,13 +4551,13 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
                         this.enginePower = Math.max(this.enginePower - 0.001D * powerReduce * Math.min(this.holdPowerTick, 5), this.onGround() ? 0.0D : 0.04D / liftSpeed);
                     }
                 }
-                if (altitudeLimited && this.engineStartOver) {
+                if (altitudeLimited && this.engineStartOver && !playerVerticalControl) {
                     this.enginePower = Math.max(this.enginePower - 0.0015D * powerReduce, 0.0D);
                 }
                 if (this.engineStart && !this.engineStartOver) {
                     this.enginePower = Math.min(this.enginePower + 0.0012D * powerAdd, 0.045D);
                 }
-                if (!(up || down || back) && this.engineStartOver) {
+                if (!playerVerticalControl && !(up || down || back) && this.engineStartOver) {
                     if (velocity.y < 0.0D) {
                         this.enginePower = Math.min(this.enginePower + 0.00015D, 0.105D);
                     } else {
@@ -4535,9 +4612,14 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
             }
         }
 
-        double verticalSpeedBeforeGravity = velocity.y;
-        Vec3 lift = this.helicopterLiftVector(liftRotorSpeed * liftSpeed * mobility * altitudeLimitFactor);
-        velocity = velocity.add(0.0D, -0.06D, 0.0D).add(lift);
+        if (playerVerticalControl) {
+            // Steer the velocity directly instead of summing gravity and rotor lift, which never balance exactly and made the hover drift.
+            velocity = this.playerHelicopterVelocity(velocityAtTickStart, targetVerticalSpeed, engine, mobility);
+            this.updatePlayerHelicopterAttitude(velocity, engine, mobility, Mth.wrapDegrees(this.getYRot() - this.yRotO));
+        } else {
+            Vec3 lift = this.helicopterLiftVector(liftRotorSpeed * liftSpeed * mobility * altitudeLimitFactor);
+            velocity = velocity.add(0.0D, -0.06D, 0.0D).add(lift);
+        }
         if (forcedDescent) {
             double descentTarget = Math.max(verticalSpeedBeforeDrag - HELICOPTER_FORCED_DESCENT_ACCELERATION, -HELICOPTER_MAX_DESCENT_SPEED);
             velocity = new Vec3(velocity.x, Math.min(velocity.y, descentTarget), velocity.z);
@@ -4554,7 +4636,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
             this.engineStartOver = false;
         }
 
-        double maxHorizontalSpeed = engine.maxForwardSpeed() * mobility;
+        double maxHorizontalSpeed = playerVerticalControl ? this.playerHelicopterMaxSpeed(engine, mobility) : engine.maxForwardSpeed() * mobility;
         Vec3 horizontalVelocity = new Vec3(velocity.x, 0.0D, velocity.z);
         if (horizontalVelocity.length() > maxHorizontalSpeed) {
             horizontalVelocity = horizontalVelocity.normalize().scale(maxHorizontalSpeed);
@@ -4565,10 +4647,45 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         this.warnHelicopterDangerousDescent(forcedDescent, altitude);
     }
 
+    private double playerHelicopterMaxSpeed(EngineInfo engine, double mobility) {
+        double maxSpeed = engine.playerMaxSpeed() > 0.0D ? engine.playerMaxSpeed() : engine.maxForwardSpeed() * HELICOPTER_PLAYER_SPEED_MULTIPLIER;
+        return maxSpeed * mobility;
+    }
+
+    private Vec3 playerHelicopterVelocity(Vec3 current, double targetVerticalSpeed, EngineInfo engine, double mobility) {
+        int forward = this.input.forwardAxis();
+        int strafe = this.input.strafeAxis();
+        double forwardSpeed = forward > 0 ? this.playerHelicopterMaxSpeed(engine, mobility) : engine.maxReverseSpeed() * mobility * HELICOPTER_PLAYER_SPEED_MULTIPLIER;
+        double strafeSpeed = this.playerHelicopterMaxSpeed(engine, mobility) * HELICOPTER_STRAFE_SPEED_RATIO;
+        Vec3 forwardDirection = this.horizontalDirection(this.getYRot());
+        Vec3 leftDirection = new Vec3(forwardDirection.z, 0.0D, -forwardDirection.x);
+        Vec3 target = forwardDirection.scale(forward * forwardSpeed).add(leftDirection.scale(strafe * strafeSpeed));
+        Vec3 horizontal = new Vec3(current.x, 0.0D, current.z);
+        double response = (forward == 0 && strafe == 0 ? HELICOPTER_BRAKING_RESPONSE : HELICOPTER_ACCELERATION_RESPONSE) * Mth.clamp(engine.playerAcceleration(), 0.05D, 4.0D);
+        horizontal = horizontal.add(target.subtract(horizontal).scale(response));
+        double vertical = Mth.lerp(HELICOPTER_VERTICAL_RESPONSE, current.y, targetVerticalSpeed);
+        return new Vec3(horizontal.x, vertical, horizontal.z);
+    }
+
+    private void updatePlayerHelicopterAttitude(Vec3 velocity, EngineInfo engine, double mobility, float yawDelta) {
+        Vec3 forwardDirection = this.horizontalDirection(this.getYRot());
+        Vec3 leftDirection = new Vec3(forwardDirection.z, 0.0D, -forwardDirection.x);
+        double maxForward = Math.max(1.0E-4D, this.playerHelicopterMaxSpeed(engine, mobility));
+        double maxStrafe = Math.max(1.0E-4D, maxForward * HELICOPTER_STRAFE_SPEED_RATIO);
+        float forwardFraction = (float) Mth.clamp(velocity.dot(forwardDirection) / maxForward, -1.0D, 1.0D);
+        float leftFraction = (float) Mth.clamp(velocity.dot(leftDirection) / maxStrafe, -1.0D, 1.0D);
+        // Nose down (positive pitch) into forward flight, bank (positive roll is right) into strafes and turns.
+        float targetPitch = Mth.clamp(forwardFraction * HELICOPTER_MAX_FORWARD_TILT + this.pilotAimPitch, -50.0F, 40.0F);
+        float targetRoll = Mth.clamp(-leftFraction * HELICOPTER_MAX_FORWARD_TILT + yawDelta * HELICOPTER_TURN_BANK, -HELICOPTER_MAX_BANK, HELICOPTER_MAX_BANK);
+        this.setXRot(this.getXRot() + (targetPitch - this.getXRot()) * HELICOPTER_ATTITUDE_RESPONSE);
+        this.setRoll(this.roll() + (targetRoll - this.roll()) * HELICOPTER_ATTITUDE_RESPONSE);
+    }
+
     private void warnHelicopterDangerousDescent(boolean forcedDescent, double altitude) {
         if (this.level().isClientSide()
                 || (!forcedDescent && (altitude <= HELICOPTER_DANGEROUS_DESCENT_WARNING_MIN_ALTITUDE
-                || this.getDeltaMovement().y >= -HELICOPTER_SAFE_DESCENT_SPEED))) {
+                || this.getDeltaMovement().y >= -HELICOPTER_SAFE_DESCENT_SPEED
+                || this.getDeltaMovement().horizontalDistance() >= HELICOPTER_LOW_AIRSPEED_THRESHOLD))) {
             return;
         }
         String warningKey = this.helicopterDangerWarningKey(forcedDescent);

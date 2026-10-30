@@ -220,7 +220,9 @@ public final class VehicleDataManager {
                 getDouble(object, "roll_speed", fallback.rollSpeed()),
                 getDouble(object, "lift_speed", fallback.liftSpeed()),
                 getResourceLocation(object, "engine_start_sound", fallback.engineStartSound()),
-                getFloat(object, "engine_sound_volume", fallback.engineSoundVolume())
+                getFloat(object, "engine_sound_volume", fallback.engineSoundVolume()),
+                getDouble(object, "player_max_speed", fallback.playerMaxSpeed()),
+                getDouble(object, "player_acceleration", fallback.playerAcceleration())
         );
     }
 

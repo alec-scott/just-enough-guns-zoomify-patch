@@ -24,6 +24,8 @@
     "InventoryScreenVehicleMixin",
     "GuiMixin",
     "MinecraftMixin",
+    "MinecraftVehicleFrameTimingMixin",
+    "DeltaTrackerVehicleTimingMixin",
     "KeyMappingVehicleMixin",
     "LivingEntityRendererVehicleMixin",
     "MinecraftVehicleHotbarMixin",

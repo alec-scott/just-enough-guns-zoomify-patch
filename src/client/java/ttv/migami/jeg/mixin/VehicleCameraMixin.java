@@ -53,12 +53,6 @@ public abstract class VehicleCameraMixin implements VehicleCameraHandler.Vehicle
     private Vector3f left;
 
     @Shadow
-    private float xRot;
-
-    @Shadow
-    private float yRot;
-
-    @Shadow
     private Entity entity;
 
     @Inject(
@@ -144,12 +138,12 @@ public abstract class VehicleCameraMixin implements VehicleCameraHandler.Vehicle
         float yaw = (float) cameraRotation.x;
         float pitch = (float) cameraRotation.y;
         float roll = (float) cameraRotation.z;
+        // Always go through setRotation: besides the angles it marks the camera's cached view matrices dirty.
+        // Writing the fields directly left the world rendering with a stale rotation whenever the vehicle banked.
+        this.setRotation(yaw, pitch);
         if (roll == 0.0F) {
-            this.setRotation(yaw, pitch);
             return;
         }
-        this.xRot = pitch;
-        this.yRot = yaw;
         this.rotation.rotationYXZ((float) Math.PI - yaw * DEG_TO_RAD, -pitch * DEG_TO_RAD, roll * DEG_TO_RAD);
         this.forwards.set(0.0F, 0.0F, 1.0F).rotate(this.rotation);
         this.up.set(0.0F, 1.0F, 0.0F).rotate(this.rotation);

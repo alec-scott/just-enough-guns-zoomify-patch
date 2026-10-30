@@ -82,6 +82,13 @@ public final class KeyBindings {
             CATEGORY
     );
 
+    public static final KeyMapping VEHICLE_AUTO_FORWARD = new KeyMapping(
+            "key.jeg.vehicle_auto_forward",
+            InputConstants.Type.KEYSYM,
+            GLFW.GLFW_KEY_J,
+            CATEGORY
+    );
+
     public static final KeyMapping VEHICLE_CHANGE_SEAT = new KeyMapping(
             "key.jeg.vehicle_change_seat",
             InputConstants.Type.KEYSYM,
@@ -118,6 +125,7 @@ public final class KeyBindings {
         KeyMappingHelper.registerKeyMapping(VEHICLE_DEPLOY_DECOY);
         KeyMappingHelper.registerKeyMapping(VEHICLE_SEEK);
         KeyMappingHelper.registerKeyMapping(VEHICLE_BRAKE_DESCEND);
+        KeyMappingHelper.registerKeyMapping(VEHICLE_AUTO_FORWARD);
         KeyMappingHelper.registerKeyMapping(VEHICLE_CHANGE_SEAT);
         KeyMappingHelper.registerKeyMapping(VEHICLE_DISMOUNT);
         KeyMappingHelper.registerKeyMapping(VEHICLE_PLAYER_INVENTORY);
