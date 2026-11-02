@@ -5,6 +5,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.client.renderer.RenderPipelines;
+import net.minecraft.client.resources.sounds.SimpleSoundInstance;
 import net.minecraft.resources.Identifier;
 import net.minecraft.util.Mth;
 import net.minecraft.world.item.ItemStack;
@@ -12,6 +13,7 @@ import ttv.migami.jeg.Config;
 import ttv.migami.jeg.Reference;
 import ttv.migami.jeg.client.handler.AimingHandler;
 import ttv.migami.jeg.gun.GunScopeSupport;
+import ttv.migami.jeg.init.ModSounds;
 import ttv.migami.jeg.item.GunItem;
 
 public final class CrosshairHandler {
@@ -62,7 +64,7 @@ public final class CrosshairHandler {
         techScale = 1.5F;
     }
 
-    public static void playHitMarker(boolean critical) {
+    public static void playHitMarker(boolean critical, boolean killed) {
         if (!Config.showHitmarker() || !ClientUiConfig.showHitFeedback()) {
             return;
         }
@@ -70,6 +72,14 @@ public final class CrosshairHandler {
         criticalHitMarker = critical;
         hitMarkerTime = 1;
         prevHitMarkerTime = 0;
+        playHitMarkerSound(killed ? "ui.hitmarker.kill" : critical ? "ui.hitmarker.headshot" : "ui.hitmarker.hit");
+    }
+
+    private static void playHitMarkerSound(String id) {
+        var sound = ModSounds.ALL.get(Reference.id(id));
+        if (sound != null) {
+            Minecraft.getInstance().getSoundManager().play(SimpleSoundInstance.forUI(sound.get(), 1.0F, 0.8F));
+        }
     }
 
     public static void reset() {

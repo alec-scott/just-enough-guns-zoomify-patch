@@ -412,8 +412,8 @@ public final class NetworkHandler {
         }
     }
 
-    public static void sendHitMarker(ServerPlayer player, boolean critical) {
-        ServerPlayNetworking.send(player, new HitMarkerPayload(critical));
+    public static void sendHitMarker(ServerPlayer player, boolean critical, boolean killed) {
+        ServerPlayNetworking.send(player, new HitMarkerPayload(critical, killed));
     }
 
     public static void sendHeadshotMedal(ServerPlayer player) {

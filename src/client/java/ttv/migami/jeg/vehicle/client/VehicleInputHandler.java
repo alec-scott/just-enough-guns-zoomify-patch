@@ -21,15 +21,24 @@ public final class VehicleInputHandler {
     private static int vehicleInventoryInputBlockTicks;
 
     private static boolean autoForward;
+    /** Forward speed (blocks per tick) that cruise control holds; locked when it is switched on. */
+    private static float cruiseSpeed;
     private static boolean wasRidingVehicle;
 
     private VehicleInputHandler() {}
 
-    private static void setAutoForward(Minecraft minecraft, boolean enabled) {
+    private static void setAutoForward(Minecraft minecraft, VehicleEntity vehicle, boolean enabled) {
         autoForward = enabled;
-        minecraft.gui.setOverlayMessage(net.minecraft.network.chat.Component.translatable(enabled
-                ? "message.jeg.vehicle.auto_forward_on"
-                : "message.jeg.vehicle.auto_forward_off"), false);
+        if (enabled) {
+            cruiseSpeed = forwardSpeed(vehicle);
+        }
+        minecraft.gui.setOverlayMessage(enabled
+                ? net.minecraft.network.chat.Component.translatable("message.jeg.vehicle.auto_forward_on", Math.round(cruiseSpeed * 20.0F))
+                : net.minecraft.network.chat.Component.translatable("message.jeg.vehicle.auto_forward_off"), false);
+    }
+
+    private static float forwardSpeed(VehicleEntity vehicle) {
+        return (float) Math.max(0.0D, vehicle.getDeltaMovement().dot(net.minecraft.world.phys.Vec3.directionFromRotation(0.0F, vehicle.getYRot())));
     }
 
     public static void tick(Minecraft minecraft) {
@@ -133,12 +142,16 @@ public final class VehicleInputHandler {
         if (!helicopterPilot) {
             autoForward = false;
         } else if (autoForwardToggled) {
-            setAutoForward(minecraft, !autoForward);
+            setAutoForward(minecraft, vehicle, !autoForward);
         } else if (autoForward && minecraft.options.keyDown.isDown()) {
-            setAutoForward(minecraft, false);
+            setAutoForward(minecraft, vehicle, false);
+        } else if (autoForward && minecraft.options.keyUp.isDown()) {
+            // Holding forward while cruising speeds up as usual; releasing it keeps the new speed.
+            cruiseSpeed = Math.max(cruiseSpeed, forwardSpeed(vehicle));
         }
+        boolean cruising = autoForward && !minecraft.options.keyUp.isDown();
         VehicleInput input = new VehicleInput(
-                minecraft.options.keyUp.isDown() || autoForward,
+                minecraft.options.keyUp.isDown() || (cruising && cruiseSpeed > 0.0F),
                 minecraft.options.keyDown.isDown(),
                 minecraft.options.keyLeft.isDown(),
                 minecraft.options.keyRight.isDown(),
@@ -154,7 +167,8 @@ public final class VehicleInputHandler {
                 seek,
                 KeyBindings.VEHICLE_DEPLOY_DECOY.consumeClick(),
                 aircraftControls && !freeLook ? VehicleClientState.mouseLerpX() : 0.0F,
-                aircraftControls && !freeLook ? VehicleClientState.mouseLerpY() : 0.0F
+                aircraftControls && !freeLook ? VehicleClientState.mouseLerpY() : 0.0F,
+                cruising ? cruiseSpeed : 0.0F
         );
         vehicle.processClientInput(player, input);
         ClientNetworkHandler.sendVehicleInput(vehicle.getId(), input);

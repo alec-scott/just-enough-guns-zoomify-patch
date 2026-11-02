@@ -32,6 +32,7 @@ import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.MenuProvider;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.InterpolationHandler;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.MoverType;
@@ -116,6 +117,8 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     private static final double VEHICLE_IDLE_SYNC_MOTION_THRESHOLD_SQR = 1.0E-4D;
     private static final double VEHICLE_IDLE_SYNC_Y_DELTA = 1.0E-3D;
     private static final float OTHER_VEHICLE_COLLISION_LENGTH_SCALE = 1.2F;
+    /** Vehicle weapons reload 20% faster than the same gun carried by hand. */
+    private static final float VEHICLE_RELOAD_TIME_SCALE = 0.8F;
     private static final float SPEEDBOAT_COLLISION_LENGTH_SCALE = 1.2F;
     private static final double SPEEDBOAT_COLLISION_FORWARD_SHIFT = 0.15D;
     private static final double BOAT_WATER_PROBE_BELOW = 0.2D;
@@ -263,6 +266,9 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     private static final float HELICOPTER_MAX_BANK = 30.0F;
     private static final float HELICOPTER_TURN_BANK = 1.5F;
     private static final float HELICOPTER_ATTITUDE_RESPONSE = 0.2F;
+    private static final float HELICOPTER_ROLL_SPRING = 0.07F;
+    private static final float HELICOPTER_ROLL_DAMPING = 0.18F;
+    private static final float HELICOPTER_STRAFE_ACCELERATION_BANK = 0.8F;
     private static final float HELICOPTER_DANGEROUS_DESCENT_WARNING_VOLUME = 14.0F;
     private static final double LAND_VEHICLE_BODY_IMPACT_MIN_SPEED = 0.22D;
     private static final double LAND_VEHICLE_BODY_IMPACT_MAX_MOVED_RATIO = 0.75D;
@@ -339,12 +345,16 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     private float destroyRot;
     private float pilotAimPitch;
     private int dismountLerpSuppressionTicks;
+    @Nullable
+    private SyncedStateInterpolation syncedStateInterpolation;
+    private int lastSyncedStateTick = -1000;
     private UUID recentDismountSyncPlayerId;
     private int recentDismountSyncTicks;
     private float leftWheelHealth = PART_MAX_HEALTH;
     private float rightWheelHealth = PART_MAX_HEALTH;
     private float engineHealth = PART_MAX_HEALTH;
     private float subEngineHealth = PART_MAX_HEALTH;
+    private float rollVelocity;
     private float turretHealth = PART_MAX_HEALTH;
 
     private record BlockCollisionBounds(double centerX, double minY, double maxY, double centerZ, double halfWidth, double halfLength) {}
@@ -378,17 +388,14 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
 
     @Override
     protected AABB makeBoundingBox(Vec3 position) {
-        BlockCollisionBounds bounds = this.blockCollisionBounds();
-        if (bounds != null) {
-            double yaw = Math.toRadians(this.getYRot());
-            double absSin = Math.abs(Math.sin(yaw));
-            double absCos = Math.abs(Math.cos(yaw));
-            double extentX = bounds.halfWidth() * absCos + bounds.halfLength() * absSin;
-            double extentZ = bounds.halfWidth() * absSin + bounds.halfLength() * absCos;
-            Vec3 offset = this.rotateLocalOffset(bounds.centerX(), 0.0D, bounds.centerZ(), 1.0F);
-            double centerX = position.x + offset.x;
-            double centerZ = position.z + offset.z;
-            return new AABB(centerX - extentX, position.y + bounds.minY(), centerZ - extentZ, centerX + extentX, position.y + bounds.maxY(), centerZ + extentZ);
+        if (this.usesHullBlockCollisionBox()) {
+            // Helicopter part boxes include the tail boom and stub wings, so their rotated envelope is several times
+            // the airframe; keep the block/pick box at the hull-sized entity dimensions instead.
+            return super.makeBoundingBox(position);
+        }
+        AABB envelope = this.obbEnvelopeBox(position);
+        if (envelope != null) {
+            return envelope;
         }
         double scale = this.collisionLengthScale();
         double offsetZ = this.collisionCenterOffsetZ();
@@ -407,6 +414,33 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         double centerX = position.x + offset.x;
         double centerZ = position.z + offset.z;
         return new AABB(centerX - extentX, position.y, centerZ - extentZ, centerX + extentX, position.y + dimensions.height(), centerZ + extentZ);
+    }
+
+    @Nullable
+    private AABB obbEnvelopeBox(Vec3 position) {
+        BlockCollisionBounds bounds = this.blockCollisionBounds();
+        if (bounds == null) {
+            return null;
+        }
+        double yaw = Math.toRadians(this.getYRot());
+        double absSin = Math.abs(Math.sin(yaw));
+        double absCos = Math.abs(Math.cos(yaw));
+        double extentX = bounds.halfWidth() * absCos + bounds.halfLength() * absSin;
+        double extentZ = bounds.halfWidth() * absSin + bounds.halfLength() * absCos;
+        Vec3 offset = this.rotateLocalOffset(bounds.centerX(), 0.0D, bounds.centerZ(), 1.0F);
+        double centerX = position.x + offset.x;
+        double centerZ = position.z + offset.z;
+        return new AABB(centerX - extentX, position.y + bounds.minY(), centerZ - extentZ, centerX + extentX, position.y + bounds.maxY(), centerZ + extentZ);
+    }
+
+    /** Box covering every part, for entity-collision searches and render culling. */
+    public AABB partBounds() {
+        AABB envelope = this.obbEnvelopeBox(this.position());
+        return envelope == null ? this.getBoundingBox() : this.getBoundingBox().minmax(envelope);
+    }
+
+    private boolean usesHullBlockCollisionBox() {
+        return this.isAh6Vehicle() || this.isMi28Vehicle();
     }
 
     @Override
@@ -688,7 +722,6 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
             this.syncSelectedWeaponAmmoState();
             return true;
         }
-        this.cancelWeaponReload();
         this.entityData.set(DATA_SELECTED_WEAPON, slot);
         this.setSelectedWeaponSlotForSeat(seatIndex, slot);
         this.syncSelectedWeaponAmmoState();
@@ -1103,7 +1136,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         this.selectFallbackWeaponFor(player, input);
         VehicleWeaponInfo selectedWeapon = this.selectedWeapon(player);
         boolean canUseSelectedWeapon = selectedWeapon != null && this.canUseSelectedWeapon(player, selectedWeapon);
-        if (selectedWeapon != null && !this.isFreeLookInput(input) && canUseSelectedWeapon) {
+        if (selectedWeapon != null && !this.isFreeLookInput(input) && canUseSelectedWeapon && this.controlsTurret(player)) {
             this.entityData.set(DATA_TURRET_YAW, this.turretYawFromPlayer(player));
             this.entityData.set(DATA_TURRET_PITCH, this.weaponPitch(player));
         }
@@ -1113,13 +1146,15 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         if (input.deployDecoy()) {
             this.tryDeployDecoy(player);
         }
-        if (this.hasVehicleWeapons() && input.seekTarget()) {
+        // Only armed seats drive the vehicle trigger; a free-hand passenger firing their own gun must not take it over.
+        boolean armedSeat = this.hasWeaponUsableBySeat(this.seatIndexForPassenger(player, this.getPassengers().indexOf(player)));
+        if (armedSeat && input.seekTarget()) {
             this.seekControllerId = player.getId();
             this.seekInput = true;
         } else if (this.seekControllerId == player.getId()) {
             this.seekInput = false;
         }
-        if (this.hasVehicleWeapons() && input.fire()) {
+        if (armedSeat && input.fire()) {
             this.weaponControllerId = player.getId();
             this.weaponFireInput = true;
         } else if (this.weaponControllerId == player.getId()) {
@@ -1147,7 +1182,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         }
         this.selectFallbackWeaponFor(player, input);
         VehicleWeaponInfo selectedWeapon = this.selectedWeapon(player);
-        if (selectedWeapon != null && !this.isFreeLookInput(input) && this.canUseSelectedWeapon(player, selectedWeapon)) {
+        if (selectedWeapon != null && !this.isFreeLookInput(input) && this.canUseSelectedWeapon(player, selectedWeapon) && this.controlsTurret(player)) {
             this.entityData.set(DATA_TURRET_YAW, this.turretYawFromPlayer(player));
             this.entityData.set(DATA_TURRET_PITCH, this.weaponPitch(player));
         }
@@ -1157,6 +1192,10 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     }
 
     public void refreshClientTurretAim(Entity passenger) {
+        this.refreshClientTurretAim(passenger, 1.0F);
+    }
+
+    public void refreshClientTurretAim(Entity passenger, float partialTick) {
         if (!this.level().isClientSide()
                 || !(passenger instanceof LivingEntity living)
                 || passenger.getVehicle() != this
@@ -1165,9 +1204,16 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
             return;
         }
         VehicleWeaponInfo selectedWeapon = this.selectedWeapon(living);
-        if (selectedWeapon != null && this.canUseSelectedWeapon(living, selectedWeapon)) {
-            this.entityData.set(DATA_TURRET_YAW, this.turretYawFromPlayer(living));
+        if (selectedWeapon != null && this.canUseSelectedWeapon(living, selectedWeapon) && this.controlsTurret(living)) {
+            // Aim from the frame-interpolated aircraft heading and view so the turret camera does not step once per tick.
+            this.entityData.set(DATA_TURRET_YAW, this.turretYawFromView(living, Mth.rotLerp(partialTick, this.yRotO, this.getYRot()), living.getViewYRot(partialTick)));
             this.entityData.set(DATA_TURRET_PITCH, this.weaponPitch(living));
+            if (living == localClientPlayer()) {
+                // The local gunner re-aims every frame; interpolating from the tick-start (server-synced) value made the
+                // turret camera swing between the server and predicted aim every tick while the aircraft turned.
+                this.turretYawO = this.turretYaw();
+                this.turretPitchO = this.turretPitch();
+            }
         }
     }
 
@@ -1176,7 +1222,24 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     }
 
     private float turretYawFromPlayer(LivingEntity player) {
-        return Mth.wrapDegrees(this.getYRot() - player.getYRot());
+        return this.turretYawFromView(player, this.getYRot(), player.getYRot());
+    }
+
+    private float turretYawFromView(LivingEntity player, float vehicleYaw, float viewYaw) {
+        // Clamp to the seat's view limits like the client does, or the server turret runs past what the gunner sees.
+        float relativeView = Mth.wrapDegrees(viewYaw - vehicleYaw);
+        int fallbackIndex = this.getPassengers().indexOf(player);
+        if (fallbackIndex >= 0) {
+            SeatInfo seat = this.seatForPassenger(player, fallbackIndex);
+            relativeView = Mth.clamp(relativeView, seat.minYaw(), seat.maxYaw());
+        }
+        return -relativeView;
+    }
+
+    /** With a turret, only its seat aims it; other armed seats (the Mi-28 pilot's rockets) overwrote the gunner's aim. */
+    private boolean controlsTurret(LivingEntity player) {
+        var turret = this.vehicleData().defaults().turret();
+        return !turret.enabled() || this.seatIndexForPassenger(player, this.getPassengers().indexOf(player)) == turret.seatIndex();
     }
 
     private boolean shouldAlignDriverView(int seatIndex) {
@@ -1239,6 +1302,10 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
             this.hasPredictedRoll = false;
         }
         this.rollO = this.roll();
+        SyncedStateInterpolation interpolation = this.syncedStateInterpolation();
+        if (interpolation != null) {
+            interpolation.interpolate();
+        }
         this.updateLastTickMovementSpeed();
         super.tick();
         if (this.level().isClientSide() && this.dismountLerpSuppressionTicks > 0) {
@@ -1810,8 +1877,14 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
             return;
         }
         if (this.level().isClientSide() && !forceApply && !this.shouldRunClientPrediction()) {
-            int lerpSteps = this.authoritativeVehicleStateSyncInterval(false);
-            super.lerpPositionAndRotationStep(lerpSteps > 0 ? lerpSteps : MOVING_DRIVER_STATE_SYNC_INTERVAL, x, y, z, yaw, pitch);
+            SyncedStateInterpolation interpolation = this.syncedStateInterpolation();
+            if (interpolation != null) {
+                this.lastSyncedStateTick = this.tickCount;
+                interpolation.interpolateToSyncedState(new Vec3(x, y, z), yaw, pitch);
+            } else {
+                int lerpSteps = this.authoritativeVehicleStateSyncInterval(false);
+                super.lerpPositionAndRotationStep(lerpSteps > 0 ? lerpSteps : MOVING_DRIVER_STATE_SYNC_INTERVAL, x, y, z, yaw, pitch);
+            }
             super.lerpMotion(new Vec3(motionX, motionY, motionZ));
             return;
         }
@@ -1832,6 +1905,54 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
                 clearClientVehicleState();
                 this.clearControlState(false);
             }
+        }
+    }
+
+    @Override
+    @Nullable
+    public InterpolationHandler getInterpolation() {
+        return this.syncedStateInterpolation();
+    }
+
+    /**
+     * Remote-controlled land, boat and helicopter vehicles are smoothed from the mod's state packets. Vanilla move packets
+     * snapped them each tick with rotation rounded to 1.4 degrees, fighting the precise state and making the seats bob.
+     */
+    @Nullable
+    private SyncedStateInterpolation syncedStateInterpolation() {
+        if (!this.level().isClientSide() || this.isLocalInstanceAuthoritative()) {
+            return null;
+        }
+        VehicleType type = this.vehicleData().defaults().vehicleType();
+        if (type != VehicleType.LAND && type != VehicleType.BOAT && type != VehicleType.HELICOPTER) {
+            return null;
+        }
+        if (this.syncedStateInterpolation == null) {
+            this.syncedStateInterpolation = new SyncedStateInterpolation(this);
+        }
+        return this.syncedStateInterpolation;
+    }
+
+    private static final class SyncedStateInterpolation extends InterpolationHandler {
+        private static final int VANILLA_PACKET_SUPPRESSION_TICKS = 5;
+        private final VehicleEntity vehicle;
+
+        private SyncedStateInterpolation(VehicleEntity vehicle) {
+            super(vehicle);
+            this.vehicle = vehicle;
+        }
+
+        @Override
+        public void interpolateTo(Vec3 position, float yRot, float xRot) {
+            // Vanilla packets still move parked or pushed vehicles, but not while the mod's state sync is running.
+            if (this.vehicle.tickCount - this.vehicle.lastSyncedStateTick <= VANILLA_PACKET_SUPPRESSION_TICKS) {
+                return;
+            }
+            super.interpolateTo(position, yRot, xRot);
+        }
+
+        private void interpolateToSyncedState(Vec3 position, float yRot, float xRot) {
+            super.interpolateTo(position, yRot, xRot);
         }
     }
 
@@ -2395,7 +2516,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
             return;
         }
         boolean damaged = false;
-        for (LivingEntity target : this.level().getEntitiesOfClass(LivingEntity.class, this.getBoundingBox().inflate(0.25D, 0.15D, 0.25D))) {
+        for (LivingEntity target : this.level().getEntitiesOfClass(LivingEntity.class, this.partBounds().inflate(0.25D, 0.15D, 0.25D))) {
             if (!target.isAlive() || target.getVehicle() == this) {
                 continue;
             }
@@ -2407,7 +2528,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
             GunnerFriendlyFireEvents.clearFriendlyVehicleStrikeTargetAfterDamage(target, source);
             damaged = true;
         }
-        for (VehicleEntity target : this.level().getEntitiesOfClass(VehicleEntity.class, this.getBoundingBox().inflate(0.35D, 0.2D, 0.35D))) {
+        for (VehicleEntity target : this.level().getEntitiesOfClass(VehicleEntity.class, this.partBounds().inflate(0.35D, 0.2D, 0.35D))) {
             if (target == this || target.isRemoved()
                     || target.vehicleData().defaults().collisionLevel() == CollisionLevel.NONE) {
                 continue;
@@ -2485,7 +2606,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
                 || this.vehicleData().defaults().collisionLevel() == CollisionLevel.NONE) {
             return;
         }
-        for (VehicleEntity target : this.level().getEntitiesOfClass(VehicleEntity.class, this.getBoundingBox().inflate(VEHICLE_ENTITY_COLLISION_SEARCH_EXPANSION))) {
+        for (VehicleEntity target : this.level().getEntitiesOfClass(VehicleEntity.class, this.partBounds().inflate(VEHICLE_ENTITY_COLLISION_SEARCH_EXPANSION))) {
             if (target == this || target.isRemoved() || target.noPhysics || this.getId() >= target.getId()
                     || target.vehicleData().defaults().collisionLevel() == CollisionLevel.NONE) {
                 continue;
@@ -2616,7 +2737,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
             return;
         }
         Entity localPlayer = this.level().isClientSide() ? localClientPlayer() : null;
-        for (Entity entity : this.level().getEntities(this, this.getBoundingBox().inflate(0.35D), this::canSupportWithObbCollision)) {
+        for (Entity entity : this.level().getEntities(this, this.partBounds().inflate(0.35D), this::canSupportWithObbCollision)) {
             if (this.level().isClientSide() && entity != localPlayer) {
                 continue;
             }
@@ -2914,9 +3035,6 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
             }
             return false;
         }
-        if (!this.level().isClientSide()) {
-            this.cancelWeaponReload();
-        }
         this.entityData.set(DATA_SELECTED_WEAPON, slot);
         this.setSelectedWeaponSlotForSeat(seatIndex, slot);
         if (this.level().isClientSide()) {
@@ -3046,13 +3164,13 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     private int selectedWeaponReloadDuration() {
         Identifier weaponId = this.selectedVehicleWeaponId();
         GunStats stats = weaponId == null ? null : VehicleWeaponStats.get(weaponId);
-        return stats == null ? 0 : Math.max(0, stats.totalReloadTime());
+        return stats == null ? 0 : Math.max(0, Math.round(stats.totalReloadTime() * VEHICLE_RELOAD_TIME_SCALE));
     }
 
     private int selectedWeaponReloadDuration(Entity passenger) {
         Identifier weaponId = this.selectedVehicleWeaponId(passenger);
         GunStats stats = weaponId == null ? null : VehicleWeaponStats.get(weaponId);
-        return stats == null ? 0 : Math.max(0, stats.totalReloadTime());
+        return stats == null ? 0 : Math.max(0, Math.round(stats.totalReloadTime() * VEHICLE_RELOAD_TIME_SCALE));
     }
 
     private boolean isWeaponReloading() {
@@ -3393,9 +3511,6 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
                     }
                     return false;
                 }
-                if (!this.level().isClientSide()) {
-                    this.cancelWeaponReload();
-                }
                 this.entityData.set(DATA_SELECTED_WEAPON, next);
                 this.setSelectedWeaponSlotForSeat(seatIndex, next);
                 if (this.level().isClientSide()) {
@@ -3567,7 +3682,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
             return null;
         }
         return new Vec3(
-                Mth.lerp(partialTick, this.yRotO, this.getYRot()),
+                Mth.rotLerp(partialTick, this.yRotO, this.getYRot()),
                 Mth.lerp(partialTick, this.xRotO, this.getXRot()),
                 this.roll(partialTick)
         );
@@ -3619,7 +3734,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
 
     public Vec3 aircraftCameraRotationFor(float partialTick) {
         return new Vec3(
-                Mth.lerp(partialTick, this.yRotO, this.getYRot()),
+                Mth.rotLerp(partialTick, this.yRotO, this.getYRot()),
                 Mth.lerp(partialTick, this.xRotO, this.getXRot()),
                 this.roll(partialTick)
         );
@@ -3637,7 +3752,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
             return null;
         }
         return new Vec3(
-                Mth.lerp(partialTick, this.yRotO, this.getYRot()),
+                Mth.rotLerp(partialTick, this.yRotO, this.getYRot()),
                 Mth.lerp(partialTick, this.xRotO, this.getXRot()),
                 0.0D
         );
@@ -4628,7 +4743,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         if (playerVerticalControl) {
             // Steer the velocity directly instead of summing gravity and rotor lift, which never balance exactly and made the hover drift.
             velocity = this.playerHelicopterVelocity(velocityAtTickStart, targetVerticalSpeed, engine, mobility);
-            this.updatePlayerHelicopterAttitude(velocity, engine, mobility, Mth.wrapDegrees(this.getYRot() - this.yRotO));
+            this.updatePlayerHelicopterAttitude(velocity, velocityAtTickStart, engine, mobility, Mth.wrapDegrees(this.getYRot() - this.yRotO));
         } else {
             Vec3 lift = this.helicopterLiftVector(liftRotorSpeed * liftSpeed * mobility * altitudeLimitFactor);
             velocity = velocity.add(0.0D, -0.06D, 0.0D).add(lift);
@@ -4669,6 +4784,10 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         int forward = this.input.forwardAxis();
         int strafe = this.input.strafeAxis();
         double forwardSpeed = forward > 0 ? this.playerHelicopterMaxSpeed(engine, mobility) : engine.maxReverseSpeed() * mobility * HELICOPTER_PLAYER_SPEED_MULTIPLIER;
+        if (forward > 0 && this.input.cruiseSpeed() > 0.0F) {
+            // Cruise control holds the speed it was switched on at instead of flying flat out.
+            forwardSpeed = Math.min(forwardSpeed, this.input.cruiseSpeed());
+        }
         double strafeSpeed = this.playerHelicopterMaxSpeed(engine, mobility) * HELICOPTER_STRAFE_SPEED_RATIO;
         Vec3 forwardDirection = this.horizontalDirection(this.getYRot());
         Vec3 leftDirection = new Vec3(forwardDirection.z, 0.0D, -forwardDirection.x);
@@ -4680,18 +4799,27 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         return new Vec3(horizontal.x, vertical, horizontal.z);
     }
 
-    private void updatePlayerHelicopterAttitude(Vec3 velocity, EngineInfo engine, double mobility, float yawDelta) {
+    private void updatePlayerHelicopterAttitude(Vec3 velocity, Vec3 previousVelocity, EngineInfo engine, double mobility, float yawDelta) {
         Vec3 forwardDirection = this.horizontalDirection(this.getYRot());
         Vec3 leftDirection = new Vec3(forwardDirection.z, 0.0D, -forwardDirection.x);
+        Vec3 previousForward = this.horizontalDirection(this.yRotO);
+        Vec3 previousLeft = new Vec3(previousForward.z, 0.0D, -previousForward.x);
         double maxForward = Math.max(1.0E-4D, this.playerHelicopterMaxSpeed(engine, mobility));
         double maxStrafe = Math.max(1.0E-4D, maxForward * HELICOPTER_STRAFE_SPEED_RATIO);
         float forwardFraction = (float) Mth.clamp(velocity.dot(forwardDirection) / maxForward, -1.0D, 1.0D);
         float leftFraction = (float) Mth.clamp(velocity.dot(leftDirection) / maxStrafe, -1.0D, 1.0D);
+        // Sideways acceleration in the aircraft's own frame, so a steady turn does not read as a strafe.
+        double lateralAcceleration = velocity.dot(leftDirection) - previousVelocity.dot(previousLeft);
+        double fullLateralAcceleration = maxStrafe * HELICOPTER_ACCELERATION_RESPONSE * Mth.clamp(engine.playerAcceleration(), 0.05D, 4.0D);
+        float leftAccelerationFraction = (float) Mth.clamp(lateralAcceleration / fullLateralAcceleration, -1.5D, 1.5D);
         // Nose down (positive pitch) into forward flight, bank (positive roll is right) into strafes and turns.
         float targetPitch = Mth.clamp(forwardFraction * HELICOPTER_MAX_FORWARD_TILT + this.pilotAimPitch, -50.0F, 40.0F);
-        float targetRoll = Mth.clamp(-leftFraction * HELICOPTER_MAX_FORWARD_TILT + yawDelta * HELICOPTER_TURN_BANK, -HELICOPTER_MAX_BANK, HELICOPTER_MAX_BANK);
+        float targetRoll = Mth.clamp(-(leftFraction + leftAccelerationFraction * HELICOPTER_STRAFE_ACCELERATION_BANK) * HELICOPTER_MAX_FORWARD_TILT
+                + yawDelta * HELICOPTER_TURN_BANK, -HELICOPTER_MAX_BANK, HELICOPTER_MAX_BANK);
         this.setXRot(this.getXRot() + (targetPitch - this.getXRot()) * HELICOPTER_ATTITUDE_RESPONSE);
-        this.setRoll(this.roll() + (targetRoll - this.roll()) * HELICOPTER_ATTITUDE_RESPONSE);
+        // Spring the bank: lean into a sideways move, counter-bank to stop it, then rock a little before settling upright.
+        this.rollVelocity += (targetRoll - this.roll()) * HELICOPTER_ROLL_SPRING - this.rollVelocity * HELICOPTER_ROLL_DAMPING;
+        this.setRoll(this.roll() + this.rollVelocity);
     }
 
     private void warnHelicopterDangerousDescent(boolean forcedDescent, double altitude) {
@@ -4849,7 +4977,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     }
 
     private Vec3 rotateLocalOffset(double localX, double localY, double localZ, float partialTick) {
-        double yaw = Math.toRadians(Mth.lerp(partialTick, this.yRotO, this.getYRot()));
+        double yaw = Math.toRadians(Mth.rotLerp(partialTick, this.yRotO, this.getYRot()));
         double cos = Math.cos(yaw);
         double sin = Math.sin(yaw);
         double x = localX * cos - localZ * sin;
@@ -4891,7 +5019,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         double pivotY = this.rotateOffsetHeight();
         Matrix4d transform = new Matrix4d();
         transform.translate(origin.x, origin.y + pivotY, origin.z);
-        transform.rotate(Axis.YP.rotationDegrees(-Mth.lerp(partialTick, this.yRotO, this.getYRot())));
+        transform.rotate(Axis.YP.rotationDegrees(-Mth.rotLerp(partialTick, this.yRotO, this.getYRot())));
         transform.rotate(Axis.XP.rotationDegrees(Mth.lerp(partialTick, this.xRotO, this.getXRot())));
         transform.rotate(Axis.ZP.rotationDegrees(this.roll(partialTick)));
         transform.translate(0.0D, -pivotY, 0.0D);
@@ -4903,7 +5031,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         double pivotY = this.rotateOffsetHeight();
         Matrix4d transform = new Matrix4d();
         transform.translate(origin.x, origin.y + pivotY, origin.z);
-        transform.rotate(Axis.YP.rotationDegrees(-Mth.lerp(partialTick, this.yRotO, this.getYRot())));
+        transform.rotate(Axis.YP.rotationDegrees(-Mth.rotLerp(partialTick, this.yRotO, this.getYRot())));
         transform.rotate(Axis.XP.rotationDegrees(Mth.lerp(partialTick, this.xRotO, this.getXRot())));
         transform.translate(0.0D, -pivotY, 0.0D);
         return transform;
@@ -4911,7 +5039,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
 
     private Matrix4d vehiclePoseRotation(float partialTick) {
         Matrix4d transform = new Matrix4d();
-        transform.rotate(Axis.YP.rotationDegrees(-Mth.lerp(partialTick, this.yRotO, this.getYRot())));
+        transform.rotate(Axis.YP.rotationDegrees(-Mth.rotLerp(partialTick, this.yRotO, this.getYRot())));
         transform.rotate(Axis.XP.rotationDegrees(Mth.lerp(partialTick, this.xRotO, this.getXRot())));
         transform.rotate(Axis.ZP.rotationDegrees(this.roll(partialTick)));
         return transform;
@@ -4952,7 +5080,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     }
 
     private float articulatedWorldTurretYaw(float partialTick) {
-        return Mth.lerp(partialTick, this.yRotO, this.getYRot()) - this.turretYaw(partialTick);
+        return Mth.rotLerp(partialTick, this.yRotO, this.getYRot()) - this.turretYaw(partialTick);
     }
 
     private float articulatedTurretPitch(float partialTick) {
@@ -5639,6 +5767,17 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
             passenger = this.getFirstPassenger();
         }
         return passenger instanceof LivingEntity living ? living : null;
+    }
+
+    @Override
+    public boolean shouldRenderAtSqrDistance(double distance) {
+        // Helicopter hull boxes are smaller than the airframe, so size render distance from the full part bounds.
+        double size = this.partBounds().getSize();
+        if (Double.isNaN(size)) {
+            size = 1.0D;
+        }
+        size *= 64.0D * getViewScale();
+        return distance < size * size;
     }
 
     @Override

@@ -91,6 +91,7 @@ public final class AnimatedGunItem extends GunItem implements GeoItem {
     private static ItemStack clientDrawResetStack = ItemStack.EMPTY;
     private static long clientDrawResetDeadlineNanos;
     private static long clientSprintAnimationBlockedUntilNanos;
+    private static final int STATE_BLEND_TICKS = 3;
     private static String lastFirstPersonGunId = "";
 
     public AnimatedGunItem(Properties properties, GunStats stats) {
@@ -124,6 +125,8 @@ public final class AnimatedGunItem extends GunItem implements GeoItem {
         if (isNonFirstPersonPerspective(test)) {
             return PlayState.STOP;
         }
+        // Blend between idle, reload, sprint and inspect instead of snapping; shots below start instantly.
+        test.controller().setTransitionTicks(STATE_BLEND_TICKS);
         ItemStack renderStack = rendererItemStack(test);
         ItemStack stack = animationStateStack(test, renderStack);
         clearStaleRenderReloadVisualState(renderStack, stack);
@@ -406,6 +409,7 @@ public final class AnimatedGunItem extends GunItem implements GeoItem {
         }
 
         test.controller().reset();
+        test.controller().setTransitionTicks(0);
         String animation = clientShootAiming ? ANIM_AIM_SHOOT : ANIM_SHOOT;
         if (!test.controller().triggerAnimation(animation)) {
             clearPendingClientShoot();

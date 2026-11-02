@@ -171,7 +171,7 @@ public final class GunItemClientExtensions implements IClientItemExtensions {
         applyBobbingTransforms(poseStack, player, partialTick, ads);
         applySwayTransforms(poseStack, player, partialTick, ads);
         applySprintingTransforms(poseStack, player, stack, direction, ads);
-        applyRecoilTransforms(poseStack, ads);
+        applyRecoilTransforms(poseStack, partialTick, ads);
         return true;
     }
 
@@ -242,9 +242,10 @@ public final class GunItemClientExtensions implements IClientItemExtensions {
         return id != null && id.getPath().endsWith("_sword");
     }
 
-    private static void applyRecoilTransforms(PoseStack poseStack, float ads) {
-        double recoilNormal = GunRecoilHandler.getGunRecoilNormal();
-        if (recoilNormal <= 0.0D) {
+    private static void applyRecoilTransforms(PoseStack poseStack, float partialTick, float ads) {
+        // Interpolated per frame: the kick used to move in 20 Hz steps.
+        double recoilNormal = GunRecoilHandler.getGunRecoilNormal(partialTick);
+        if (Math.abs(recoilNormal) < 1.0E-4D) {
             return;
         }
 
@@ -252,7 +253,7 @@ public final class GunItemClientExtensions implements IClientItemExtensions {
         double kick = GunRecoilHandler.getGunRecoilKick() * 0.0625D * recoilNormal * adsReduction;
         float recoilLift = (float) (GunRecoilHandler.getGunRecoilAngle() * recoilNormal) * adsReduction;
         float recoilSwayAmount = 2.0F + 1.0F * (1.0F - ads);
-        float recoilSway = (float) ((GunRecoilHandler.getGunRecoilRandom() * recoilSwayAmount - recoilSwayAmount / 2.0F) * recoilNormal);
+        float recoilSway = (float) (GunRecoilHandler.getGunRecoilSway(partialTick) * recoilSwayAmount / 2.0F * recoilNormal);
         poseStack.translate(0.0D, 0.0D, kick);
         poseStack.translate(0.0D, 0.0D, 0.15D);
         poseStack.mulPose(Axis.YP.rotationDegrees(recoilSway));

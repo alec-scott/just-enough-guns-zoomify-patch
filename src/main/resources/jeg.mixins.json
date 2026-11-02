@@ -27,6 +27,7 @@
     "MinecraftVehicleFrameTimingMixin",
     "DeltaTrackerVehicleTimingMixin",
     "KeyMappingVehicleMixin",
+    "LocalPlayerVehiclePickMixin",
     "LivingEntityRendererVehicleMixin",
     "MinecraftVehicleHotbarMixin",
     "MouseHandlerVehicleMixin",

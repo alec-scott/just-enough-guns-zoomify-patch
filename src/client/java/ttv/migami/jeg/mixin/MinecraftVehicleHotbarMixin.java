@@ -59,7 +59,8 @@ public class MinecraftVehicleHotbarMixin {
 
     @Inject(method = "handleKeybinds()V", at = @At("HEAD"), cancellable = true)
     private void jeg$handleVehicleHotbarKeys(CallbackInfo callback) {
-        if (this.player == null || !(this.player.getVehicle() instanceof VehicleEntity vehicle)) {
+        // Passengers with free hands keep the normal hotbar; only drivers and gunners select vehicle weapons with it.
+        if (this.player == null || !(this.player.getVehicle() instanceof VehicleEntity vehicle) || !vehicle.shouldBanPassengerHand(this.player)) {
             return;
         }
         int weaponSlot = -1;

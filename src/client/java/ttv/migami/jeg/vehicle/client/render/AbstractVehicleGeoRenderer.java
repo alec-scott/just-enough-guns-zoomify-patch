@@ -82,7 +82,7 @@ abstract class AbstractVehicleGeoRenderer<T extends VehicleEntity> extends GeoEn
         if (!vehicle.shouldRender(camX, camY, camZ)) {
             return false;
         }
-        AABB bounds = vehicle.getBoundingBox().inflate(5.0D);
+        AABB bounds = vehicle.partBounds().inflate(5.0D);
         if (bounds.hasNaN() || bounds.getSize() == 0.0D) {
             bounds = new AABB(vehicle.getX() - 8.0D, vehicle.getY() - 6.0D, vehicle.getZ() - 8.0D, vehicle.getX() + 8.0D, vehicle.getY() + 6.0D, vehicle.getZ() + 8.0D);
         }

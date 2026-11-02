@@ -120,6 +120,10 @@ public class GunItem extends Item {
     static final int RELOAD_STAGE_START = 1;
     static final int RELOAD_STAGE_LOOP = 2;
     static final int RELOAD_STAGE_STOP = 3;
+    /** Single-stage reload whose ammo is already in; the rest of the animation can be cancelled by firing. */
+    static final int RELOAD_STAGE_COMMITTED = 4;
+    /** Share of a single-stage reload after which the new magazine counts (CoD-style reload cancel). */
+    private static final float RELOAD_COMMIT_FRACTION = 0.75F;
     private static final int DEFAULT_DRAW_TICKS = 30;
     private static final double DRAW_OPERATION_LOCK_FRACTION = 0.85D;
     private static final Map<String, Integer> DRAW_ANIMATION_TICKS = Map.ofEntries(
@@ -886,6 +890,12 @@ public class GunItem extends Item {
 
         if (player.getCooldowns().isOnCooldown(stack)) {
             return false;
+        }
+        if (isReloading(stack) && !usesSegmentedReloadAnimation()) {
+            if (stack.getOrDefault(ModDataComponents.GUN_RELOAD_STAGE.get(), RELOAD_STAGE_NONE) != RELOAD_STAGE_COMMITTED) {
+                return false;
+            }
+            clearReloadVisualState(stack);
         }
 
         if (usesOverheatMechanic() && isOverheated(stack)) {
@@ -1889,7 +1899,8 @@ public class GunItem extends Item {
 
     private boolean startPendingReload(Level level, Player player, InteractionHand hand, ItemStack stack, @Nullable PendingMagazineSwap pendingMagazine) {
         int reloadTicks = Math.max(1, stats.totalReloadTime());
-        player.getCooldowns().addCooldown(stack, reloadTicks);
+        int lockTicks = usesSegmentedReloadAnimation() ? reloadTicks : reloadCommitTicks(getReloadVisualTicks(reloadTicks)) + 1;
+        player.getCooldowns().addCooldown(stack, lockTicks);
         playSound(level, player, stats.reloadStartSoundEvent());
         PENDING_RELOADS.put(player.getUUID(), new PendingReload(
                 hand,
@@ -2246,13 +2257,22 @@ public class GunItem extends Item {
         }
 
         remainingTicks--;
+        boolean committed = stack.getOrDefault(ModDataComponents.GUN_RELOAD_STAGE.get(), RELOAD_STAGE_NONE) == RELOAD_STAGE_COMMITTED;
         if (remainingTicks <= 0) {
-            completePendingReload(level, player, stack);
+            if (!committed) {
+                completePendingReload(level, player, stack);
+            }
             clearReloadVisualState(stack);
             return;
         }
 
         stack.set(ModDataComponents.GUN_RELOAD_TICKS_REMAINING.get(), remainingTicks);
+        int totalTicks = Math.max(1, stack.getOrDefault(ModDataComponents.GUN_RELOAD_TICKS_TOTAL.get(), remainingTicks));
+        if (!committed && !usesSegmentedReloadAnimation() && totalTicks - remainingTicks >= reloadCommitTicks(totalTicks)) {
+            // The new magazine is seated: load it now so firing can cut the rest of the animation.
+            completePendingReload(level, player, stack);
+            stack.set(ModDataComponents.GUN_RELOAD_STAGE.get(), RELOAD_STAGE_COMMITTED);
+        }
         if (usesSegmentedReloadAnimation()) {
             int oldStage = stack.getOrDefault(ModDataComponents.GUN_RELOAD_STAGE.get(), RELOAD_STAGE_NONE);
             int newStage = computeSegmentedReloadStage(stack, remainingTicks);
@@ -2327,6 +2347,10 @@ public class GunItem extends Item {
         }
         int defaultTicks = Mth.clamp(totalTicks / 4, 4, 12);
         return Math.max(defaultTicks, RELOAD_STOP_ANIMATION_MIN_TICKS.getOrDefault(stats.id().getPath(), defaultTicks));
+    }
+
+    private static int reloadCommitTicks(int totalTicks) {
+        return Math.max(1, Mth.ceil(totalTicks * RELOAD_COMMIT_FRACTION));
     }
 
     private int getReloadVisualTicks(int reloadTicks) {

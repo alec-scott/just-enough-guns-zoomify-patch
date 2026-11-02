@@ -492,7 +492,7 @@ public final class FabricClientBootstrap {
         ItemStack heldOff = player.getOffhandItem();
 
         boolean drawLocked = GunItem.isDrawOperationLocked(heldMain);
-        while (!(player.getVehicle() instanceof VehicleEntity) && consumeUnlockedClick(KeyBindings.ATTACHMENTS, drawLocked)) {
+        while (!handsBannedInVehicle(player) && consumeUnlockedClick(KeyBindings.ATTACHMENTS, drawLocked)) {
             if (heldMain.getItem() instanceof GunItem && !GunItem.isDrawOperationLocked(heldMain)) {
                 ClientNetworkHandler.sendOpenAttachments();
             }
@@ -524,10 +524,10 @@ public final class FabricClientBootstrap {
                 GunItem.clearTriggerLock(heldMain);
                 ClientNetworkHandler.sendTriggerRelease(InteractionHand.MAIN_HAND);
                 nextVisualShotTickMain = 0L;
-                GunRecoilHandler.stopImmediate();
+                GunRecoilHandler.releaseTrigger();
             } else {
                 nextVisualShotTickMain = 0L;
-                GunRecoilHandler.stopImmediate();
+                GunRecoilHandler.releaseTrigger();
             }
             attackHeldLastTick = attackDown;
         } else {
@@ -542,14 +542,14 @@ public final class FabricClientBootstrap {
             client.options.keyAttack.setDown(false);
         }
 
-        while (!(player.getVehicle() instanceof VehicleEntity) && consumeUnlockedClick(KeyBindings.MELEE, drawLocked)) {
+        while (!handsBannedInVehicle(player) && consumeUnlockedClick(KeyBindings.MELEE, drawLocked)) {
             if (heldMain.getItem() instanceof GunItem && !GunItem.isDrawOperationLocked(heldMain) && canUseGunMelee(player, heldMain)) {
                 GunItem.cancelReloadForImmediateAction(player, heldMain);
                 ClientNetworkHandler.sendMelee();
             }
         }
 
-        if (!(player.getVehicle() instanceof VehicleEntity) && consumeUnlockedClick(KeyBindings.INSPECT, drawLocked)
+        if (!handsBannedInVehicle(player) && consumeUnlockedClick(KeyBindings.INSPECT, drawLocked)
                 && heldMain.getItem() instanceof GunItem && !GunItem.isDrawOperationLocked(heldMain)) {
             if (heldMain.getItem() instanceof AnimatedGunItem) {
                 AnimatedGunItem.triggerClientInspect(player);
@@ -557,7 +557,7 @@ public final class FabricClientBootstrap {
             ClientNetworkHandler.sendInspect();
         }
 
-        if (!(player.getVehicle() instanceof VehicleEntity) && consumeUnlockedClick(KeyBindings.RELOAD, drawLocked)) {
+        if (!handsBannedInVehicle(player) && consumeUnlockedClick(KeyBindings.RELOAD, drawLocked)) {
             if (heldMain.getItem() instanceof GunItem && !GunItem.isDrawOperationLocked(heldMain)) {
                 ClientNetworkHandler.sendReload(InteractionHand.MAIN_HAND);
             } else if (heldOff.getItem() instanceof GunItem && !GunItem.isDrawOperationLocked(heldOff)) {
@@ -666,6 +666,11 @@ public final class FabricClientBootstrap {
                 && GunScopeSupport.hasTelescopicSight(stack)) {
             AimingHandler.get().suppressUntilUseReleased();
         }
+    }
+
+    /** Drivers and gunners use these keys for the vehicle; other passengers keep normal gun controls. */
+    private static boolean handsBannedInVehicle(LocalPlayer player) {
+        return player.getVehicle() instanceof VehicleEntity vehicle && vehicle.shouldBanPassengerHand(player);
     }
 
     private static void suppressSwingAnimation(Minecraft client) {

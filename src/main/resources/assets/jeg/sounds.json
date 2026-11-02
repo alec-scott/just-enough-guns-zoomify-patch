@@ -208,6 +208,30 @@
       }
     ]
   },
+  "ui.hitmarker.hit": {
+    "sounds": [
+      {
+        "name": "jeg:ui/hitmarker/hit1"
+      },
+      {
+        "name": "jeg:ui/hitmarker/hit2"
+      }
+    ]
+  },
+  "ui.hitmarker.headshot": {
+    "sounds": [
+      {
+        "name": "jeg:ui/hitmarker/headshot"
+      }
+    ]
+  },
+  "ui.hitmarker.kill": {
+    "sounds": [
+      {
+        "name": "jeg:ui/hitmarker/kill"
+      }
+    ]
+  },
   "item.kill_effect.birthday_party": {
     "sounds": [
       {

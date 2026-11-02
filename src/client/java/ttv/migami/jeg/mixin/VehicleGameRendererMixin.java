@@ -36,7 +36,7 @@ public abstract class VehicleGameRendererMixin {
             return;
         }
         boolean fixedCamera = vehicle.usesFixedCameraPosition(entity);
-        float yawDelta = Mth.wrapDegrees(this.mainCamera.yRot() - Mth.lerp(partialTick, vehicle.yRotO, vehicle.getYRot()));
+        float yawDelta = Mth.wrapDegrees(this.mainCamera.yRot() - Mth.rotLerp(partialTick, vehicle.yRotO, vehicle.getYRot()));
         float rollFactor = (Mth.abs(yawDelta) - 90.0F) / 90.0F;
         float pitchFactor;
         if (Mth.abs(yawDelta) <= 90.0F) {
@@ -55,7 +55,7 @@ public abstract class VehicleGameRendererMixin {
         float eyeHeight = entity.getEyeHeight();
         Vector3f offset = new Vector3f(0.0F, -eyeHeight, 0.0F);
         Quaternionf quaternion = Axis.XP.rotationDegrees(0.0F);
-        quaternion.mul(Axis.YP.rotationDegrees(-Mth.lerp(partialTick, vehicle.yRotO, vehicle.getYRot())));
+        quaternion.mul(Axis.YP.rotationDegrees(-Mth.rotLerp(partialTick, vehicle.yRotO, vehicle.getYRot())));
         quaternion.mul(Axis.XP.rotationDegrees(Mth.lerp(partialTick, vehicle.xRotO, vehicle.getXRot())));
         quaternion.mul(Axis.ZP.rotationDegrees(vehicle.roll(partialTick)));
         offset.rotate(quaternion);
