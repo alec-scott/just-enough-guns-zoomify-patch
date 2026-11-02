@@ -104,6 +104,7 @@ public class BulletEntity extends Projectile {
     }
     private static final double MIN_TRAIL_START_DISTANCE_SQR = 0.45D * 0.45D;
     private static final double TRAIL_SYNC_RANGE = 256.0D;
+    private static final double BULLET_KNOCKBACK = 0.02D;
     private static final float ROCKET_EXPLOSION_POWER = 6.8F;
     private static final float ROCKET_DIRECT_HIT_DAMAGE = 70.0F;
     private static final float ROCKET_BLAST_BASE_DAMAGE = 32.0F;
@@ -406,9 +407,9 @@ public class BulletEntity extends Projectile {
                 if (hitEntity instanceof LivingEntity living) {
                     GunStats stats = getGunStats();
                     float damage = applyBallisticArmor(living, result, this.entityData.get(DATA_DAMAGE), stats, false);
-                    boolean hurt = living.hurtServer((ServerLevel) this.level(), source, damage);
+                    boolean hurt = this.hurtWithLightKnockback(living, source, damage);
                     if (hurt && livingOwner instanceof ServerPlayer shooter) {
-                        NetworkHandler.sendHitMarker(shooter, isCriticalHit(result, living), living.isDeadOrDying());
+                        NetworkHandler.sendHitMarker(shooter, living, isCriticalHit(result, living));
                     }
                     if (hurt) {
                         applyKillEffect(living, result);
@@ -460,13 +461,12 @@ public class BulletEntity extends Projectile {
             if (entity instanceof LivingEntity living) {
                 damage = applyBallisticArmor(living, result, damage, stats, false);
 
-                ServerLevel serverLevel = (ServerLevel) this.level();
-                boolean hurt = living.hurtServer(serverLevel, source, damage);
+                boolean hurt = this.hurtWithLightKnockback(living, source, damage);
                 if (hurt && this.entityData.get(DATA_EXPLOSIVE_AMMO)) {
                     living.igniteForSeconds(2);
                 }
                 if (hurt && livingOwner instanceof ServerPlayer shooter) {
-                    NetworkHandler.sendHitMarker(shooter, isCriticalHit(result, living), living.isDeadOrDying());
+                    NetworkHandler.sendHitMarker(shooter, living, isCriticalHit(result, living));
                 }
                 if (hurt) {
                     applyKillEffect(living, result);
@@ -509,6 +509,24 @@ public class BulletEntity extends Projectile {
         }
 
         this.discard();
+    }
+
+    /**
+     * Bullets clear the target's damage cooldown so every round lands, which also let vanilla's full melee knockback
+     * stack on every bullet and launch mobs under automatic fire. Keep the target's own motion and add a light nudge
+     * along the bullet's path instead.
+     */
+    private boolean hurtWithLightKnockback(LivingEntity living, DamageSource source, float damage) {
+        Vec3 motionBefore = living.getDeltaMovement();
+        boolean hurt = living.hurtServer((ServerLevel) this.level(), source, damage);
+        if (hurt) {
+            Vec3 path = this.getDeltaMovement().multiply(1.0D, 0.0D, 1.0D);
+            double resistance = Mth.clamp(living.getAttributeValue(Attributes.KNOCKBACK_RESISTANCE), 0.0D, 1.0D);
+            Vec3 nudge = path.lengthSqr() > 1.0E-8D ? path.normalize().scale(BULLET_KNOCKBACK * (1.0D - resistance)) : Vec3.ZERO;
+            living.setDeltaMovement(motionBefore.add(nudge));
+            living.hurtMarked = true;
+        }
+        return hurt;
     }
 
     private static boolean isCriticalHit(EntityHitResult result, LivingEntity living) {
@@ -976,7 +994,7 @@ public class BulletEntity extends Projectile {
                             float damage = applyBallisticArmor(living, entityHit, directDamage, stats, id.equals(ROCKET_LAUNCHER_ID));
                             boolean hurt = living.hurtServer((ServerLevel) this.level(), source, damage);
                             if (hurt && owner instanceof ServerPlayer shooter) {
-                                NetworkHandler.sendHitMarker(shooter, isCriticalHit(entityHit, living), living.isDeadOrDying());
+                                NetworkHandler.sendHitMarker(shooter, living, isCriticalHit(entityHit, living));
                             }
                         } else {
                             hitEntity.hurt(source, directDamage);
@@ -1005,7 +1023,7 @@ public class BulletEntity extends Projectile {
                             float directDamage = applyBallisticArmor(living, entityHit, stats.damage(), stats, false);
                             boolean hurt = living.hurtServer((ServerLevel) this.level(), source, directDamage);
                             if (hurt && owner instanceof ServerPlayer shooter) {
-                                NetworkHandler.sendHitMarker(shooter, isCriticalHit(entityHit, living), living.isDeadOrDying());
+                                NetworkHandler.sendHitMarker(shooter, living, isCriticalHit(entityHit, living));
                             }
                         } else {
                             hitEntity.hurt(source, stats.damage());

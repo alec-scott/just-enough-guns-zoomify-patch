@@ -92,6 +92,8 @@ public final class AnimatedGunItem extends GunItem implements GeoItem {
     private static long clientDrawResetDeadlineNanos;
     private static long clientSprintAnimationBlockedUntilNanos;
     private static final int STATE_BLEND_TICKS = 3;
+    private static final long SHOT_NO_BLEND_WINDOW_NANOS = 400_000_000L;
+    private static long clientLastShotNanos;
     private static String lastFirstPersonGunId = "";
 
     public AnimatedGunItem(Properties properties, GunStats stats) {
@@ -125,8 +127,10 @@ public final class AnimatedGunItem extends GunItem implements GeoItem {
         if (isNonFirstPersonPerspective(test)) {
             return PlayState.STOP;
         }
-        // Blend between idle, reload, sprint and inspect instead of snapping; shots below start instantly.
-        test.controller().setTransitionTicks(STATE_BLEND_TICKS);
+        // Blend between idle, reload, sprint and inspect instead of snapping. Not while firing: each shot animation
+        // blending back toward idle between rounds kept the hands drifting mid-pose during automatic fire.
+        boolean firing = System.nanoTime() - clientLastShotNanos < SHOT_NO_BLEND_WINDOW_NANOS;
+        test.controller().setTransitionTicks(firing ? 0 : STATE_BLEND_TICKS);
         ItemStack renderStack = rendererItemStack(test);
         ItemStack stack = animationStateStack(test, renderStack);
         clearStaleRenderReloadVisualState(renderStack, stack);
@@ -728,6 +732,7 @@ public final class AnimatedGunItem extends GunItem implements GeoItem {
         clientShootStack = stack;
         clientShootAiming = aiming;
         clientShootTriggerDeadlineNanos = System.nanoTime() + CLIENT_SHOOT_TRIGGER_WINDOW_NANOS;
+        clientLastShotNanos = System.nanoTime();
     }
 
     public static void triggerClientMelee(Entity entity) {

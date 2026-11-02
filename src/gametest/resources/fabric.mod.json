@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "id": "jeg-gametest",
+  "version": "1.0.0",
+  "name": "JEG Client Game Tests",
+  "environment": "client",
+  "entrypoints": {
+    "fabric-client-gametest": [
+      "ttv.migami.jeg.gametest.HelicopterSwayClientGameTest",
+      "ttv.migami.jeg.gametest.HitMarkerClientGameTest"
+    ]
+  },
+  "depends": {
+    "jeg": "*",
+    "fabric-client-gametest-api-v1": "*"
+  }
+}

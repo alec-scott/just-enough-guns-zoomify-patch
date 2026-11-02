@@ -266,9 +266,12 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     private static final float HELICOPTER_MAX_BANK = 30.0F;
     private static final float HELICOPTER_TURN_BANK = 1.5F;
     private static final float HELICOPTER_ATTITUDE_RESPONSE = 0.2F;
-    private static final float HELICOPTER_ROLL_SPRING = 0.07F;
-    private static final float HELICOPTER_ROLL_DAMPING = 0.18F;
-    private static final float HELICOPTER_STRAFE_ACCELERATION_BANK = 0.8F;
+    // Weighted sway: a soft, lightly damped spring (~1.8 s period) that sideways acceleration kicks the opposite way.
+    private static final float HELICOPTER_ROLL_SPRING = 0.03F;
+    private static final float HELICOPTER_ROLL_DAMPING = 0.1F;
+    private static final float HELICOPTER_SWAY_INERTIA = 0.7F;
+    private static final float HELICOPTER_STRAFE_BANK = 0.6F;
+    private static final float HELICOPTER_MAX_SWAY = 35.0F;
     private static final float HELICOPTER_DANGEROUS_DESCENT_WARNING_VOLUME = 14.0F;
     private static final double LAND_VEHICLE_BODY_IMPACT_MIN_SPEED = 0.22D;
     private static final double LAND_VEHICLE_BODY_IMPACT_MAX_MOVED_RATIO = 0.75D;
@@ -355,6 +358,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     private float engineHealth = PART_MAX_HEALTH;
     private float subEngineHealth = PART_MAX_HEALTH;
     private float rollVelocity;
+    private double swayStrafeSpeed;
     private float turretHealth = PART_MAX_HEALTH;
 
     private record BlockCollisionBounds(double centerX, double minY, double maxY, double centerZ, double halfWidth, double halfLength) {}
@@ -995,6 +999,15 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
 
     public float roll(float partialTick) {
         return Mth.rotLerp(partialTick, this.rollO, this.roll());
+    }
+
+    /** Helicopter sway belongs to the hull: cameras keep the horizon level and do not swing sideways with the bank. */
+    public boolean keepsCameraLevel() {
+        return this.vehicleData().defaults().vehicleType() == VehicleType.HELICOPTER;
+    }
+
+    public float cameraRoll(float partialTick) {
+        return this.keepsCameraLevel() ? 0.0F : this.roll(partialTick);
     }
 
     public boolean isWeaponFiring() {
@@ -3619,7 +3632,9 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
                 return this.interpolatedVehiclePosition(partialTick).add(firstPersonOffset);
             }
         }
-        Vec3 offset = this.seatOffset(seat, passenger.getEyeHeight(), partialTick);
+        Vec3 offset = this.usesVehiclePoseTransform()
+                ? this.cameraOffsetWithPose(seat.x(), seat.y() + passenger.getEyeHeight(), seat.z(), partialTick)
+                : this.seatOffset(seat, passenger.getEyeHeight(), partialTick);
         return this.interpolatedVehiclePosition(partialTick).add(offset);
     }
 
@@ -3684,7 +3699,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         return new Vec3(
                 Mth.rotLerp(partialTick, this.yRotO, this.getYRot()),
                 Mth.lerp(partialTick, this.xRotO, this.getXRot()),
-                this.roll(partialTick)
+                this.cameraRoll(partialTick)
         );
     }
 
@@ -3712,7 +3727,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
             return passenger.getEyePosition(partialTick);
         }
         var camera = this.seatForPassenger(passenger, fallbackIndex).zoomCamera();
-        Vec3 offset = this.rotateLocalOffsetWithPose(camera.aircraftX(), camera.aircraftY(), camera.aircraftZ(), partialTick);
+        Vec3 offset = this.cameraOffsetWithPose(camera.aircraftX(), camera.aircraftY(), camera.aircraftZ(), partialTick);
         return this.interpolatedVehiclePosition(partialTick).add(offset);
     }
 
@@ -3728,7 +3743,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
             Vec3 offset = this.rotateLocalOffsetWithPoseNoRoll(camera.aircraftX(), camera.aircraftY(), camera.aircraftZ(), partialTick);
             return this.interpolatedVehiclePosition(partialTick).add(offset);
         }
-        Vec3 offset = this.rotateLocalOffsetWithPose(camera.x(), camera.y(), camera.z(), partialTick);
+        Vec3 offset = this.cameraOffsetWithPose(camera.x(), camera.y(), camera.z(), partialTick);
         return this.interpolatedVehiclePosition(partialTick).add(offset);
     }
 
@@ -3736,7 +3751,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         return new Vec3(
                 Mth.rotLerp(partialTick, this.yRotO, this.getYRot()),
                 Mth.lerp(partialTick, this.xRotO, this.getXRot()),
-                this.roll(partialTick)
+                this.cameraRoll(partialTick)
         );
     }
 
@@ -3783,7 +3798,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     }
 
     private double cameraRollForAiming(float partialTick) {
-        return this.usesVehiclePoseTransform() ? this.roll(partialTick) : 0.0D;
+        return this.usesVehiclePoseTransform() ? this.cameraRoll(partialTick) : 0.0D;
     }
 
     private boolean usesFirstPersonSeatCamera(Entity passenger) {
@@ -4743,7 +4758,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         if (playerVerticalControl) {
             // Steer the velocity directly instead of summing gravity and rotor lift, which never balance exactly and made the hover drift.
             velocity = this.playerHelicopterVelocity(velocityAtTickStart, targetVerticalSpeed, engine, mobility);
-            this.updatePlayerHelicopterAttitude(velocity, velocityAtTickStart, engine, mobility, Mth.wrapDegrees(this.getYRot() - this.yRotO));
+            this.updatePlayerHelicopterAttitude(velocity, engine, mobility, Mth.wrapDegrees(this.getYRot() - this.yRotO));
         } else {
             Vec3 lift = this.helicopterLiftVector(liftRotorSpeed * liftSpeed * mobility * altitudeLimitFactor);
             velocity = velocity.add(0.0D, -0.06D, 0.0D).add(lift);
@@ -4799,27 +4814,31 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         return new Vec3(horizontal.x, vertical, horizontal.z);
     }
 
-    private void updatePlayerHelicopterAttitude(Vec3 velocity, Vec3 previousVelocity, EngineInfo engine, double mobility, float yawDelta) {
+    private void updatePlayerHelicopterAttitude(Vec3 velocity, EngineInfo engine, double mobility, float yawDelta) {
         Vec3 forwardDirection = this.horizontalDirection(this.getYRot());
-        Vec3 leftDirection = new Vec3(forwardDirection.z, 0.0D, -forwardDirection.x);
-        Vec3 previousForward = this.horizontalDirection(this.yRotO);
-        Vec3 previousLeft = new Vec3(previousForward.z, 0.0D, -previousForward.x);
         double maxForward = Math.max(1.0E-4D, this.playerHelicopterMaxSpeed(engine, mobility));
         double maxStrafe = Math.max(1.0E-4D, maxForward * HELICOPTER_STRAFE_SPEED_RATIO);
         float forwardFraction = (float) Mth.clamp(velocity.dot(forwardDirection) / maxForward, -1.0D, 1.0D);
-        float leftFraction = (float) Mth.clamp(velocity.dot(leftDirection) / maxStrafe, -1.0D, 1.0D);
-        // Sideways acceleration in the aircraft's own frame, so a steady turn does not read as a strafe.
-        double lateralAcceleration = velocity.dot(leftDirection) - previousVelocity.dot(previousLeft);
-        double fullLateralAcceleration = maxStrafe * HELICOPTER_ACCELERATION_RESPONSE * Mth.clamp(engine.playerAcceleration(), 0.05D, 4.0D);
-        float leftAccelerationFraction = (float) Mth.clamp(lateralAcceleration / fullLateralAcceleration, -1.5D, 1.5D);
+        // Sway follows the pilot's strafing, not the measured sideways velocity: while turning, the velocity lags the
+        // heading and every mouse movement read as a sideways jolt that rocked the hull at random.
+        double acceleration = Mth.clamp(engine.playerAcceleration(), 0.05D, 4.0D);
+        boolean braking = this.input.forwardAxis() == 0 && this.input.strafeAxis() == 0;
+        double previousStrafeSpeed = this.swayStrafeSpeed;
+        this.swayStrafeSpeed += (this.input.strafeAxis() * maxStrafe - this.swayStrafeSpeed)
+                * (braking ? HELICOPTER_BRAKING_RESPONSE : HELICOPTER_ACCELERATION_RESPONSE) * acceleration;
+        float leftFraction = (float) Mth.clamp(this.swayStrafeSpeed / maxStrafe, -1.0D, 1.0D);
+        double fullLateralAcceleration = maxStrafe * HELICOPTER_ACCELERATION_RESPONSE * acceleration;
+        float leftAccelerationFraction = (float) Mth.clamp((this.swayStrafeSpeed - previousStrafeSpeed) / fullLateralAcceleration, -1.5D, 1.5D);
         // Nose down (positive pitch) into forward flight, bank (positive roll is right) into strafes and turns.
         float targetPitch = Mth.clamp(forwardFraction * HELICOPTER_MAX_FORWARD_TILT + this.pilotAimPitch, -50.0F, 40.0F);
-        float targetRoll = Mth.clamp(-(leftFraction + leftAccelerationFraction * HELICOPTER_STRAFE_ACCELERATION_BANK) * HELICOPTER_MAX_FORWARD_TILT
+        float targetRoll = Mth.clamp(-leftFraction * HELICOPTER_STRAFE_BANK * HELICOPTER_MAX_FORWARD_TILT
                 + yawDelta * HELICOPTER_TURN_BANK, -HELICOPTER_MAX_BANK, HELICOPTER_MAX_BANK);
         this.setXRot(this.getXRot() + (targetPitch - this.getXRot()) * HELICOPTER_ATTITUDE_RESPONSE);
-        // Spring the bank: lean into a sideways move, counter-bank to stop it, then rock a little before settling upright.
-        this.rollVelocity += (targetRoll - this.roll()) * HELICOPTER_ROLL_SPRING - this.rollVelocity * HELICOPTER_ROLL_DAMPING;
-        this.setRoll(this.roll() + this.rollVelocity);
+        // The hull hangs off the rotor like a weight: a sudden move right swings it left, it then swings through into a
+        // gentle lean, and stopping throws it the other way before it rocks back upright.
+        this.rollVelocity += (targetRoll - this.roll()) * HELICOPTER_ROLL_SPRING - this.rollVelocity * HELICOPTER_ROLL_DAMPING
+                + leftAccelerationFraction * HELICOPTER_SWAY_INERTIA;
+        this.setRoll(Mth.clamp(this.roll() + this.rollVelocity, -HELICOPTER_MAX_SWAY, HELICOPTER_MAX_SWAY));
     }
 
     private void warnHelicopterDangerousDescent(boolean forcedDescent, double altitude) {
@@ -4927,9 +4946,15 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
 
     private Vec3 firstPersonSeatCameraOffset(double localX, double localY, double localZ, float partialTick) {
         if (this.usesVehiclePoseTransform()) {
-            return this.rotateLocalOffsetWithPose(localX, localY, localZ, partialTick);
+            return this.cameraOffsetWithPose(localX, localY, localZ, partialTick);
         }
         return this.rotateLocalOffset(localX, localY, localZ, partialTick);
+    }
+
+    private Vec3 cameraOffsetWithPose(double localX, double localY, double localZ, float partialTick) {
+        return this.keepsCameraLevel()
+                ? this.rotateLocalOffsetWithPoseNoRoll(localX, localY, localZ, partialTick)
+                : this.rotateLocalOffsetWithPose(localX, localY, localZ, partialTick);
     }
 
     private Vec3 simulatedThirdPersonCameraPosition(Entity passenger, CameraPos camera, float partialTick) {
@@ -4946,7 +4971,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
             return this.articulatedBarrelPosition(camera.x(), camera.y(), camera.z(), partialTick);
         }
         Vec3 offset = this.usesVehiclePoseTransform()
-                ? this.rotateLocalOffsetWithPose(camera.x(), camera.y(), camera.z(), partialTick)
+                ? this.cameraOffsetWithPose(camera.x(), camera.y(), camera.z(), partialTick)
                 : this.rotateLocalOffset(camera.x(), camera.y(), camera.z(), partialTick);
         return this.interpolatedVehiclePosition(partialTick).add(offset);
     }

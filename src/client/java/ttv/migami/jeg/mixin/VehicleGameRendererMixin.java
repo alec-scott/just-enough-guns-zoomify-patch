@@ -46,7 +46,9 @@ public abstract class VehicleGameRendererMixin {
         } else {
             pitchFactor = (180.0F - yawDelta) / 90.0F;
         }
-        poseStack.mulPose(Axis.ZP.rotationDegrees(-rollFactor * vehicle.roll(partialTick) - pitchFactor * Mth.lerp(partialTick, vehicle.xRotO, vehicle.getXRot())));
+        if (!vehicle.keepsCameraLevel()) {
+            poseStack.mulPose(Axis.ZP.rotationDegrees(-rollFactor * vehicle.roll(partialTick) - pitchFactor * Mth.lerp(partialTick, vehicle.xRotO, vehicle.getXRot())));
+        }
 
         if (fixedCamera) {
             return;
@@ -57,7 +59,7 @@ public abstract class VehicleGameRendererMixin {
         Quaternionf quaternion = Axis.XP.rotationDegrees(0.0F);
         quaternion.mul(Axis.YP.rotationDegrees(-Mth.rotLerp(partialTick, vehicle.yRotO, vehicle.getYRot())));
         quaternion.mul(Axis.XP.rotationDegrees(Mth.lerp(partialTick, vehicle.xRotO, vehicle.getXRot())));
-        quaternion.mul(Axis.ZP.rotationDegrees(vehicle.roll(partialTick)));
+        quaternion.mul(Axis.ZP.rotationDegrees(vehicle.cameraRoll(partialTick)));
         offset.rotate(quaternion);
 
         poseStack.mulPose(Axis.XP.rotationDegrees(this.mainCamera.xRot()));

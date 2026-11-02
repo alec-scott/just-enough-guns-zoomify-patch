@@ -10,6 +10,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.server.level.ServerPlayer;
@@ -22,6 +23,7 @@ import ttv.migami.jeg.Reference;
 import ttv.migami.jeg.event.AttachmentRuntimeEvents;
 import ttv.migami.jeg.event.GunEvents;
 import ttv.migami.jeg.gun.GunScopeSupport;
+import ttv.migami.jeg.gun.SquadWipeTracker;
 import ttv.migami.jeg.init.ModItems;
 import ttv.migami.jeg.init.ModSounds;
 import ttv.migami.jeg.item.AnimatedGunItem;
@@ -412,8 +414,10 @@ public final class NetworkHandler {
         }
     }
 
-    public static void sendHitMarker(ServerPlayer player, boolean critical, boolean killed) {
-        ServerPlayNetworking.send(player, new HitMarkerPayload(critical, killed));
+    public static void sendHitMarker(ServerPlayer player, LivingEntity target, boolean critical) {
+        boolean killed = target.isDeadOrDying();
+        boolean squadWipe = killed && SquadWipeTracker.recordKill(player, target);
+        ServerPlayNetworking.send(player, new HitMarkerPayload(critical, killed, squadWipe));
     }
 
     public static void sendHeadshotMedal(ServerPlayer player) {

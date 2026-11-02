@@ -40,6 +40,17 @@ loom {
     }
 }
 
+// Client game tests boot a real client: ./gradlew runClientGameTest (screenshots land in build/run/clientGameTest/screenshots).
+fabricApi {
+    configureTests {
+        createSourceSet = true
+        modId = "jeg-gametest"
+        enableGameTests = false
+        enableClientGameTests = true
+        eula = true
+    }
+}
+
 java {
     toolchain.languageVersion = JavaLanguageVersion.of(25)
     withSourcesJar()

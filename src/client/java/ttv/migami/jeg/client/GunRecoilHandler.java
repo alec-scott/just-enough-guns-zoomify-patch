@@ -18,6 +18,7 @@ public final class GunRecoilHandler {
     private static final double GUN_RECOIL_DAMPING_RATIO = 0.7D;
     private static final double GUN_RECOIL_IMPULSE = 2.1D;
     private static final int GUN_RECOIL_SUBSTEPS = 8;
+    private static final double BURST_SETTLED_RECOIL = 0.15D;
 
     private static float recoil;
     private static float previous;
@@ -66,7 +67,10 @@ public final class GunRecoilHandler {
         gunRecoilAngle = recoilAngle;
         gunRecoilKick = recoilKick;
         gunRecoilAdsReduction = parameters.adsReduction();
-        gunRecoilRandom = RANDOM.nextFloat();
+        // One sideways direction per burst: re-rolling it every round twisted the gun left and right under automatic fire.
+        if (gunRecoilNormal < BURST_SETTLED_RECOIL) {
+            gunRecoilRandom = RANDOM.nextFloat();
+        }
         suppressSprintPoseUntilNanos = System.nanoTime() + SPRINT_POSE_SUPPRESSION_NANOS;
     }
 

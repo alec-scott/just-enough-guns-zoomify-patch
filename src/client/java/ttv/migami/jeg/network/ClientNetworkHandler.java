@@ -53,7 +53,7 @@ public final class ClientNetworkHandler {
         });
 
         ClientPlayNetworking.registerGlobalReceiver(HitMarkerPayload.TYPE, (payload, context) -> {
-            context.client().execute(() -> CrosshairHandler.playHitMarker(payload.critical(), payload.killed()));
+            context.client().execute(() -> CrosshairHandler.playHitMarker(payload.critical(), payload.killed(), payload.squadWipe()));
         });
 
         ClientPlayNetworking.registerGlobalReceiver(HeadshotMedalPayload.TYPE, (payload, context) -> {

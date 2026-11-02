@@ -27,6 +27,7 @@ import ttv.migami.jeg.fabric.FabricRecipeUnlock;
 import ttv.migami.jeg.faction.GunMobValues;
 import ttv.migami.jeg.faction.GunnerFriendlyFireEvents;
 import ttv.migami.jeg.faction.GunnerMobSpawner;
+import ttv.migami.jeg.gun.SquadWipeTracker;
 import ttv.migami.jeg.item.HappyGhastArmorEvents;
 import ttv.migami.jeg.init.ModBlockEntities;
 import ttv.migami.jeg.init.ModBlocks;
@@ -89,6 +90,7 @@ public final class FabricEntrypoint implements ModInitializer {
         });
         ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> {
             GunEvents.onPlayerLogout(new PlayerEvent.PlayerLoggedOutEvent(handler.player));
+            SquadWipeTracker.forget(handler.player);
         });
         ServerLivingEntityEvents.ALLOW_DAMAGE.register((entity, source, amount) -> {
             LivingIncomingDamageEvent event = new LivingIncomingDamageEvent(entity, source, amount);

@@ -211,10 +211,7 @@
   "ui.hitmarker.hit": {
     "sounds": [
       {
-        "name": "jeg:ui/hitmarker/hit1"
-      },
-      {
-        "name": "jeg:ui/hitmarker/hit2"
+        "name": "jeg:ui/hitmarker/hit"
       }
     ]
   },
@@ -229,6 +226,13 @@
     "sounds": [
       {
         "name": "jeg:ui/hitmarker/kill"
+      }
+    ]
+  },
+  "ui.hitmarker.squad_wipe": {
+    "sounds": [
+      {
+        "name": "jeg:ui/hitmarker/squad_wipe"
       }
     ]
   },

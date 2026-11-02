@@ -31,6 +31,8 @@ public final class CrosshairHandler {
     private static final float DYNAMIC_SPREAD_PIXELS_PER_DEGREE = 0.85F;
     private static final float DYNAMIC_MAX_SPREAD_PIXELS = 28.0F;
     private static final int HIT_MARKER_MAX_TIME = 6;
+    private static final int HIT_MARKER_SOUND_LAYERS = 2;
+    private static final int SQUAD_WIPE_SOUND_LAYERS = 4;
 
     private static float techScale;
     private static float prevTechScale;
@@ -40,10 +42,14 @@ public final class CrosshairHandler {
     private static boolean criticalHitMarker;
     private static int hitMarkerTime;
     private static int prevHitMarkerTime;
+    private static int clientTicks;
+    private static int hitSoundTick = -1;
+    private static int hitSoundPriority;
 
     private CrosshairHandler() {}
 
     public static void tick() {
+        clientTicks++;
         prevTechRotation = techRotation;
         prevTechScale = techScale;
         techRotation += 4.0F;
@@ -64,7 +70,7 @@ public final class CrosshairHandler {
         techScale = 1.5F;
     }
 
-    public static void playHitMarker(boolean critical, boolean killed) {
+    public static void playHitMarker(boolean critical, boolean killed, boolean squadWipe) {
         if (!Config.showHitmarker() || !ClientUiConfig.showHitFeedback()) {
             return;
         }
@@ -72,13 +78,32 @@ public final class CrosshairHandler {
         criticalHitMarker = critical;
         hitMarkerTime = 1;
         prevHitMarkerTime = 0;
+        if (squadWipe) {
+            playHitMarkerSound("ui.hitmarker.squad_wipe", SQUAD_WIPE_SOUND_LAYERS);
+        }
+        // Every shot that lands gets its own sound, but a shotgun volley landing in one tick plays once, not once per pellet.
+        int priority = killed ? 2 : critical ? 1 : 0;
+        if (hitSoundTick == clientTicks && priority <= hitSoundPriority) {
+            return;
+        }
+        hitSoundTick = clientTicks;
+        hitSoundPriority = priority;
         playHitMarkerSound(killed ? "ui.hitmarker.kill" : critical ? "ui.hitmarker.headshot" : "ui.hitmarker.hit");
     }
 
     private static void playHitMarkerSound(String id) {
+        playHitMarkerSound(id, HIT_MARKER_SOUND_LAYERS);
+    }
+
+    private static void playHitMarkerSound(String id, int layers) {
         var sound = ModSounds.ALL.get(Reference.id(id));
-        if (sound != null) {
-            Minecraft.getInstance().getSoundManager().play(SimpleSoundInstance.forUI(sound.get(), 1.0F, 0.8F));
+        if (sound == null) {
+            return;
+        }
+        // A single source tops out at full volume and was still buried under the gunshot; each doubling of stacked
+        // copies adds ~6 dB.
+        for (int layer = 0; layer < layers; layer++) {
+            Minecraft.getInstance().getSoundManager().play(SimpleSoundInstance.forUI(sound.get(), 1.0F, 1.0F));
         }
     }
 
