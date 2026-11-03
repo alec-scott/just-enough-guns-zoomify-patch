@@ -12,7 +12,11 @@
     "GunnerSunBurnMixin",
     "GunnerWaterConversionMixin",
     "HappyGhastArmorDamageMixin",
-    "LivingEntityDeathDropsMixin"
+    "LivingEntityDeathDropsMixin",
+    "EnchantmentCompatibilityMixin",
+    "AnvilMenuGunEnchantMixin",
+    "EnchantmentHelperGunEnchantMixin",
+    "EnchantCommandGunEnchantMixin"
   ],
   "client": [
     "AbstractClientPlayerMixin",

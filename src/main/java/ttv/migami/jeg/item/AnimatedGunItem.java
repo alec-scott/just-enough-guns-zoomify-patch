@@ -38,6 +38,12 @@ import ttv.migami.jeg.network.NetworkHandler;
 
 public final class AnimatedGunItem extends GunItem implements GeoItem {
     public static final String CONTROLLER = "controller";
+    /**
+     * Shots play on their own controller, layered over the main one. Switching a controller to a new animation leaves
+     * it without a pose for that frame; on the main controller that drew the model's bind pose and threw the arms into
+     * the middle of the screen on every burst. On this layer an empty frame just shows the main controller's idle pose.
+     */
+    public static final String SHOOT_CONTROLLER = "shoot_controller";
     public static final String ANIM_SHOOT = "shoot";
     public static final String ANIM_RELOAD = "reload";
     public static final String ANIM_RELOAD_START = "reload_start";
@@ -53,6 +59,8 @@ public final class AnimatedGunItem extends GunItem implements GeoItem {
 
     private static final RawAnimation IDLE = RawAnimation.begin().thenLoop("idle");
     private static final RawAnimation SHOOT = RawAnimation.begin().then(ANIM_SHOOT, LoopType.PLAY_ONCE).thenLoop("idle");
+    private static final RawAnimation SHOT_ONLY = RawAnimation.begin().then(ANIM_SHOOT, LoopType.PLAY_ONCE);
+    private static final RawAnimation AIM_SHOT_ONLY = RawAnimation.begin().then(ANIM_AIM_SHOOT, LoopType.PLAY_ONCE);
     private static final RawAnimation AIM_SHOOT = RawAnimation.begin().then(ANIM_AIM_SHOOT, LoopType.PLAY_ONCE).thenLoop("idle");
     private static final RawAnimation DRAW = RawAnimation.begin().then(ANIM_DRAW, LoopType.PLAY_ONCE).thenLoop("idle");
     private static final RawAnimation RELOAD = RawAnimation.begin().then(ANIM_RELOAD, LoopType.PLAY_ONCE).thenLoop("idle");
@@ -121,6 +129,19 @@ public final class AnimatedGunItem extends GunItem implements GeoItem {
                 .triggerableAnim(ANIM_MELEE, MELEE)
                 .triggerableAnim(ANIM_BAYONET, BAYONET)
                 .triggerableAnim(ANIM_INSPECT, INSPECT));
+        controllers.add(new AnimationController<>(SHOOT_CONTROLLER, 0, this::shootPredicate));
+    }
+
+    private PlayState shootPredicate(AnimationTest<AnimatedGunItem> test) {
+        if (isNonFirstPersonPerspective(test)) {
+            return PlayState.STOP;
+        }
+        ItemStack stack = animationStateStack(test, rendererItemStack(test));
+        PlayState shot = startPendingClientShoot(test, stack);
+        if (shot != null) {
+            return shot;
+        }
+        return shouldContinueShootAnimation(test.controller()) ? PlayState.CONTINUE : PlayState.STOP;
     }
 
     private PlayState animationPredicate(AnimationTest<AnimatedGunItem> test) {
@@ -150,10 +171,6 @@ public final class AnimatedGunItem extends GunItem implements GeoItem {
         drawAnimation = drawAnimationFor(stack);
         if (drawAnimation != null) {
             return test.setAndContinue(drawAnimation);
-        }
-
-        if (triggerPendingClientShoot(test, stack)) {
-            return PlayState.CONTINUE;
         }
 
         clearInterruptedReloadAnimation(test.controller(), stack);
@@ -396,31 +413,48 @@ public final class AnimatedGunItem extends GunItem implements GeoItem {
         return true;
     }
 
-    private static boolean triggerPendingClientShoot(AnimationTest<AnimatedGunItem> test, ItemStack renderStack) {
+    /**
+     * Starts the shot animation on the shot layer for a round the client just fired, or null when there is none.
+     * A round fired while the last one's shot is still playing rewinds it instead of starting it again.
+     */
+    private static PlayState startPendingClientShoot(AnimationTest<AnimatedGunItem> test, ItemStack renderStack) {
         if (clientShootStack.isEmpty()) {
-            return false;
+            return null;
         }
         if (System.nanoTime() > clientShootTriggerDeadlineNanos) {
             clearPendingClientShoot();
-            return false;
+            return null;
         }
         if (!matchesHeldStack(renderStack, clientShootStack)) {
-            return false;
+            return null;
         }
         if (shouldDiscardReleasedAutomaticShot(renderStack)) {
             clearPendingClientShoot();
-            return false;
+            return null;
         }
 
-        test.controller().reset();
+        String name = clientShootAiming ? ANIM_AIM_SHOOT : ANIM_SHOOT;
+        RawAnimation animation = clientShootAiming ? AIM_SHOT_ONLY : SHOT_ONLY;
+        clearPendingClientShoot();
         test.controller().setTransitionTicks(0);
-        String animation = clientShootAiming ? ANIM_AIM_SHOOT : ANIM_SHOOT;
-        if (!test.controller().triggerAnimation(animation)) {
-            clearPendingClientShoot();
+        if (isPlayingShotStage(test.controller(), name)) {
+            test.controller().setAnimationTime(0.0D);
+            return PlayState.CONTINUE;
+        }
+        return test.setAndContinue(animation);
+    }
+
+    /** True while the controller is still inside the shot itself (not yet the idle loop that follows it). */
+    private static boolean isPlayingShotStage(AnimationController<AnimatedGunItem> controller, String name) {
+        if (!hasAnimation(controller.getCurrentRawAnimation(), name)) {
             return false;
         }
-        clearPendingClientShoot();
-        return true;
+        var point = controller.getCurrentAnimationPoint();
+        return point != null && point.animation() != null && name.equals(point.animation().name());
+    }
+
+    private static boolean shouldContinueShootAnimation(AnimationController<AnimatedGunItem> controller) {
+        return isPlayingShotStage(controller, ANIM_SHOOT) || isPlayingShotStage(controller, ANIM_AIM_SHOOT);
     }
 
     private static boolean triggerPendingClientMelee(AnimationTest<AnimatedGunItem> test, ItemStack renderStack) {
@@ -869,8 +903,14 @@ public final class AnimatedGunItem extends GunItem implements GeoItem {
     }
 
     public void triggerShoot(Level level, Entity triggerEntity, ItemStack stack) {
-        boolean aiming = triggerEntity instanceof net.minecraft.world.entity.player.Player player && NetworkHandler.isAiming(player);
-        trigger(level, triggerEntity, stack, aiming ? ANIM_AIM_SHOOT : ANIM_SHOOT);
+        if (triggerEntity instanceof net.minecraft.world.entity.player.Player) {
+            // The shooter's client already starts the shot animation the moment it fires (triggerClientShoot), and gun
+            // animations only play in that player's first-person view. A second, synced trigger arriving a tick later
+            // restarted the shot before the first had posed the model, so the frame drew the bind pose and the arms
+            // jumped to the middle of the screen on every round.
+            return;
+        }
+        trigger(level, triggerEntity, stack, ANIM_SHOOT);
     }
 
     public void triggerReload(Level level, Entity triggerEntity, ItemStack stack) {

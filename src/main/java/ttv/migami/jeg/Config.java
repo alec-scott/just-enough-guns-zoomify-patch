@@ -80,6 +80,11 @@ public final class Config {
     public static final ModConfigSpec.BooleanValue ENEMY_VEHICLE_SPAWNING_ENABLED;
     public static final ModConfigSpec.IntValue ENEMY_VEHICLE_START_DAY;
     public static final ModConfigSpec.DoubleValue ENEMY_VEHICLE_CONVERSION_CHANCE;
+    public static final ModConfigSpec.BooleanValue HELICOPTER_WEIGHTY_FLIGHT;
+    public static final ModConfigSpec.DoubleValue HELICOPTER_WEIGHT_MULTIPLIER;
+    public static final ModConfigSpec.DoubleValue HELICOPTER_TURN_GRIP;
+    public static final ModConfigSpec.DoubleValue HELICOPTER_TILT_SINK;
+    public static final ModConfigSpec.BooleanValue HELICOPTER_BARREL_ROLLS;
     public static final ModConfigSpec.IntValue BULLET_LIFETIME_SECONDS;
     public static final ModConfigSpec.BooleanValue UI_SHOW_CROSSHAIR;
     public static final ModConfigSpec.BooleanValue UI_SHOW_HIT_FEEDBACK;
@@ -353,6 +358,25 @@ public final class Config {
         ENEMY_VEHICLE_CONVERSION_CHANCE = serverBuilder
                 .comment("Probability (0-1) that a newly created open-sky natural gunner converts into an enemy vehicle.")
                 .defineInRange("enemyVehicleConversionChance", 0.05D, 0.0D, 1.0D);
+        serverBuilder.push("helicopter");
+        HELICOPTER_WEIGHTY_FLIGHT = serverBuilder
+                .comment("If true, player-flown helicopters use weighty flight: tilting the hull is what moves it, speed builds and",
+                        "bleeds off with momentum, turns drift, and climbs and descents carry through. If false, the previous direct controls are used.")
+                .define("weightyFlight", true);
+        HELICOPTER_WEIGHT_MULTIPLIER = serverBuilder
+                .comment("Weighty flight: scales every helicopter's player_weight. Higher feels heavier and slower to respond.")
+                .defineInRange("weightMultiplier", 1.0D, 0.5D, 2.0D);
+        HELICOPTER_TURN_GRIP = serverBuilder
+                .comment("Weighty flight: how quickly a turn pulls the momentum round to the new heading. 0 slides like ice, 1 carves tight.")
+                .defineInRange("turnGrip", 0.5D, 0.0D, 1.0D);
+        HELICOPTER_TILT_SINK = serverBuilder
+                .comment("Weighty flight: how much altitude a hard forward or sideways tilt costs. 0 holds altitude perfectly.")
+                .defineInRange("tiltSink", 0.5D, 0.0D, 1.0D);
+        HELICOPTER_BARREL_ROLLS = serverBuilder
+                .comment("Weighty flight: if true, pilots can double-tap a strafe key and keep it held to roll the helicopter by hand,",
+                        "all the way round if they like. The rotor stops holding it up on its side or upside down, so rolls cost altitude.")
+                .define("barrelRolls", true);
+        serverBuilder.pop();
         serverBuilder.pop();
 
         serverBuilder.push("combat");
@@ -386,6 +410,11 @@ public final class Config {
         registerCommandConfig("vehicle.enemySpawning.enabled", ENEMY_VEHICLE_SPAWNING_ENABLED);
         registerCommandConfig("vehicle.enemySpawning.startDay", ENEMY_VEHICLE_START_DAY);
         registerCommandConfig("vehicle.enemySpawning.conversionChance", ENEMY_VEHICLE_CONVERSION_CHANCE);
+        registerCommandConfig("vehicle.helicopter.weightyFlight", HELICOPTER_WEIGHTY_FLIGHT);
+        registerCommandConfig("vehicle.helicopter.weightMultiplier", HELICOPTER_WEIGHT_MULTIPLIER);
+        registerCommandConfig("vehicle.helicopter.turnGrip", HELICOPTER_TURN_GRIP);
+        registerCommandConfig("vehicle.helicopter.tiltSink", HELICOPTER_TILT_SINK);
+        registerCommandConfig("vehicle.helicopter.barrelRolls", HELICOPTER_BARREL_ROLLS);
     }
 
     private static void defineGunnerGrowthConfig(ModConfigSpec.Builder serverBuilder) {
@@ -568,6 +597,40 @@ public final class Config {
     public static boolean magazineFeedEnabled() {
         Boolean synced = syncedMagazineFeedEnabled;
         return synced != null ? synced : MAGAZINE_FEED_ENABLED.get();
+    }
+
+    /** The server's own setting, for sending to clients (see configuredHelicopterFlight). */
+    public static boolean configuredMagazineFeedEnabled() {
+        return MAGAZINE_FEED_ENABLED.get();
+    }
+
+    /** Weighty-flight settings as the connected server has them, so client prediction flies the same way. */
+    public record HelicopterFlightSettings(boolean weightyFlight, double weightMultiplier, double turnGrip, double tiltSink,
+                                           boolean barrelRolls) {
+    }
+
+    private static volatile HelicopterFlightSettings syncedHelicopterFlight;
+
+    public static HelicopterFlightSettings helicopterFlight() {
+        HelicopterFlightSettings synced = syncedHelicopterFlight;
+        return synced != null ? synced : configuredHelicopterFlight();
+    }
+
+    /**
+     * The server's own settings, for sending to clients. In singleplayer the client and integrated server share these
+     * statics, so the synced copy must never be what the server sends, or command changes would echo the old value back.
+     */
+    public static HelicopterFlightSettings configuredHelicopterFlight() {
+        return new HelicopterFlightSettings(
+                HELICOPTER_WEIGHTY_FLIGHT.get(),
+                HELICOPTER_WEIGHT_MULTIPLIER.get(),
+                HELICOPTER_TURN_GRIP.get(),
+                HELICOPTER_TILT_SINK.get(),
+                HELICOPTER_BARREL_ROLLS.get());
+    }
+
+    public static void setSyncedHelicopterFlight(HelicopterFlightSettings settings) {
+        syncedHelicopterFlight = settings;
     }
 
     // Set on the client from the connected server's config so shared code (attachment slots, reload HUD) agrees with the server.

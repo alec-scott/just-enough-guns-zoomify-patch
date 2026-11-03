@@ -6,6 +6,11 @@
   "environment": "client",
   "entrypoints": {
     "fabric-client-gametest": [
+      "ttv.migami.jeg.gametest.GunHandPoseClientGameTest",
+      "ttv.migami.jeg.gametest.StationDropsClientGameTest",
+      "ttv.migami.jeg.gametest.GunBowEnchantmentsClientGameTest",
+      "ttv.migami.jeg.gametest.Mi28GunnerAimClientGameTest",
+      "ttv.migami.jeg.gametest.HelicopterWeightyFlightClientGameTest",
       "ttv.migami.jeg.gametest.HelicopterSwayClientGameTest",
       "ttv.migami.jeg.gametest.HitMarkerClientGameTest"
     ]

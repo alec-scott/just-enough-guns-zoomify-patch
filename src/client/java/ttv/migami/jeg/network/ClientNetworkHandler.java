@@ -75,6 +75,10 @@ public final class ClientNetworkHandler {
             });
         });
 
+        ClientPlayNetworking.registerGlobalReceiver(HelicopterFlightConfigPayload.TYPE, (payload, context) -> {
+            context.client().execute(() -> Config.setSyncedHelicopterFlight(payload.settings()));
+        });
+
         ClientPlayNetworking.registerGlobalReceiver(VehicleDataSyncPayload.TYPE, (payload, context) -> {
             context.client().execute(() -> VehicleDataManager.applySyncedJson(payload.data()));
         });
@@ -176,7 +180,8 @@ public final class ClientNetworkHandler {
                 input.deployDecoy(),
                 input.mouseX(),
                 input.mouseY(),
-                input.cruiseSpeed()
+                input.cruiseSpeed(),
+                input.barrelRoll()
         ));
     }
 

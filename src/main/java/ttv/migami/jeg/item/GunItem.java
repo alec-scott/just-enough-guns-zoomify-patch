@@ -1,5 +1,7 @@
 package ttv.migami.jeg.item;
 
+import ttv.migami.jeg.gun.GunBowEnchantments;
+
 import java.util.Locale;
 import java.util.HashMap;
 import java.util.Map;
@@ -1247,7 +1249,7 @@ public class GunItem extends Item {
         }
 
         if (isInventoryFedGun()) {
-            if (consumeSingleAmmoFromInventory(player)) {
+            if (hasInfiniteAmmo(player, stack) || consumeSingleAmmoFromInventory(player)) {
                 return true;
             }
             HudMessageHelper.showActionBar(player, Component.translatable("item.jeg.gun.no_ammo"));
@@ -1405,9 +1407,10 @@ public class GunItem extends Item {
                 shooter,
                 stats,
                 velocity,
-                modifiedDamage(stats, modifiers),
+                modifiedDamage(stats, modifiers) * GunBowEnchantments.powerDamageMultiplier(level.registryAccess(), stack),
                 modifiers.explosiveAmmo()
         );
+        bullet.setBowEnchantments(GunBowEnchantments.punch(level.registryAccess(), stack), GunBowEnchantments.flame(level.registryAccess(), stack));
         GunAttachments.id(stack, AttachmentType.KILL_EFFECT).ifPresent(bullet::setKillEffect);
         bullet.setMedalsEnabled(GunAttachments.areMedalsEnabled(stack));
         if (shooter instanceof Player player && !player.getAbilities().instabuild
@@ -1958,6 +1961,12 @@ public class GunItem extends Item {
         }
 
         int ammo = getAmmo(stack);
+        if (!player.getAbilities().instabuild && GunBowEnchantments.infinity(player.registryAccess(), stack)) {
+            // Infinity: the magazine in hand is never used up, so there is no spent one to hand back either.
+            setLoadedMagazineItem(stack, magazineItemId);
+            setAmmo(stack, newAmmo);
+            return true;
+        }
         ItemStack oldMagazine = createStoredMagazineStack(stack, ammo);
         magazineStack.shrink(1);
         if (magazineStack.isEmpty()) {
@@ -1979,7 +1988,7 @@ public class GunItem extends Item {
         }
 
         int needed = maxAmmo - ammo;
-        int pulled = player.getAbilities().instabuild ? needed : removeAmmoFromInventory(player, needed);
+        int pulled = player.getAbilities().instabuild || hasInfiniteAmmo(player, stack) ? needed : removeAmmoFromInventory(player, needed);
         if (pulled <= 0) {
             return false;
         }
@@ -2732,6 +2741,18 @@ public class GunItem extends Item {
             gun.updateClientReloadVisualState(player, offhand, true);
             updateDrawVisualState(player, offhand, true);
         }
+    }
+
+    /** Infinity, like on a bow: ammo is never used up as long as the player carries at least one round of it. */
+    private boolean hasInfiniteAmmo(Player player, ItemStack stack) {
+        if (!GunBowEnchantments.infinity(player.registryAccess(), stack)) {
+            return false;
+        }
+        Optional<Item> ammoItem = getAmmoItem();
+        if (ammoItem.isEmpty()) {
+            return true;
+        }
+        return player.getInventory().contains(new ItemStack(ammoItem.get()));
     }
 
     private int removeAmmoFromInventory(Player player, int needed) {

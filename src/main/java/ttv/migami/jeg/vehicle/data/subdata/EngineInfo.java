@@ -20,11 +20,13 @@ public record EngineInfo(
         float engineSoundVolume,
         // Player-flown helicopters: top speed in blocks per tick (0 = twice max_forward_speed) and acceleration multiplier.
         double playerMaxSpeed,
-        double playerAcceleration
+        double playerAcceleration,
+        // Weighty helicopter flight: how heavy the airframe feels (1 = light scout). Slows tilt, speed and climb response.
+        double playerWeight
 ) {
-    public static final EngineInfo WHEEL_TEST = new EngineInfo(EngineType.WHEEL, 0.045D, 0.42D, 0.18D, 0.82D, 0.0D, 0, 1.0D, 1.0D, 1.0D, 1.0D, 1.0D, 1.0D, null, 1.0F, 0.0D, 1.0D);
+    public static final EngineInfo WHEEL_TEST = new EngineInfo(EngineType.WHEEL, 0.045D, 0.42D, 0.18D, 0.82D, 0.0D, 0, 1.0D, 1.0D, 1.0D, 1.0D, 1.0D, 1.0D, null, 1.0F, 0.0D, 1.0D, 1.0D);
 
     public EngineInfo(EngineType type, double acceleration, double maxForwardSpeed, double maxReverseSpeed, double friction, double steeringSpeed, int energyCostRate) {
-        this(type, acceleration, maxForwardSpeed, maxReverseSpeed, friction, steeringSpeed, energyCostRate, 1.0D, 1.0D, 1.0D, 1.0D, 1.0D, 1.0D, null, 1.0F, 0.0D, 1.0D);
+        this(type, acceleration, maxForwardSpeed, maxReverseSpeed, friction, steeringSpeed, energyCostRate, 1.0D, 1.0D, 1.0D, 1.0D, 1.0D, 1.0D, null, 1.0F, 0.0D, 1.0D, 1.0D);
     }
 }

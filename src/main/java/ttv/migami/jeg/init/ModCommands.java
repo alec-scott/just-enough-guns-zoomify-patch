@@ -203,7 +203,13 @@ public final class ModCommands {
                 .then(Commands.literal("enemySpawning")
                         .then(configBooleanConfigCommand("enabled", "vehicle.enemySpawning.enabled"))
                         .then(configIntConfigCommand("startDay", "vehicle.enemySpawning.startDay", 0, 5000))
-                        .then(configDoubleConfigCommand("conversionChance", "vehicle.enemySpawning.conversionChance")));
+                        .then(configDoubleConfigCommand("conversionChance", "vehicle.enemySpawning.conversionChance")))
+                .then(Commands.literal("helicopter")
+                        .then(configBooleanConfigCommand("weightyFlight", "vehicle.helicopter.weightyFlight"))
+                        .then(configDoubleConfigCommand("weightMultiplier", "vehicle.helicopter.weightMultiplier", 0.5D, 2.0D))
+                        .then(configDoubleConfigCommand("turnGrip", "vehicle.helicopter.turnGrip"))
+                        .then(configDoubleConfigCommand("tiltSink", "vehicle.helicopter.tiltSink"))
+                        .then(configBooleanConfigCommand("barrelRolls", "vehicle.helicopter.barrelRolls")));
     }
 
     private static LiteralArgumentBuilder<CommandSourceStack> configScaledMobChanceCommand(String name, String chanceKey, String maxChanceKey) {
@@ -218,9 +224,13 @@ public final class ModCommands {
     }
 
     private static LiteralArgumentBuilder<CommandSourceStack> configDoubleConfigCommand(String name, String key) {
+        return configDoubleConfigCommand(name, key, 0.0D, 1.0D);
+    }
+
+    private static LiteralArgumentBuilder<CommandSourceStack> configDoubleConfigCommand(String name, String key, double min, double max) {
         return Commands.literal(name)
                 .executes(context -> executeGetDoubleConfig(context.getSource(), key, key))
-                .then(Commands.argument("value", DoubleArgumentType.doubleArg(0.0D, 1.0D))
+                .then(Commands.argument("value", DoubleArgumentType.doubleArg(min, max))
                         .executes(context -> executeSetDoubleConfig(
                                 context.getSource(),
                                 key,
@@ -401,7 +411,7 @@ public final class ModCommands {
         boolean oldValue = (Boolean) Config.getConfigValue(key);
         Config.setConfigValue(key, value);
         Config.saveServerConfig();
-        if (key.startsWith("ui.") || key.equals("combat.magazineFeed")) {
+        if (key.startsWith("ui.") || key.equals("combat.magazineFeed") || key.startsWith("vehicle.helicopter.")) {
             NetworkHandler.broadcastUiConfig(source.getServer());
         }
         source.sendSuccess(() -> Component.translatable("commands.jeg.config_set", displayName, oldValue, value), true);
@@ -431,6 +441,9 @@ public final class ModCommands {
         double oldValue = (Double) Config.getConfigValue(key);
         Config.setConfigValue(key, value);
         Config.saveServerConfig();
+        if (key.startsWith("vehicle.helicopter.")) {
+            NetworkHandler.broadcastUiConfig(source.getServer());
+        }
         source.sendSuccess(() -> Component.translatable("commands.jeg.config_set", displayName, oldValue, value), true);
         return 1;
     }

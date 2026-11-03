@@ -25,7 +25,49 @@ public final class VehicleInputHandler {
     private static float cruiseSpeed;
     private static boolean wasRidingVehicle;
 
+    // Double-tap a strafe key and keep it held to roll the helicopter that way by hand; letting go hands the roll back.
+    private static final int BARREL_ROLL_DOUBLE_TAP_TICKS = 7;
+    private static boolean leftWasDown;
+    private static boolean rightWasDown;
+    private static int leftTapAge = Integer.MAX_VALUE;
+    private static int rightTapAge = Integer.MAX_VALUE;
+    private static int barrelRollRequest;
+
     private VehicleInputHandler() {}
+
+    /** Returns -1 (roll left), 1 (roll right) or 0: the double-tapped strafe key, for as long as it stays held. */
+    private static int tickBarrelRollRequest(Minecraft minecraft, boolean helicopterPilot) {
+        boolean leftDown = minecraft.options.keyLeft.isDown();
+        boolean rightDown = minecraft.options.keyRight.isDown();
+        if (leftTapAge < Integer.MAX_VALUE) {
+            leftTapAge++;
+        }
+        if (rightTapAge < Integer.MAX_VALUE) {
+            rightTapAge++;
+        }
+        if (helicopterPilot && leftDown && !leftWasDown) {
+            if (leftTapAge <= BARREL_ROLL_DOUBLE_TAP_TICKS) {
+                barrelRollRequest = -1;
+                leftTapAge = Integer.MAX_VALUE;
+            } else {
+                leftTapAge = 0;
+            }
+        }
+        if (helicopterPilot && rightDown && !rightWasDown) {
+            if (rightTapAge <= BARREL_ROLL_DOUBLE_TAP_TICKS) {
+                barrelRollRequest = 1;
+                rightTapAge = Integer.MAX_VALUE;
+            } else {
+                rightTapAge = 0;
+            }
+        }
+        if ((barrelRollRequest < 0 && !leftDown) || (barrelRollRequest > 0 && !rightDown) || !helicopterPilot) {
+            barrelRollRequest = 0;
+        }
+        leftWasDown = leftDown;
+        rightWasDown = rightDown;
+        return barrelRollRequest;
+    }
 
     private static void setAutoForward(Minecraft minecraft, VehicleEntity vehicle, boolean enabled) {
         autoForward = enabled;
@@ -150,6 +192,7 @@ public final class VehicleInputHandler {
             cruiseSpeed = Math.max(cruiseSpeed, forwardSpeed(vehicle));
         }
         boolean cruising = autoForward && !minecraft.options.keyUp.isDown();
+        int barrelRoll = tickBarrelRollRequest(minecraft, helicopterPilot);
         VehicleInput input = new VehicleInput(
                 minecraft.options.keyUp.isDown() || (cruising && cruiseSpeed > 0.0F),
                 minecraft.options.keyDown.isDown(),
@@ -168,7 +211,8 @@ public final class VehicleInputHandler {
                 KeyBindings.VEHICLE_DEPLOY_DECOY.consumeClick(),
                 aircraftControls && !freeLook ? VehicleClientState.mouseLerpX() : 0.0F,
                 aircraftControls && !freeLook ? VehicleClientState.mouseLerpY() : 0.0F,
-                cruising ? cruiseSpeed : 0.0F
+                cruising ? cruiseSpeed : 0.0F,
+                barrelRoll
         );
         vehicle.processClientInput(player, input);
         ClientNetworkHandler.sendVehicleInput(vehicle.getId(), input);

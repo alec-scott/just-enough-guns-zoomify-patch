@@ -15,7 +15,7 @@ import java.util.UUID;
  * dropped several of them in quick succession.
  */
 public final class SquadWipeTracker {
-    private static final double VICINITY_RADIUS = 24.0D;
+    private static final double VICINITY_RADIUS = 12.0D;
     private static final int MIN_KILLS = 3;
     private static final long KILL_WINDOW_TICKS = 30L * 20L;
     private static final Map<UUID, Map<EntityType<?>, Deque<Long>>> RECENT_KILLS = new HashMap<>();

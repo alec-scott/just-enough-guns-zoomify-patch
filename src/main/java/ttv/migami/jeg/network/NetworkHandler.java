@@ -84,6 +84,7 @@ public final class NetworkHandler {
         PayloadTypeRegistry.clientboundPlay().register(MedalPayload.TYPE, MedalPayload.STREAM_CODEC);
         PayloadTypeRegistry.clientboundPlay().register(KillMedalPayload.TYPE, KillMedalPayload.STREAM_CODEC);
         PayloadTypeRegistry.clientboundPlay().register(UiConfigPayload.TYPE, UiConfigPayload.STREAM_CODEC);
+        PayloadTypeRegistry.clientboundPlay().register(HelicopterFlightConfigPayload.TYPE, HelicopterFlightConfigPayload.STREAM_CODEC);
         PayloadTypeRegistry.clientboundPlay().register(VehicleDataSyncPayload.TYPE, VehicleDataSyncPayload.STREAM_CODEC);
         PayloadTypeRegistry.clientboundPlay().register(VehicleAssemblyRecipeSyncPayload.TYPE, VehicleAssemblyRecipeSyncPayload.STREAM_CODEC);
         PayloadTypeRegistry.clientboundPlay().register(VehicleStatePayload.TYPE, VehicleStatePayload.STREAM_CODEC);
@@ -434,10 +435,11 @@ public final class NetworkHandler {
 
     public static void sendUiConfig(ServerPlayer player) {
         ServerPlayNetworking.send(player, uiConfigPayload());
+        ServerPlayNetworking.send(player, new HelicopterFlightConfigPayload(Config.configuredHelicopterFlight()));
     }
 
     private static UiConfigPayload uiConfigPayload() {
-        return new UiConfigPayload(Config.showCrosshair(), Config.showHitFeedback(), Config.hideMedals(), Config.magazineFeedEnabled());
+        return new UiConfigPayload(Config.showCrosshair(), Config.showHitFeedback(), Config.hideMedals(), Config.configuredMagazineFeedEnabled());
     }
 
     public static void sendVehicleData(ServerPlayer player) {
@@ -447,8 +449,10 @@ public final class NetworkHandler {
 
     public static void broadcastUiConfig(MinecraftServer server) {
         UiConfigPayload payload = uiConfigPayload();
+        HelicopterFlightConfigPayload helicopterFlight = new HelicopterFlightConfigPayload(Config.configuredHelicopterFlight());
         for (ServerPlayer player : PlayerLookup.all(server)) {
             ServerPlayNetworking.send(player, payload);
+            ServerPlayNetworking.send(player, helicopterFlight);
         }
     }
 

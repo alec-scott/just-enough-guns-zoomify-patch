@@ -222,7 +222,8 @@ public final class VehicleDataManager {
                 getResourceLocation(object, "engine_start_sound", fallback.engineStartSound()),
                 getFloat(object, "engine_sound_volume", fallback.engineSoundVolume()),
                 getDouble(object, "player_max_speed", fallback.playerMaxSpeed()),
-                getDouble(object, "player_acceleration", fallback.playerAcceleration())
+                getDouble(object, "player_acceleration", fallback.playerAcceleration()),
+                getDouble(object, "player_weight", fallback.playerWeight())
         );
     }
 
@@ -344,7 +345,8 @@ public final class VehicleDataManager {
                     getInt(weapon, "seat", getInt(weapon, "seat_index", -1)),
                     muzzle == null ? Double.NaN : getDouble(muzzle, "x", Double.NaN),
                     muzzle == null ? Double.NaN : getDouble(muzzle, "y", Double.NaN),
-                    muzzle == null ? Double.NaN : getDouble(muzzle, "z", Double.NaN)
+                    muzzle == null ? Double.NaN : getDouble(muzzle, "z", Double.NaN),
+                    weapon.has("turret_mounted") ? Boolean.valueOf(getBoolean(weapon, "turret_mounted", true)) : null
             ));
         }
         return List.copyOf(weapons);

@@ -123,6 +123,18 @@ public final class ItemInHandRendererMixin {
             this.offHandHeight = 1.0F;
             this.oOffHandHeight = 1.0F;
         }
+
+        // Pulling the trigger counts as an attack, and vanilla lowers the held item while the attack meter recharges,
+        // which dropped the gun and threw the arms across the screen on every shot. Keep a gun that stays in hand up;
+        // switching to a different item still plays the normal lower-and-raise.
+        if (liveMain.getItem() instanceof GunItem && ItemStack.isSameItem(this.mainHandItem, liveMain)) {
+            this.mainHandHeight = 1.0F;
+            this.oMainHandHeight = 1.0F;
+        }
+        if (liveOff.getItem() instanceof GunItem && ItemStack.isSameItem(this.offHandItem, liveOff)) {
+            this.offHandHeight = 1.0F;
+            this.oOffHandHeight = 1.0F;
+        }
     }
 
     @Inject(method = "renderItem", at = @At("HEAD"))

@@ -48,6 +48,12 @@ public abstract class VehicleGameRendererMixin {
         }
         if (!vehicle.keepsCameraLevel()) {
             poseStack.mulPose(Axis.ZP.rotationDegrees(-rollFactor * vehicle.roll(partialTick) - pitchFactor * Mth.lerp(partialTick, vehicle.xRotO, vehicle.getXRot())));
+        } else {
+            // Level-horizon hulls (helicopters) only turn the view during a barrel roll.
+            float cameraRoll = vehicle.cameraRoll(partialTick);
+            if (cameraRoll != 0.0F) {
+                poseStack.mulPose(Axis.ZP.rotationDegrees(-rollFactor * cameraRoll));
+            }
         }
 
         if (fixedCamera) {
@@ -59,7 +65,8 @@ public abstract class VehicleGameRendererMixin {
         Quaternionf quaternion = Axis.XP.rotationDegrees(0.0F);
         quaternion.mul(Axis.YP.rotationDegrees(-Mth.rotLerp(partialTick, vehicle.yRotO, vehicle.getYRot())));
         quaternion.mul(Axis.XP.rotationDegrees(Mth.lerp(partialTick, vehicle.xRotO, vehicle.getXRot())));
-        quaternion.mul(Axis.ZP.rotationDegrees(vehicle.cameraRoll(partialTick)));
+        // Helicopter barrel rolls already place the eye with the rolled seat (VehicleEntity.cameraPositionFor).
+        quaternion.mul(Axis.ZP.rotationDegrees(vehicle.keepsCameraLevel() ? 0.0F : vehicle.cameraRoll(partialTick)));
         offset.rotate(quaternion);
 
         poseStack.mulPose(Axis.XP.rotationDegrees(this.mainCamera.xRot()));

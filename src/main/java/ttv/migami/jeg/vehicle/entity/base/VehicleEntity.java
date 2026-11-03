@@ -1,5 +1,7 @@
 package ttv.migami.jeg.vehicle.entity.base;
 
+import ttv.migami.jeg.Config;
+
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -273,6 +275,46 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     private static final float HELICOPTER_STRAFE_BANK = 0.6F;
     private static final float HELICOPTER_MAX_SWAY = 35.0F;
     private static final float HELICOPTER_DANGEROUS_DESCENT_WARNING_VOLUME = 14.0F;
+    // Weighty flight (Config: vehicle.helicopter.weightyFlight). The stick tilts the hull, the tilted rotor is what pushes
+    // the helicopter along, and drag sets the top speed, so speed builds and bleeds off with momentum. Each helicopter's
+    // engine.player_weight slows the tilt, speed and climb response (1 = light scout).
+    private static final float WEIGHTY_MAX_PITCH = 20.0F;
+    // Letting go flares the nose up against the remaining speed; S while still moving forward is a hard flare.
+    private static final float WEIGHTY_FLARE_PITCH = 16.0F;
+    private static final float WEIGHTY_HARD_FLARE_PITCH = 28.0F;
+    private static final float WEIGHTY_LEVEL_ROLL = 7.0F;
+    // Lightly damped, so the hull rocks past level after a flare or a hard start before it settles.
+    private static final double WEIGHTY_TILT_SPRING = 0.07D;
+    private static final double WEIGHTY_TILT_DAMPING = 0.26D;
+    // Ticks for a light helicopter to reach ~63% of a new speed once fully tilted.
+    private static final double WEIGHTY_SPEED_TIME_TICKS = 32.0D;
+    // Max share of the gap between the travel direction and the nose closed per tick at speed (scaled by turnGrip).
+    private static final double WEIGHTY_MAX_TURN_GRIP = 0.08D;
+    // Climb/descent: a speed target chased through a lagging rotor, so climbs carry on, stops dip and the hull bobs.
+    private static final double WEIGHTY_VERTICAL_GAIN = 0.12D;
+    private static final double WEIGHTY_LIFT_RESPONSE = 0.16D;
+    // Sink in blocks per tick at full tilt and tiltSink = 1.
+    private static final double WEIGHTY_MAX_TILT_SINK = 0.08D;
+    // Climb in blocks per tick a full-speed flare trades the forward momentum for (per unit of nose-up tilt).
+    private static final double WEIGHTY_FLARE_BALLOON = 0.15D;
+    // Gravity the rotor holds up, in blocks per tick squared. The rotor can give up to 60% more than hover, is only
+    // trimmed for tilts up to 35 degrees, and is unloaded to a quarter while the helicopter is upside down.
+    private static final double WEIGHTY_GRAVITY = 0.035D;
+    private static final double WEIGHTY_MAX_EXTRA_LIFT = 0.6D;
+    private static final double WEIGHTY_TRIM_LIMIT_COS = Math.cos(Math.toRadians(35.0D));
+    private static final double WEIGHTY_INVERTED_THRUST = 0.25D;
+    // Pilot-driven rolls (double-tap and hold A/D): roll acceleration and top roll rate in degrees per tick, divided by
+    // weight. Past an ordinary bank the hull is the pilot's: let go and the spin bleeds off while the rotor slowly rights
+    // it the short way round.
+    private static final float WEIGHTY_ROLL_ACCELERATION = 2.5F;
+    private static final float WEIGHTY_MAX_ROLL_RATE = 18.0F;
+    private static final float WEIGHTY_FREE_ROLL_ANGLE = 45.0F;
+    private static final float WEIGHTY_ROLL_SPIN_DAMPING = 0.22F;
+    private static final float WEIGHTY_ROLL_RIGHTING = 0.006F;
+    private static final float WEIGHTY_AIM_RESPONSE = 0.35F;
+    private static final float WEIGHTY_VISUAL_ROLL_SPRING = 0.08F;
+    private static final float WEIGHTY_VISUAL_ROLL_DAMPING = 0.3F;
+    private static final float WEIGHTY_SWAY_INERTIA = 0.45F;
     private static final double LAND_VEHICLE_BODY_IMPACT_MIN_SPEED = 0.22D;
     private static final double LAND_VEHICLE_BODY_IMPACT_MAX_MOVED_RATIO = 0.75D;
     private static final double LAND_VEHICLE_BODY_IMPACT_PROBE_DISTANCE = 0.65D;
@@ -359,6 +401,13 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     private float subEngineHealth = PART_MAX_HEALTH;
     private float rollVelocity;
     private double swayStrafeSpeed;
+    private float heliTiltPitch;
+    private float heliTiltPitchVelocity;
+    private float heliTiltRoll;
+    private float heliTiltRollVelocity;
+    private double heliLift;
+    // True while the pilot is rolling the hull by hand or it is still past an ordinary bank.
+    private boolean manualRolling;
     private float turretHealth = PART_MAX_HEALTH;
 
     private record BlockCollisionBounds(double centerX, double minY, double maxY, double centerZ, double halfWidth, double halfLength) {}
@@ -1007,7 +1056,13 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     }
 
     public float cameraRoll(float partialTick) {
-        return this.keepsCameraLevel() ? 0.0F : this.roll(partialTick);
+        float roll = this.roll(partialTick);
+        if (!this.keepsCameraLevel()) {
+            return roll;
+        }
+        // Ordinary sway leaves the horizon level; past it (a barrel roll) the view blends in and turns with the hull.
+        float blend = Mth.clamp((Math.abs(Mth.wrapDegrees(roll)) - HELICOPTER_MAX_SWAY) / 55.0F, 0.0F, 1.0F);
+        return Mth.wrapDegrees(roll) * blend * blend * (3.0F - 2.0F * blend);
     }
 
     public boolean isWeaponFiring() {
@@ -1150,8 +1205,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         VehicleWeaponInfo selectedWeapon = this.selectedWeapon(player);
         boolean canUseSelectedWeapon = selectedWeapon != null && this.canUseSelectedWeapon(player, selectedWeapon);
         if (selectedWeapon != null && !this.isFreeLookInput(input) && canUseSelectedWeapon && this.controlsTurret(player)) {
-            this.entityData.set(DATA_TURRET_YAW, this.turretYawFromPlayer(player));
-            this.entityData.set(DATA_TURRET_PITCH, this.weaponPitch(player));
+            this.setTurretAimFromView(player, this.getYRot(), player.getYRot(), player.getXRot(), 1.0F);
         }
         if (input.reload() && canUseSelectedWeapon) {
             this.startWeaponReload(player);
@@ -1196,8 +1250,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         this.selectFallbackWeaponFor(player, input);
         VehicleWeaponInfo selectedWeapon = this.selectedWeapon(player);
         if (selectedWeapon != null && !this.isFreeLookInput(input) && this.canUseSelectedWeapon(player, selectedWeapon) && this.controlsTurret(player)) {
-            this.entityData.set(DATA_TURRET_YAW, this.turretYawFromPlayer(player));
-            this.entityData.set(DATA_TURRET_PITCH, this.weaponPitch(player));
+            this.setTurretAimFromView(player, this.getYRot(), player.getYRot(), player.getXRot(), 1.0F);
         }
         if (player == this.getControllingPassenger()) {
             this.input = input;
@@ -1219,8 +1272,8 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         VehicleWeaponInfo selectedWeapon = this.selectedWeapon(living);
         if (selectedWeapon != null && this.canUseSelectedWeapon(living, selectedWeapon) && this.controlsTurret(living)) {
             // Aim from the frame-interpolated aircraft heading and view so the turret camera does not step once per tick.
-            this.entityData.set(DATA_TURRET_YAW, this.turretYawFromView(living, Mth.rotLerp(partialTick, this.yRotO, this.getYRot()), living.getViewYRot(partialTick)));
-            this.entityData.set(DATA_TURRET_PITCH, this.weaponPitch(living));
+            this.setTurretAimFromView(living, Mth.rotLerp(partialTick, this.yRotO, this.getYRot()),
+                    living.getViewYRot(partialTick), living.getViewXRot(partialTick), partialTick);
             if (living == localClientPlayer()) {
                 // The local gunner re-aims every frame; interpolating from the tick-start (server-synced) value made the
                 // turret camera swing between the server and predicted aim every tick while the aircraft turned.
@@ -1234,19 +1287,32 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         return this.vehicleData().defaults().allowFreeCam() && input.freeLook();
     }
 
-    private float turretYawFromPlayer(LivingEntity player) {
-        return this.turretYawFromView(player, this.getYRot(), player.getYRot());
-    }
-
-    private float turretYawFromView(LivingEntity player, float vehicleYaw, float viewYaw) {
-        // Clamp to the seat's view limits like the client does, or the server turret runs past what the gunner sees.
-        float relativeView = Mth.wrapDegrees(viewYaw - vehicleYaw);
+    /**
+     * Points the turret along the gunner's view. On aircraft the turret rides the hull's pitch and roll, so the view is
+     * first turned into hull space; otherwise a nose-down or banking helicopter swung the gun off the crosshair.
+     */
+    private void setTurretAimFromView(LivingEntity player, float vehicleYaw, float viewYaw, float viewPitch, float partialTick) {
+        float turretYaw;
+        float turretPitch;
+        if (this.usesVehiclePoseTransform()) {
+            Vec3 look = Vec3.directionFromRotation(viewPitch, viewYaw);
+            Vector4d local = this.vehiclePoseRotation(partialTick).invert(new Matrix4d())
+                    .transform(new Vector4d(look.x, look.y, look.z, 0.0D));
+            turretYaw = (float) Math.toDegrees(Math.atan2(local.x, local.z));
+            turretPitch = (float) -Math.toDegrees(Math.asin(Mth.clamp(local.y, -1.0D, 1.0D)));
+        } else {
+            turretYaw = -Mth.wrapDegrees(viewYaw - vehicleYaw);
+            turretPitch = viewPitch;
+        }
         int fallbackIndex = this.getPassengers().indexOf(player);
         if (fallbackIndex >= 0) {
             SeatInfo seat = this.seatForPassenger(player, fallbackIndex);
-            relativeView = Mth.clamp(relativeView, seat.minYaw(), seat.maxYaw());
+            // Seat limits are relative to the hull, like the client's view clamp.
+            turretYaw = -Mth.clamp(-turretYaw, seat.minYaw(), seat.maxYaw());
+            turretPitch = Mth.clamp(turretPitch, seat.minPitch(), seat.maxPitch());
         }
-        return -relativeView;
+        this.entityData.set(DATA_TURRET_YAW, Mth.wrapDegrees(turretYaw));
+        this.entityData.set(DATA_TURRET_PITCH, turretPitch);
     }
 
     /** With a turret, only its seat aims it; other armed seats (the Mi-28 pilot's rockets) overwrote the gunner's aim. */
@@ -2213,6 +2279,11 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         Vec3 articulatedMuzzle = this.articulatedWeaponMuzzlePosition(weapon);
         if (articulatedMuzzle != null) {
             return articulatedMuzzle;
+        }
+        if (weapon.hasMuzzle() && this.usesVehiclePoseTransform()) {
+            // Aircraft pylons are bolted to the hull: place the muzzle with the hull's attitude, not the aim direction,
+            // so a gunner looking sideways does not swing the rocket pods round the nose.
+            return this.position().add(this.rotateLocalOffsetWithPose(weapon.muzzleX(), weapon.muzzleY(), weapon.muzzleZ(), 1.0F));
         }
         if (weapon.hasMuzzle()) {
             Vec3 aim = direction.normalize();
@@ -3633,7 +3704,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
             }
         }
         Vec3 offset = this.usesVehiclePoseTransform()
-                ? this.cameraOffsetWithPose(seat.x(), seat.y() + passenger.getEyeHeight(), seat.z(), partialTick)
+                ? this.seatEyeOffsetWithPose(seat.x(), seat.y() + passenger.getEyeHeight(), seat.z(), partialTick)
                 : this.seatOffset(seat, passenger.getEyeHeight(), partialTick);
         return this.interpolatedVehiclePosition(partialTick).add(offset);
     }
@@ -4594,6 +4665,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         double turnResponse = playerPilot ? HELICOPTER_PLAYER_TURN_RESPONSE : 1.0D;
         if (!playerVerticalControl) {
             this.pilotAimPitch = 0.0F;
+            this.settleWeightyHelicopterState();
         }
         if (playerPilot && !playerVerticalControl && this.onGround()) {
             // Settle any flight attitude left over from touchdown.
@@ -4755,7 +4827,12 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
             }
         }
 
-        if (playerVerticalControl) {
+        Config.HelicopterFlightSettings flight = Config.helicopterFlight();
+        if (playerVerticalControl && flight.weightyFlight()) {
+            float yawDelta = Mth.wrapDegrees(this.getYRot() - this.yRotO);
+            velocity = this.weightyHelicopterVelocity(velocityAtTickStart, targetVerticalSpeed, engine, mobility, flight);
+            this.updateWeightyHelicopterAttitude(velocity, engine, mobility, yawDelta, flight);
+        } else if (playerVerticalControl) {
             // Steer the velocity directly instead of summing gravity and rotor lift, which never balance exactly and made the hover drift.
             velocity = this.playerHelicopterVelocity(velocityAtTickStart, targetVerticalSpeed, engine, mobility);
             this.updatePlayerHelicopterAttitude(velocity, engine, mobility, Mth.wrapDegrees(this.getYRot() - this.yRotO));
@@ -4838,6 +4915,183 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         // gentle lean, and stopping throws it the other way before it rocks back upright.
         this.rollVelocity += (targetRoll - this.roll()) * HELICOPTER_ROLL_SPRING - this.rollVelocity * HELICOPTER_ROLL_DAMPING
                 + leftAccelerationFraction * HELICOPTER_SWAY_INERTIA;
+        this.setRoll(Mth.clamp(this.roll() + this.rollVelocity, -HELICOPTER_MAX_SWAY, HELICOPTER_MAX_SWAY));
+    }
+
+    private static double weightyHelicopterWeight(EngineInfo engine, Config.HelicopterFlightSettings flight) {
+        return Mth.clamp(engine.playerWeight() * flight.weightMultiplier(), 0.5D, 3.0D);
+    }
+
+    /** Hull tilt in degrees whose sideways rotor push is {@code thrust} (the sine of the tilt). */
+    private static float weightyTiltForThrust(double thrust) {
+        return (float) Math.toDegrees(Math.asin(Mth.clamp(thrust, -1.0D, 1.0D)));
+    }
+
+    /** Out of player control (landed, power loss, AI) the thrust tilt and rotor lag ease back to neutral. */
+    private void settleWeightyHelicopterState() {
+        this.heliTiltPitch *= 0.8F;
+        this.heliTiltRoll = Mth.wrapDegrees(this.heliTiltRoll) * 0.8F;
+        this.heliTiltPitchVelocity = 0.0F;
+        this.heliTiltRollVelocity = 0.0F;
+        this.heliLift = 0.0D;
+        this.manualRolling = false;
+    }
+
+    public boolean isBarrelRolling() {
+        return this.manualRolling;
+    }
+
+    /**
+     * Pilot-driven roll. While the pilot holds a double-tapped strafe key the hull spins up that way and keeps turning
+     * for as long as it is held; let go and the spin carries on briefly. Past an ordinary bank nothing snaps it back:
+     * the spin bleeds off and the rotor slowly rights the hull. Returns true while the roll axis is the pilot's.
+     */
+    private boolean tickWeightyManualRoll(double weight, Config.HelicopterFlightSettings flight) {
+        int command = flight.barrelRolls() ? Integer.signum(this.input.barrelRoll()) : 0;
+        this.heliTiltRoll = Mth.wrapDegrees(this.heliTiltRoll);
+        boolean pastBank = Math.abs(this.heliTiltRoll) > WEIGHTY_FREE_ROLL_ANGLE;
+        if (command == 0 && !pastBank) {
+            this.manualRolling = false;
+            return false;
+        }
+        this.manualRolling = true;
+        float maxRate = (float) (WEIGHTY_MAX_ROLL_RATE / weight);
+        if (command != 0) {
+            // A positive command rolls right (positive roll).
+            this.heliTiltRollVelocity = Mth.clamp(this.heliTiltRollVelocity + (float) (command * WEIGHTY_ROLL_ACCELERATION / weight),
+                    -maxRate, maxRate);
+        } else {
+            this.heliTiltRollVelocity += (float) (-this.heliTiltRoll * WEIGHTY_ROLL_RIGHTING / weight)
+                    - this.heliTiltRollVelocity * WEIGHTY_ROLL_SPIN_DAMPING;
+        }
+        this.heliTiltRoll = Mth.wrapDegrees(this.heliTiltRoll + this.heliTiltRollVelocity);
+        return true;
+    }
+
+    private Vec3 weightyHelicopterVelocity(Vec3 current, double targetVerticalSpeed, EngineInfo engine, double mobility,
+                                           Config.HelicopterFlightSettings flight) {
+        double weight = weightyHelicopterWeight(engine, flight);
+        int forward = this.input.forwardAxis();
+        int strafe = this.input.strafeAxis();
+        double maxSpeed = Math.max(1.0E-4D, this.playerHelicopterMaxSpeed(engine, mobility));
+        double maxStrafe = maxSpeed * HELICOPTER_STRAFE_SPEED_RATIO;
+        double sinMaxPitch = Math.sin(Math.toRadians(WEIGHTY_MAX_PITCH));
+        Vec3 forwardDirection = this.horizontalDirection(this.getYRot());
+        Vec3 leftDirection = new Vec3(forwardDirection.z, 0.0D, -forwardDirection.x);
+        Vec3 horizontal = new Vec3(current.x, 0.0D, current.z);
+        double forwardSpeed = horizontal.dot(forwardDirection);
+        double leftSpeed = horizontal.dot(leftDirection);
+
+        // 1. The stick asks for a tilt. Hands off, the nose flares up against the remaining speed and the hull levels.
+        // Positive pitch is nose down; positive roll banks right.
+        float targetPitch;
+        if (forward > 0) {
+            double fraction = this.input.cruiseSpeed() > 0.0F ? Math.min(1.0D, this.input.cruiseSpeed() / maxSpeed) : 1.0D;
+            targetPitch = weightyTiltForThrust(fraction * sinMaxPitch);
+        } else if (forward < 0 && forwardSpeed > 0.15D * maxSpeed) {
+            // S while still moving forward: haul the nose up hard and trade the speed away.
+            targetPitch = (float) (-WEIGHTY_HARD_FLARE_PITCH * Mth.clamp(1.5D * forwardSpeed / maxSpeed, 0.35D, 1.0D));
+        } else if (forward < 0) {
+            double reverseSpeed = engine.maxReverseSpeed() * mobility * HELICOPTER_PLAYER_SPEED_MULTIPLIER;
+            targetPitch = -weightyTiltForThrust(Math.min(1.0D, reverseSpeed / maxSpeed) * sinMaxPitch);
+        } else {
+            targetPitch = (float) (-Mth.clamp(forwardSpeed / maxSpeed, -1.0D, 1.0D) * WEIGHTY_FLARE_PITCH);
+        }
+        float targetRoll = strafe != 0
+                ? -strafe * weightyTiltForThrust(HELICOPTER_STRAFE_SPEED_RATIO * sinMaxPitch)
+                : (float) (Mth.clamp(leftSpeed / maxStrafe, -1.0D, 1.0D) * WEIGHTY_LEVEL_ROLL);
+
+        // 2. The hull swings to that tilt on a spring; heavier airframes tilt more slowly and rock for longer.
+        // While the pilot rolls by hand (or the hull is still past an ordinary bank) the roll axis is theirs.
+        double tiltSpring = WEIGHTY_TILT_SPRING / weight;
+        double tiltDamping = WEIGHTY_TILT_DAMPING / Math.sqrt(weight);
+        this.heliTiltPitchVelocity += (float) ((targetPitch - this.heliTiltPitch) * tiltSpring - this.heliTiltPitchVelocity * tiltDamping);
+        this.heliTiltPitch += this.heliTiltPitchVelocity;
+        boolean rolling = this.tickWeightyManualRoll(weight, flight);
+        if (!rolling) {
+            this.heliTiltRollVelocity += (float) ((targetRoll - this.heliTiltRoll) * tiltSpring - this.heliTiltRollVelocity * tiltDamping);
+            this.heliTiltRoll += this.heliTiltRollVelocity;
+        }
+
+        // 3. Rotor thrust. The pilot assist trims it to hold altitude through ordinary tilts; past 35 degrees of bank, and
+        // above all upside down, gravity wins and the helicopter drops.
+        double pitchRadians = Math.toRadians(this.heliTiltPitch);
+        double rollRadians = Math.toRadians(this.heliTiltRoll);
+        double uprightness = Math.cos(pitchRadians) * Math.cos(rollRadians);
+        double tiltAmount = 0.0D;
+        double pitchThrust = Math.sin(pitchRadians) * Math.cos(rollRadians) / sinMaxPitch;
+        double rollThrust = Math.sin(rollRadians) / sinMaxPitch;
+        double verticalTarget = targetVerticalSpeed;
+        if (!rolling) {
+            tiltAmount = Math.min(pitchThrust * pitchThrust + rollThrust * rollThrust, 1.5D);
+            verticalTarget -= WEIGHTY_MAX_TILT_SINK * flight.tiltSink() * weight * tiltAmount;
+            // A flare at speed balloons upward as the forward momentum turns into height.
+            verticalTarget += WEIGHTY_FLARE_BALLOON * Math.max(0.0D, -pitchThrust) * Mth.clamp(forwardSpeed / maxSpeed, 0.0D, 1.0D);
+        }
+        double desiredLift = (verticalTarget - current.y) * WEIGHTY_VERTICAL_GAIN;
+        this.heliLift += (desiredLift - this.heliLift) * WEIGHTY_LIFT_RESPONSE / weight;
+        this.heliLift = Mth.clamp(this.heliLift, -WEIGHTY_GRAVITY, WEIGHTY_MAX_EXTRA_LIFT * WEIGHTY_GRAVITY);
+        double thrust = WEIGHTY_GRAVITY + this.heliLift;
+        if (uprightness < 0.0D) {
+            thrust *= WEIGHTY_INVERTED_THRUST;
+        }
+        double trim = 1.0D / Math.max(uprightness, WEIGHTY_TRIM_LIMIT_COS);
+        double verticalAcceleration = thrust * uprightness * trim - WEIGHTY_GRAVITY;
+
+        // 4. The tilted rotor pushes along; drag makes the full tilt settle at exactly the helicopter's top speed.
+        // Mid-roll the push follows the real thrust, so the roll arcs out to the side and back.
+        double drag = 1.0D / (WEIGHTY_SPEED_TIME_TICKS * weight);
+        double fullThrust = maxSpeed * drag / (1.0D - drag);
+        if (rolling) {
+            double thrustShare = thrust / WEIGHTY_GRAVITY;
+            pitchThrust = Math.sin(pitchRadians) * Math.cos(rollRadians) * thrustShare;
+            rollThrust = Math.sin(rollRadians) * thrustShare;
+        }
+        horizontal = horizontal.add(forwardDirection.scale(pitchThrust * fullThrust)).add(leftDirection.scale(-rollThrust * fullThrust));
+
+        // 5. Turning swings the nose first; the momentum follows it round over a moment, so fast turns drift.
+        double along = horizontal.dot(forwardDirection);
+        double speed = horizontal.length();
+        if (strafe == 0 && !rolling && along > 0.0D && speed > 1.0E-4D) {
+            double grip = WEIGHTY_MAX_TURN_GRIP * flight.turnGrip() * Mth.clamp(2.0D * along / maxSpeed, 0.0D, 1.0D) / weight;
+            Vec3 direction = horizontal.scale(1.0D / speed);
+            Vec3 turned = direction.add(forwardDirection.subtract(direction).scale(grip));
+            if (turned.lengthSqr() > 1.0E-8D) {
+                horizontal = turned.normalize().scale(speed);
+            }
+        }
+        horizontal = horizontal.scale(1.0D - drag);
+        return new Vec3(horizontal.x, current.y + verticalAcceleration, horizontal.z);
+    }
+
+    private void updateWeightyHelicopterAttitude(Vec3 velocity, EngineInfo engine, double mobility, float yawDelta,
+                                                 Config.HelicopterFlightSettings flight) {
+        double weight = weightyHelicopterWeight(engine, flight);
+        double maxSpeed = Math.max(1.0E-4D, this.playerHelicopterMaxSpeed(engine, mobility));
+        double maxStrafe = maxSpeed * HELICOPTER_STRAFE_SPEED_RATIO;
+        // The hull shows the thrust tilt; the pilot's mouse aim rides on top without pushing the helicopter.
+        float targetPitch = Mth.clamp(this.heliTiltPitch + this.pilotAimPitch, -50.0F, 40.0F);
+        this.setXRot(this.getXRot() + (targetPitch - this.getXRot()) * WEIGHTY_AIM_RESPONSE);
+
+        // Same weighted sway as before, layered on the thrust bank: a sudden strafe swings the hull the other way first.
+        double previousStrafeSpeed = this.swayStrafeSpeed;
+        boolean braking = this.input.forwardAxis() == 0 && this.input.strafeAxis() == 0;
+        double swayResponse = (braking ? HELICOPTER_BRAKING_RESPONSE : HELICOPTER_ACCELERATION_RESPONSE) / weight;
+        this.swayStrafeSpeed += (this.input.strafeAxis() * maxStrafe - this.swayStrafeSpeed) * swayResponse;
+        if (this.isBarrelRolling()) {
+            // The pilot is rolling the hull by hand; no spring or sway on top of it.
+            this.rollVelocity = 0.0F;
+            this.setRoll(this.heliTiltRoll);
+            return;
+        }
+        double fullLateralAcceleration = maxStrafe * HELICOPTER_ACCELERATION_RESPONSE / weight;
+        float leftAccelerationFraction = (float) Mth.clamp((this.swayStrafeSpeed - previousStrafeSpeed) / fullLateralAcceleration, -1.5D, 1.5D);
+        double speedFraction = Mth.clamp(velocity.horizontalDistance() / maxSpeed, 0.0D, 1.0D);
+        float turnBank = (float) (yawDelta * HELICOPTER_TURN_BANK * (0.5D + 0.5D * speedFraction));
+        float targetRoll = Mth.clamp(this.heliTiltRoll + turnBank, -HELICOPTER_MAX_BANK, HELICOPTER_MAX_BANK);
+        this.rollVelocity += (float) ((targetRoll - this.roll()) * WEIGHTY_VISUAL_ROLL_SPRING / weight
+                - this.rollVelocity * WEIGHTY_VISUAL_ROLL_DAMPING / Math.sqrt(weight)
+                + leftAccelerationFraction * WEIGHTY_SWAY_INERTIA * weight);
         this.setRoll(Mth.clamp(this.roll() + this.rollVelocity, -HELICOPTER_MAX_SWAY, HELICOPTER_MAX_SWAY));
     }
 
@@ -4946,9 +5200,20 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
 
     private Vec3 firstPersonSeatCameraOffset(double localX, double localY, double localZ, float partialTick) {
         if (this.usesVehiclePoseTransform()) {
-            return this.cameraOffsetWithPose(localX, localY, localZ, partialTick);
+            return this.seatEyeOffsetWithPose(localX, localY, localZ, partialTick);
         }
         return this.rotateLocalOffset(localX, localY, localZ, partialTick);
+    }
+
+    /** First-person eye inside the hull: turned by the camera's roll, so a barrel roll keeps the eye in the cockpit. */
+    private Vec3 seatEyeOffsetWithPose(double localX, double localY, double localZ, float partialTick) {
+        if (!this.keepsCameraLevel()) {
+            return this.rotateLocalOffsetWithPose(localX, localY, localZ, partialTick);
+        }
+        Vec3 origin = this.interpolatedVehiclePosition(partialTick);
+        Vector4d worldPosition = this.vehiclePoseTransformWithRoll(partialTick, this.cameraRoll(partialTick))
+                .transform(new Vector4d(localX, localY, localZ, 1.0D));
+        return new Vec3(worldPosition.x - origin.x, worldPosition.y - origin.y, worldPosition.z - origin.z);
     }
 
     private Vec3 cameraOffsetWithPose(double localX, double localY, double localZ, float partialTick) {
@@ -4971,7 +5236,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
             return this.articulatedBarrelPosition(camera.x(), camera.y(), camera.z(), partialTick);
         }
         Vec3 offset = this.usesVehiclePoseTransform()
-                ? this.cameraOffsetWithPose(camera.x(), camera.y(), camera.z(), partialTick)
+                ? this.seatEyeOffsetWithPose(camera.x(), camera.y(), camera.z(), partialTick)
                 : this.rotateLocalOffset(camera.x(), camera.y(), camera.z(), partialTick);
         return this.interpolatedVehiclePosition(partialTick).add(offset);
     }
@@ -4992,9 +5257,13 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     }
 
     private boolean usesArticulatedTurretMuzzle(VehicleWeaponInfo weapon) {
-        return this.vehicleData().defaults().turret().enabled()
-                && weapon.hasMuzzle()
-                && (!weapon.guided() || this.guidedWeaponsUseArticulatedTurret());
+        if (!this.vehicleData().defaults().turret().enabled() || !weapon.hasMuzzle()) {
+            return false;
+        }
+        if (weapon.turretMounted() != null) {
+            return weapon.turretMounted();
+        }
+        return !weapon.guided() || this.guidedWeaponsUseArticulatedTurret();
     }
 
     private Vec3 rotateLocalOffset(double localX, double localY, double localZ) {
@@ -5052,12 +5321,19 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     }
 
     private Matrix4d vehiclePoseTransformNoRoll(float partialTick) {
+        return this.vehiclePoseTransformWithRoll(partialTick, 0.0F);
+    }
+
+    private Matrix4d vehiclePoseTransformWithRoll(float partialTick, float roll) {
         Vec3 origin = this.interpolatedVehiclePosition(partialTick);
         double pivotY = this.rotateOffsetHeight();
         Matrix4d transform = new Matrix4d();
         transform.translate(origin.x, origin.y + pivotY, origin.z);
         transform.rotate(Axis.YP.rotationDegrees(-Mth.rotLerp(partialTick, this.yRotO, this.getYRot())));
         transform.rotate(Axis.XP.rotationDegrees(Mth.lerp(partialTick, this.xRotO, this.getXRot())));
+        if (roll != 0.0F) {
+            transform.rotate(Axis.ZP.rotationDegrees(roll));
+        }
         transform.translate(0.0D, -pivotY, 0.0D);
         return transform;
     }

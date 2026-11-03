@@ -12,7 +12,7 @@
     {"index": 0, "x": 0.0, "y": 1.9625, "z": 2.25, "driver": true, "enclosed": true, "ban_hand": true, "min_pitch": -80.0, "max_pitch": 80.0, "min_yaw": -80.0, "max_yaw": 80.0, "sensitivity_x": 0.0, "sensitivity_y": 0.0, "sensitivity_z": 0.0, "zoom_camera": {"x": 0.0, "y": 3.5625, "z": 2.25, "use_fixed_camera_pos": true, "use_aircraft_camera": true, "aircraft_x": 0.0, "aircraft_y": 8.0, "aircraft_z": -20.0}, "dismount": {"x": -2.5, "y": 0.5, "z": 2.5}},
     {"index": 1, "x": 0.0, "y": 1.3375, "z": 3.8125, "driver": false, "enclosed": true, "ban_hand": true, "min_pitch": -10.0, "max_pitch": 40.0, "min_yaw": -110.0, "max_yaw": 110.0, "sensitivity_x": 0.59, "sensitivity_y": 0.8, "sensitivity_z": 0.9, "zoom_camera": {"x": 0.0, "y": 1.0625, "z": 5.625, "use_fixed_camera_pos": true}, "dismount": {"x": -2.5, "y": 0.5, "z": 3.5625}}
   ],
-  "engine": {"type": "rotor", "acceleration": 0.038, "max_forward_speed": 0.55, "max_reverse_speed": 0.2, "friction": 0.92, "energy_cost_rate": 320, "increment": 0.68, "decrement": 1.0, "pitch_speed": 0.75, "yaw_speed": 0.85, "roll_speed": 0.6, "lift_speed": 0.68, "engine_start_sound": "jeg:vehicle.mi28.engine", "engine_sound_volume": 2.0, "player_max_speed": 2.0, "player_acceleration": 0.25},
+  "engine": {"type": "rotor", "acceleration": 0.038, "max_forward_speed": 0.55, "max_reverse_speed": 0.2, "friction": 0.92, "energy_cost_rate": 320, "increment": 0.68, "decrement": 1.0, "pitch_speed": 0.75, "yaw_speed": 0.85, "roll_speed": 0.6, "lift_speed": 0.68, "engine_start_sound": "jeg:vehicle.mi28.engine", "engine_sound_volume": 2.0, "player_max_speed": 2.0, "player_acceleration": 0.25, "player_weight": 1.25},
   "third_person_camera": {"x": 0.0, "y": 8.0, "z": -20.0},
   "dismount": {"x": 1.55, "y": 0.1, "z": 0.0},
   "collision_level": "heavy",
@@ -31,12 +31,12 @@
     {"part": "main_engine", "x": 0.0, "y": 4.625, "z": 0.5, "half_width": 0.625, "half_height": 0.8125, "half_depth": 0.625}
   ],
   "weapons": [
-    {"weapon": "jeg:vehicle_80mm_rocket", "ammo": "jeg:small_rocket", "energy_cost": 2, "guided": false, "seat": 0, "muzzle": {"x": -1.787, "y": 1.548, "z": -0.151}},
-    {"weapon": "jeg:vehicle_9m120_driver_missile", "ammo": "jeg:medium_anti_ground_missile", "energy_cost": 2, "guided": true, "seat": 0, "muzzle": {"x": -2.258, "y": 1.932, "z": 0.0}},
-    {"weapon": "jeg:vehicle_9m336_missile", "ammo": "jeg:medium_anti_air_missile", "energy_cost": 2, "guided": true, "seat": 0, "muzzle": {"x": -2.806, "y": 1.932, "z": 0.0}},
-    {"weapon": "jeg:light_machine_gun", "ammo": "jeg:rifle_ammo", "energy_cost": 1, "guided": false, "seat": 1, "muzzle": {"x": 0.0, "y": 0.102, "z": 3.013}},
-    {"weapon": "jeg:vehicle_9m120_passenger_missile", "ammo": "jeg:medium_anti_ground_missile", "energy_cost": 2, "guided": true, "seat": 1, "muzzle": {"x": 2.258, "y": 1.932, "z": 0.0}},
-    {"weapon": "jeg:vehicle_kh39_missile", "ammo": "jeg:large_anti_ground_missile", "energy_cost": 2, "guided": true, "seat": 1, "muzzle": {"x": -2.641, "y": 1.1875, "z": 0.0}}
+    {"weapon": "jeg:vehicle_80mm_rocket", "ammo": "jeg:small_rocket", "energy_cost": 2, "guided": false, "seat": 0, "turret_mounted": false, "muzzle": {"x": -1.787, "y": 1.548, "z": -0.151}},
+    {"weapon": "jeg:vehicle_9m120_driver_missile", "ammo": "jeg:medium_anti_ground_missile", "energy_cost": 2, "guided": true, "seat": 0, "turret_mounted": false, "muzzle": {"x": -2.258, "y": 1.932, "z": 0.0}},
+    {"weapon": "jeg:vehicle_9m336_missile", "ammo": "jeg:medium_anti_air_missile", "energy_cost": 2, "guided": true, "seat": 0, "turret_mounted": false, "muzzle": {"x": -2.806, "y": 1.932, "z": 0.0}},
+    {"weapon": "jeg:light_machine_gun", "ammo": "jeg:rifle_ammo", "energy_cost": 1, "guided": false, "seat": 1, "muzzle": {"x": 0.0, "y": 0.659375, "z": 7.1745}},
+    {"weapon": "jeg:vehicle_9m120_passenger_missile", "ammo": "jeg:medium_anti_ground_missile", "energy_cost": 2, "guided": true, "seat": 1, "turret_mounted": false, "muzzle": {"x": 2.258, "y": 1.932, "z": 0.0}},
+    {"weapon": "jeg:vehicle_kh39_missile", "ammo": "jeg:large_anti_ground_missile", "energy_cost": 2, "guided": true, "seat": 1, "turret_mounted": false, "muzzle": {"x": -2.641, "y": 1.1875, "z": 0.0}}
   ],
   "destroy": {"explodes": true, "explosion_power": 3.0},
   "seek": {"range": 384.0, "angle": 20.0, "warns_target": true},

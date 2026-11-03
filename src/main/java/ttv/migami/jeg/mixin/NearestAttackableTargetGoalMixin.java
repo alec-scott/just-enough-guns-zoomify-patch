@@ -66,6 +66,10 @@ public abstract class NearestAttackableTargetGoalMixin extends TargetGoal {
             if (pos.equals(startPos) || pos.equals(endPos)) {
                 continue;
             }
+            // getBlockState would load an unloaded chunk just to answer a targeting check; treat it as see-through instead.
+            if (!level.hasChunkAt(pos)) {
+                continue;
+            }
             BlockState state = level.getBlockState(pos);
             if (!state.isAir() && state.isSolidRender()) {
                 solidBlocks++;

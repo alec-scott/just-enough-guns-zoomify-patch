@@ -105,6 +105,11 @@ public class BulletEntity extends Projectile {
     private static final double MIN_TRAIL_START_DISTANCE_SQR = 0.45D * 0.45D;
     private static final double TRAIL_SYNC_RANGE = 256.0D;
     private static final double BULLET_KNOCKBACK = 0.02D;
+    // Punch: like a Punch arrow (0.6 blocks/tick per level), split across a shotgun's pellets.
+    private static final double PUNCH_KNOCKBACK_PER_LEVEL = 0.6D;
+    private static final int FLAME_SECONDS = 5;
+    private int punchLevel;
+    private boolean flame;
     private static final float ROCKET_EXPLOSION_POWER = 6.8F;
     private static final float ROCKET_DIRECT_HIT_DAMAGE = 70.0F;
     private static final float ROCKET_BLAST_BASE_DAMAGE = 32.0F;
@@ -175,6 +180,12 @@ public class BulletEntity extends Projectile {
 
     public void setMedalsEnabled(boolean medalsEnabled) {
         this.medalsEnabled = medalsEnabled;
+    }
+
+    /** Punch and Flame from the gun that fired this bullet (see GunBowEnchantments). */
+    public void setBowEnchantments(int punchLevel, boolean flame) {
+        this.punchLevel = punchLevel;
+        this.flame = flame;
     }
 
     public boolean shouldSendMedals() {
@@ -522,9 +533,21 @@ public class BulletEntity extends Projectile {
         if (hurt) {
             Vec3 path = this.getDeltaMovement().multiply(1.0D, 0.0D, 1.0D);
             double resistance = Mth.clamp(living.getAttributeValue(Attributes.KNOCKBACK_RESISTANCE), 0.0D, 1.0D);
-            Vec3 nudge = path.lengthSqr() > 1.0E-8D ? path.normalize().scale(BULLET_KNOCKBACK * (1.0D - resistance)) : Vec3.ZERO;
+            Vec3 direction = path.lengthSqr() > 1.0E-8D ? path.normalize() : Vec3.ZERO;
+            Vec3 nudge = direction.scale(BULLET_KNOCKBACK * (1.0D - resistance));
+            if (this.punchLevel > 0 && direction != Vec3.ZERO) {
+                // One Punch arrow's shove per second of fire: rapid-fire guns share it across their shots, shotguns
+                // across their pellets, so automatic fire does not launch mobs across the map.
+                GunStats stats = this.getGunStats();
+                double share = Mth.clamp(stats.fireDelay() / 20.0D, 0.1D, 1.0D) / Math.max(1, stats.projectileAmount());
+                Vec3 punch = direction.scale(this.punchLevel * PUNCH_KNOCKBACK_PER_LEVEL * (1.0D - resistance) * share);
+                nudge = nudge.add(punch.x, 0.1D * share, punch.z);
+            }
             living.setDeltaMovement(motionBefore.add(nudge));
             living.hurtMarked = true;
+            if (this.flame) {
+                living.igniteForSeconds(FLAME_SECONDS);
+            }
         }
         return hurt;
     }
