@@ -7,6 +7,7 @@ import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.client.renderer.ItemInHandRenderer;
 import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.core.component.DataComponents;
+import net.minecraft.util.Mth;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.HumanoidArm;
 import net.minecraft.world.entity.LivingEntity;
@@ -19,7 +20,9 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import ttv.migami.jeg.gun.GunWeight;
 import ttv.migami.jeg.init.ModDataComponents;
+import ttv.migami.jeg.item.AnimatedGunItem;
 import ttv.migami.jeg.item.GunItem;
 import ttv.migami.jeg.vehicle.client.VehicleCameraHandler;
 
@@ -55,6 +58,24 @@ public final class ItemInHandRendererMixin {
     @Unique
     private ItemStack jeg$preTickOffHandItem = ItemStack.EMPTY;
 
+    @Unique
+    private float jeg$preTickMainHandHeight = 1.0F;
+
+    @Unique
+    private float jeg$preTickOffHandHeight = 1.0F;
+
+    @Unique
+    private static final float JEG$LOWER_RATE = 0.25F;
+
+    @Unique
+    private static final float JEG$RAISE_RATE = 0.14F;
+
+    @Unique
+    private static final float JEG$HIDDEN_LOWERING_PROGRESS = 0.4F;
+
+    @Unique
+    private static final float JEG$HIDDEN_RAISING_PROGRESS = 0.8F;
+
     @Inject(method = "renderArmWithItem", at = @At("HEAD"), cancellable = true)
     private void jeg$captureArmRenderContext(
             AbstractClientPlayer player,
@@ -72,6 +93,15 @@ public final class ItemInHandRendererMixin {
         if (VehicleCameraHandler.shouldHideHand()) {
             ci.cancel();
             return;
+        }
+        // Out of sight anyway at this point of a switch, but its arms are not always: a gun being put away or just drawn has
+        // no animated pose for a frame, and its arms would flash up spread out from the bottom of the screen.
+        if (stack.getItem() instanceof AnimatedGunItem) {
+            boolean lowering = !ItemStack.isSameItem(stack, player.getItemInHand(hand));
+            if (equipProgress > (lowering ? JEG$HIDDEN_LOWERING_PROGRESS : JEG$HIDDEN_RAISING_PROGRESS)) {
+                ci.cancel();
+                return;
+            }
         }
         this.jeg$capturedEquipProcess = equipProgress;
         this.jeg$capturedSwingProcess = swingProgress;
@@ -99,6 +129,8 @@ public final class ItemInHandRendererMixin {
     private void jeg$capturePreTickHandItems(CallbackInfo ci) {
         this.jeg$preTickMainHandItem = this.mainHandItem.copy();
         this.jeg$preTickOffHandItem = this.offHandItem.copy();
+        this.jeg$preTickMainHandHeight = this.mainHandHeight;
+        this.jeg$preTickOffHandHeight = this.offHandHeight;
     }
 
     @Inject(method = "tick", at = @At("TAIL"))
@@ -112,29 +144,40 @@ public final class ItemInHandRendererMixin {
         if (jeg$isVolatileGunComponentDiff(this.mainHandItem, liveMain)
                 || jeg$isVolatileGunComponentDiff(this.jeg$preTickMainHandItem, liveMain)) {
             this.mainHandItem = liveMain;
-            this.mainHandHeight = 1.0F;
-            this.oMainHandHeight = 1.0F;
         }
 
         ItemStack liveOff = player.getOffhandItem();
         if (jeg$isVolatileGunComponentDiff(this.offHandItem, liveOff)
                 || jeg$isVolatileGunComponentDiff(this.jeg$preTickOffHandItem, liveOff)) {
             this.offHandItem = liveOff;
-            this.offHandHeight = 1.0F;
-            this.oOffHandHeight = 1.0F;
         }
 
         // Pulling the trigger counts as an attack, and vanilla lowers the held item while the attack meter recharges,
-        // which dropped the gun and threw the arms across the screen on every shot. Keep a gun that stays in hand up;
-        // switching to a different item still plays the normal lower-and-raise.
+        // which dropped the gun and threw the arms across the screen on every shot. A gun in hand only ever rises, at its
+        // own pace; switching lowers the old item, then brings the new gun up from out of sight.
+        float rate = jeg$raiseRate(liveMain);
+        boolean mainSwapped = !ItemStack.isSameItem(this.jeg$preTickMainHandItem, this.mainHandItem);
         if (liveMain.getItem() instanceof GunItem && ItemStack.isSameItem(this.mainHandItem, liveMain)) {
-            this.mainHandHeight = 1.0F;
-            this.oMainHandHeight = 1.0F;
+            float from = mainSwapped ? 0.0F : this.jeg$preTickMainHandHeight;
+            this.oMainHandHeight = from;
+            this.mainHandHeight = Math.min(1.0F, from + rate);
+        } else if (this.mainHandItem.getItem() instanceof GunItem && !mainSwapped) {
+            this.oMainHandHeight = this.jeg$preTickMainHandHeight;
+            this.mainHandHeight = Math.max(0.0F, this.jeg$preTickMainHandHeight - JEG$LOWER_RATE);
         }
+        boolean offSwapped = !ItemStack.isSameItem(this.jeg$preTickOffHandItem, this.offHandItem);
         if (liveOff.getItem() instanceof GunItem && ItemStack.isSameItem(this.offHandItem, liveOff)) {
-            this.offHandHeight = 1.0F;
-            this.oOffHandHeight = 1.0F;
+            float from = offSwapped ? 0.0F : this.jeg$preTickOffHandHeight;
+            this.oOffHandHeight = from;
+            this.offHandHeight = Math.min(1.0F, from + jeg$raiseRate(liveOff));
         }
+    }
+
+    @Unique
+    private static float jeg$raiseRate(ItemStack stack) {
+        return stack.getItem() instanceof GunItem gun
+                ? JEG$RAISE_RATE / Mth.sqrt(GunWeight.of(gun.getStats().id()).handling())
+                : JEG$RAISE_RATE;
     }
 
     @Inject(method = "renderItem", at = @At("HEAD"))

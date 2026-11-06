@@ -45,7 +45,7 @@ public final class RecoilProfiles {
         Map.entry(Reference.id("hypersonic_cannon"), new Parameters(4.0F, 0.55F, 0.0F, 0.2F)),
         Map.entry(Reference.id("infantry_rifle"), new Parameters(3.0F, 0.15F, 0.0F, 0.2F)),
         Map.entry(Reference.id("light_machine_gun"), new Parameters(1.0F, 0.15F, 0.0F, 0.2F)),
-        Map.entry(Reference.id("minigun"), new Parameters(0.8F, 0.15F, 0.0F, 0.2F)),
+        Map.entry(Reference.id("minigun"), new Parameters(0.35F, 0.15F, 0.0F, 0.2F)),
         Map.entry(Reference.id("primitive_bow"), new Parameters(2.0F, 0.1F, 0.0F, 0.2F)),
         Map.entry(Reference.id("pump_shotgun"), new Parameters(10.0F, 0.5F, 0.0F, 0.2F)),
         Map.entry(Reference.id("repeating_shotgun"), new Parameters(10.0F, 0.5F, 0.0F, 0.2F)),

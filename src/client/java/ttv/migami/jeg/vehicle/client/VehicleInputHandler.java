@@ -1,5 +1,13 @@
 package ttv.migami.jeg.vehicle.client;
 
+import net.minecraft.client.Camera;
+import net.minecraft.world.entity.projectile.ProjectileUtil;
+import net.minecraft.world.level.ClipContext;
+import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.EntityHitResult;
+import net.minecraft.world.phys.HitResult;
+import net.minecraft.world.phys.Vec3;
 import net.minecraft.client.CameraType;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
@@ -12,6 +20,7 @@ import ttv.migami.jeg.vehicle.entity.base.VehicleEntity;
 import ttv.migami.jeg.vehicle.entity.base.VehicleInput;
 
 public final class VehicleInputHandler {
+    private static final double CROSSHAIR_RANGE = 320.0D;
     private static final int VEHICLE_INVENTORY_INPUT_BLOCK_TICKS = 4;
     private static boolean suppressPlayerInventoryClick;
     private static boolean suppressVehicleInventoryClick;
@@ -215,7 +224,29 @@ public final class VehicleInputHandler {
                 barrelRoll
         );
         vehicle.processClientInput(player, input);
+        if (vehicle.usesVehiclePoseTransform() && !freeLook) {
+            sendCrosshairPoint(minecraft, player, vehicle);
+        }
+        // The server can fire as soon as it receives this input, so send the matching aim point first.
         ClientNetworkHandler.sendVehicleInput(vehicle.getId(), input);
+    }
+
+    /** Tells the server what the crosshair is on, so rounds can be fired at it from muzzles away from the camera. */
+    private static void sendCrosshairPoint(Minecraft minecraft, LocalPlayer player, VehicleEntity vehicle) {
+        Camera camera = minecraft.gameRenderer.getMainCamera();
+        Vec3 from = camera.position();
+        Vec3 look = Vec3.directionFromRotation(camera.xRot(), camera.yRot());
+        // Skip what is between a chase camera and the aircraft: the crosshair is not meant to aim at that.
+        double skip = minecraft.options.getCameraType().isFirstPerson() ? 0.0D : from.distanceTo(vehicle.position());
+        Vec3 start = from.add(look.scale(skip));
+        Vec3 end = from.add(look.scale(CROSSHAIR_RANGE));
+        BlockHitResult blockHit = player.level().clip(new ClipContext(start, end, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, player));
+        Vec3 reach = blockHit.getType() == HitResult.Type.MISS ? end : blockHit.getLocation();
+        EntityHitResult entityHit = ProjectileUtil.getEntityHitResult(player, start, reach, new AABB(start, reach).inflate(1.0D),
+                entity -> !entity.isSpectator() && entity.isPickable() && entity != vehicle && entity != player && entity.getVehicle() != vehicle,
+                start.distanceToSqr(reach));
+        Vec3 point = entityHit != null ? entityHit.getLocation() : reach;
+        ClientNetworkHandler.sendVehicleAim(vehicle.getId(), point);
     }
 
     public static double adjustMouseSensitivity(double base) {
@@ -289,7 +320,7 @@ public final class VehicleInputHandler {
         if (isViewLockedToAircraft(player, vehicle, seat)) {
             // Interpolate the pilot with the aircraft; pinning both values to the latest tick makes the model step while turning.
             previousYaw = vehicle.yRotO;
-            previousPitch = Mth.clamp(vehicle.xRotO, seat.minPitch(), seat.maxPitch());
+            previousPitch = Mth.clamp(vehicle.cameraPitch(0.0F), seat.minPitch(), seat.maxPitch());
         }
         player.setYRot(targetYaw);
         player.yRotO = previousYaw;
@@ -322,7 +353,7 @@ public final class VehicleInputHandler {
 
     private static float aircraftBoundPitch(LocalPlayer player, VehicleEntity vehicle, ttv.migami.jeg.vehicle.data.subdata.SeatInfo seat) {
         if (isAircraftDriver(player, vehicle) && seat.sensitivityY() == 0.0F && seat.sensitivityZ() == 0.0F && !VehicleClientState.freeLookDown()) {
-            return Mth.clamp(vehicle.getXRot(), seat.minPitch(), seat.maxPitch());
+            return Mth.clamp(vehicle.cameraPitch(1.0F), seat.minPitch(), seat.maxPitch());
         }
         return Mth.clamp(player.getXRot(), seat.minPitch(), seat.maxPitch());
     }

@@ -1,0 +1,7 @@
+# Helicopter recordings
+
+- AH-6 startup and flight: **Explorer Helicopter Engine Start Up Ignition Sequence and Idle .wav**, by **Paul368**, Freesound sound **410604**. Source: https://freesound.org/people/Paul368/sounds/410604/ . Licensed under **Creative Commons Attribution 4.0**, https://creativecommons.org/licenses/by/4.0/ . Adapted from the supplied recording: mono conversion, filtering, normalized gain, startup time compression (25–57 seconds shortened to 8 seconds), and a 46-second flight loop from 72–120 seconds with a two-second crossfade to avoid a short repeating/restarting engine texture.
+- MI-28 startup and flight: **eurocopter b2.wav**, by **joly1**, Freesound sound **81454**. Source: https://freesound.org/people/joly1/sounds/81454/ . Dedicated under **Creative Commons Zero 1.0**, https://creativecommons.org/publicdomain/zero/1.0/ . Adapted from the supplied recording: mono conversion, filtering, normalized gain, startup time compression (12–40 seconds shortened to 12 seconds), and a crossfaded flight loop from the user-selected 1:26–1:36 section (86–96 seconds).
+- AH-6 gun: adapted from the existing SBW-derived A-10 firing asset, converted into a seamless mono firing loop at 80% amplitude. Original SBW attribution and CC BY-NC-SA 3.0 terms continue to apply as documented in the project README.
+
+The original recordings remain the work of their respective authors. The adaptations are used for positional startup/engine audio; Doppler pitch changes are applied at runtime.

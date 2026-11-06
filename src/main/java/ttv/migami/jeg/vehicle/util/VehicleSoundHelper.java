@@ -1,5 +1,6 @@
 package ttv.migami.jeg.vehicle.util;
 
+import ttv.migami.jeg.vehicle.data.subdata.VehicleType;
 import java.util.Map;
 import net.minecraft.resources.Identifier;
 import net.minecraft.sounds.SoundEvent;
@@ -15,6 +16,8 @@ public final class VehicleSoundHelper {
     private static final Identifier LOCKING_WARNING = Reference.id("vehicle.locking_warning");
     private static final Identifier LOCKED_WARNING = Reference.id("vehicle.locked_warning");
     private static final Identifier MISSILE_WARNING = Reference.id("vehicle.missile_warning");
+    private static final Identifier MINIGUN_FIRE_LOOP = Reference.id("item.minigun.fire_loop");
+    private static final Identifier AH6_FIRE_LOOP = Reference.id("vehicle.ah6.cannon_fire");
     private static final Map<String, Identifier> FIRE_SOUNDS = Map.ofEntries(
             Map.entry("a10", Reference.id("vehicle.a10.fire")),
             Map.entry("ah6", Reference.id("vehicle.ah6.cannon_fire")),
@@ -60,7 +63,21 @@ public final class VehicleSoundHelper {
         return sound != null ? sound.get() : lockedWarning();
     }
 
+    /** A helicopter's machine gun, as opposed to its rockets and missiles. */
+    public static boolean isHelicopterGun(VehicleEntity vehicle, VehicleWeaponInfo weapon) {
+        String weaponPath = weapon.weaponId().getPath();
+        return vehicle.vehicleData().defaults().vehicleType() == VehicleType.HELICOPTER
+                && !weapon.guided() && !weaponPath.contains("rocket") && !weaponPath.contains("missile");
+    }
+
     public static SoundEvent fireSound(VehicleEntity vehicle, VehicleWeaponInfo weapon, GunStats fallbackStats) {
+        if (isHelicopterGun(vehicle, weapon)) {
+            Identifier id = "ah6".equals(vehicle.vehicleDataId().getPath()) ? AH6_FIRE_LOOP : MINIGUN_FIRE_LOOP;
+            DeferredHolder<SoundEvent, SoundEvent> loop = ModSounds.ALL.get(id);
+            if (loop != null) {
+                return loop.get();
+            }
+        }
         String weaponPath = weapon.weaponId().getPath();
         if ("vehicle_20mm_cannon".equals(weaponPath)
                 || !weaponPath.startsWith("vehicle_")

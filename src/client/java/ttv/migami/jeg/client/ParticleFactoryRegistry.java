@@ -32,6 +32,7 @@ public final class ParticleFactoryRegistry {
         registry.register(ModParticleTypes.FLAME.get(), FlameParticle.Provider::new);
         registry.register(ModParticleTypes.BLUE_FLAME.get(), FlameParticle.Provider::new);
         registry.register(ModParticleTypes.GUN_MUZZLE_FLASH.get(), GunMuzzleFlashParticle.Provider::new);
+        registry.register(ModParticleTypes.SMALL_GUN_MUZZLE_FLASH.get(), sprites -> new GunMuzzleFlashParticle.Provider(sprites, 0.2F));
         registry.register(ModParticleTypes.CASING_PARTICLE.get(), CasingParticle.Provider::new);
         registry.register(ModParticleTypes.SHELL_PARTICLE.get(), CasingParticle.Provider::new);
         registry.register(ModParticleTypes.SPECTRE_CASING_PARTICLE.get(), CasingParticle.Provider::new);

@@ -31,6 +31,8 @@ import net.minecraft.world.item.enchantment.Enchantment;
 import net.minecraft.world.item.enchantment.EnchantmentHelper;
 import net.minecraft.world.item.enchantment.Enchantments;
 import net.minecraft.world.level.ClipContext;
+import net.minecraft.world.entity.ai.attributes.AttributeInstance;
+import net.minecraft.world.entity.ai.attributes.AttributeModifier;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
@@ -40,6 +42,8 @@ import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.EntityHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
+import ttv.migami.jeg.gun.GunWeight;
+import ttv.migami.jeg.gun.MinigunSpin;
 import ttv.migami.jeg.Config;
 import ttv.migami.jeg.block.DynamicLightBlock;
 import ttv.migami.jeg.init.ModBlocks;
@@ -73,6 +77,10 @@ public final class AttachmentRuntimeEvents {
         }
 
         ItemStack stack = player.getMainHandItem();
+        applyGunWeight(player, stack);
+        if (player instanceof ServerPlayer serverPlayer) {
+            MinigunSpin.tick(serverPlayer);
+        }
         boolean refreshFlashlight = false;
         if (stack.getItem() instanceof GunItem) {
             tickBayonetCharge(player, stack);
@@ -93,6 +101,29 @@ public final class AttachmentRuntimeEvents {
                 || FlashlightAttachmentItem.isPowered(player.getOffhandItem()));
         if (refreshFlashlight) {
             tickFlashlight(player);
+        }
+    }
+
+    /** Carrying a gun changes how fast the player moves: a light SMG helps, a minigun drags, more so while it is spinning. */
+    private static void applyGunWeight(Player player, ItemStack stack) {
+        AttributeInstance speed = player.getAttribute(Attributes.MOVEMENT_SPEED);
+        if (speed == null) {
+            return;
+        }
+        double amount = 0.0D;
+        if (stack.getItem() instanceof GunItem gun) {
+            amount = GunWeight.of(gun.getStats().id()).speed();
+            if (MinigunSpin.isMinigun(stack) && MinigunSpin.isSpinning(player)) {
+                amount += GunWeight.SPINNING_MINIGUN_SPEED;
+            }
+        }
+        AttributeModifier current = speed.getModifier(GunWeight.MODIFIER_ID);
+        if (current != null && current.amount() == amount) {
+            return;
+        }
+        speed.removeModifier(GunWeight.MODIFIER_ID);
+        if (amount != 0.0D) {
+            speed.addTransientModifier(new AttributeModifier(GunWeight.MODIFIER_ID, amount, AttributeModifier.Operation.ADD_MULTIPLIED_TOTAL));
         }
     }
 

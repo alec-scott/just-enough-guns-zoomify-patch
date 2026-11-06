@@ -85,6 +85,7 @@ public final class Config {
     public static final ModConfigSpec.DoubleValue HELICOPTER_TURN_GRIP;
     public static final ModConfigSpec.DoubleValue HELICOPTER_TILT_SINK;
     public static final ModConfigSpec.BooleanValue HELICOPTER_BARREL_ROLLS;
+    public static final ModConfigSpec.BooleanValue HELICOPTER_GUN_BREAKS_FOLIAGE;
     public static final ModConfigSpec.IntValue BULLET_LIFETIME_SECONDS;
     public static final ModConfigSpec.BooleanValue UI_SHOW_CROSSHAIR;
     public static final ModConfigSpec.BooleanValue UI_SHOW_HIT_FEEDBACK;
@@ -376,6 +377,9 @@ public final class Config {
                 .comment("Weighty flight: if true, pilots can double-tap a strafe key and keep it held to roll the helicopter by hand,",
                         "all the way round if they like. The rotor stops holding it up on its side or upside down, so rolls cost altitude.")
                 .define("barrelRolls", true);
+        HELICOPTER_GUN_BREAKS_FOLIAGE = serverBuilder
+                .comment("If true, enough rounds from a helicopter's gun break leaves, grass, flowers, crops and glass.")
+                .define("gunBreaksFoliage", true);
         serverBuilder.pop();
         serverBuilder.pop();
 
@@ -415,6 +419,7 @@ public final class Config {
         registerCommandConfig("vehicle.helicopter.turnGrip", HELICOPTER_TURN_GRIP);
         registerCommandConfig("vehicle.helicopter.tiltSink", HELICOPTER_TILT_SINK);
         registerCommandConfig("vehicle.helicopter.barrelRolls", HELICOPTER_BARREL_ROLLS);
+        registerCommandConfig("vehicle.helicopter.gunBreaksFoliage", HELICOPTER_GUN_BREAKS_FOLIAGE);
     }
 
     private static void defineGunnerGrowthConfig(ModConfigSpec.Builder serverBuilder) {
@@ -962,6 +967,10 @@ public final class Config {
 
     public static boolean glowingLaserPointers() {
         return GLOWING_LASER_POINTERS.get();
+    }
+
+    public static boolean helicopterGunBreaksFoliage() {
+        return HELICOPTER_GUN_BREAKS_FOLIAGE.get();
     }
 
     public static boolean legacyBulletTrailEnabled() {

@@ -6,9 +6,16 @@
   "environment": "client",
   "entrypoints": {
     "fabric-client-gametest": [
+      "ttv.migami.jeg.gametest.RocketBlastClientGameTest",
+      "ttv.migami.jeg.gametest.HelicopterStartupClientGameTest",
+      "ttv.migami.jeg.gametest.GunBowEnchantmentsClientGameTest",
+      "ttv.migami.jeg.gametest.MinigunSpinClientGameTest",
+      "ttv.migami.jeg.gametest.VehicleInputCompatClientGameTest",
+      "ttv.migami.jeg.gametest.HelicopterWeaponsClientGameTest",
+      "ttv.migami.jeg.gametest.HelicopterStopCameraClientGameTest",
+      "ttv.migami.jeg.gametest.GunMotionClientGameTest",
       "ttv.migami.jeg.gametest.GunHandPoseClientGameTest",
       "ttv.migami.jeg.gametest.StationDropsClientGameTest",
-      "ttv.migami.jeg.gametest.GunBowEnchantmentsClientGameTest",
       "ttv.migami.jeg.gametest.Mi28GunnerAimClientGameTest",
       "ttv.migami.jeg.gametest.HelicopterWeightyFlightClientGameTest",
       "ttv.migami.jeg.gametest.HelicopterSwayClientGameTest",

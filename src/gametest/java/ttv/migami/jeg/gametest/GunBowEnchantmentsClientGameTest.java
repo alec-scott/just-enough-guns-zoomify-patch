@@ -39,6 +39,8 @@ import ttv.migami.jeg.item.MagazineItem;
 public class GunBowEnchantmentsClientGameTest implements FabricClientGameTest {
     private static final Logger LOGGER = LoggerFactory.getLogger("jeg-gametest");
 
+    private record Burst(float damage, double pushed, boolean burning) {}
+
     @Override
     public void runTest(ClientGameTestContext context) {
         List<Float> damage = new ArrayList<>();
@@ -66,9 +68,14 @@ public class GunBowEnchantmentsClientGameTest implements FabricClientGameTest {
             server.runCommand("item replace entity @p weapon.mainhand with jeg:assault_rifle");
             context.waitTicks(20);
 
-            // Baseline burst, then the same burst with Power V, Punch II and Flame.
-            float plain = this.burst(context, server, damage, report, "plain");
+            // Compare Power on its own. Punch moves the target and Flame can change its damage state between rounds;
+            // neither side effect belongs in the Power damage comparison.
+            Burst plain = this.burst(context, server, damage, report, "plain");
             server.runCommand("enchant @p minecraft:power 5");
+            context.waitTicks(5);
+            Burst powered = this.burst(context, server, damage, report, "power5");
+            report.append(String.format("damage ratio=%.2f (expected 1.50)%n", powered.damage() / plain.damage()));
+
             server.runCommand("enchant @p minecraft:punch 2");
             server.runCommand("enchant @p minecraft:flame 1");
             context.waitTicks(5);
@@ -80,8 +87,7 @@ public class GunBowEnchantmentsClientGameTest implements FabricClientGameTest {
                         + " flame=" + GunBowEnchantments.level(player.registryAccess(), gun, Enchantments.FLAME);
             });
             report.append("enchanted: ").append(levels).append('\n');
-            float enchanted = this.burst(context, server, damage, report, "power5-punch2-flame");
-            report.append(String.format("damage ratio=%.2f (expected 1.50)%n", enchanted / plain));
+            Burst enchanted = this.burst(context, server, damage, report, "power5-punch2-flame");
 
             // Infinity in survival, loose-round reloads (the revolver loads single rounds): the 30 carried rounds
             // must stay 30 through three reloads.
@@ -170,8 +176,11 @@ public class GunBowEnchantmentsClientGameTest implements FabricClientGameTest {
             if (!magazineBefore.equals(magazineAfter) || magazineBullets < 3 * magazineRounds) {
                 throw new AssertionError("Infinity should reload from a magazine without using it up: " + report);
             }
-            if (Math.abs(enchanted / plain - 1.5F) > 0.05F) {
+            if (Math.abs(powered.damage() / plain.damage() - 1.5F) > 0.05F) {
                 throw new AssertionError("Power V should add 50% bullet damage: " + report);
+            }
+            if (!enchanted.burning() || enchanted.pushed() <= powered.pushed() + 0.1D) {
+                throw new AssertionError("Flame should ignite the target and Punch should increase knockback: " + report);
             }
         }
     }
@@ -263,10 +272,10 @@ public class GunBowEnchantmentsClientGameTest implements FabricClientGameTest {
     }
 
     /** Fires a short burst into a fresh, sturdy husk and returns the average damage per bullet. */
-    private float burst(ClientGameTestContext context, TestServerContext server, List<Float> damage, StringBuilder report, String label) {
+    private Burst burst(ClientGameTestContext context, TestServerContext server, List<Float> damage, StringBuilder report, String label) {
         server.runCommand("kill @e[type=minecraft:husk]");
         server.runCommand("execute as @p at @s rotated 0 0 run summon minecraft:husk ^ ^ ^5 "
-                + "{PersistenceRequired:1b,Health:1000f,attributes:[{id:\"minecraft:max_health\",base:1000d}]}");
+                + "{PersistenceRequired:1b,IsBaby:0b,Health:1000f,attributes:[{id:\"minecraft:max_health\",base:1000d}]}");
         server.runCommand("effect give @e[type=minecraft:husk] minecraft:slowness infinite 255 true");
         server.runCommand("effect give @e[type=minecraft:husk] minecraft:fire_resistance infinite 0 true");
         context.waitTicks(30);
@@ -299,9 +308,12 @@ public class GunBowEnchantmentsClientGameTest implements FabricClientGameTest {
                 total += value;
             }
         }
-        float average = hits == 0 ? 0.0F : total / hits;
+        if (hits == 0) {
+            throw new AssertionError("No bullets hit the " + label + " target: " + report);
+        }
+        float average = total / hits;
         report.append(String.format("%s: hits=%d avgDamage=%.2f pushed=%.2f burning=%s%n", label, hits, average, pushed, burning));
-        return average;
+        return new Burst(average, pushed, burning);
     }
 
     private Vec3 huskPosition(TestServerContext server) {

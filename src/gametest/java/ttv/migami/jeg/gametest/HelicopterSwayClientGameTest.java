@@ -37,7 +37,8 @@ public class HelicopterSwayClientGameTest implements FabricClientGameTest {
             context.waitFor(mc -> mc.player != null && mc.player.getVehicle() instanceof VehicleEntity);
 
             context.getInput().holdKey(options -> options.keyJump);
-            context.waitTicks(80);
+            int startup = context.computeOnClient(mc -> ((VehicleEntity) mc.player.getVehicle()).helicopterStartupTicks());
+            context.waitTicks(startup + 80);
             context.getInput().releaseKey(options -> options.keyJump);
             context.waitTicks(SETTLE_TICKS);
 

@@ -3084,9 +3084,6 @@ public class GunAttackGoal<T extends PathfinderMob> extends Goal {
                         bullet.sendTrailToClients(serverLevel);
                     }
 
-                    if (!stats.flameTrail() && this.shooter.level() instanceof ServerLevel serverLevel) {
-                        spawnBulletTrailParticles(serverLevel, muzzle, direction, stats);
-                    }
                 }
                 FactionRaidManager.notifyRaidMobFired(this.shooter);
             }
@@ -3209,16 +3206,5 @@ public class GunAttackGoal<T extends PathfinderMob> extends Goal {
         Vec3 targetPos = new Vec3(this.shooter.getTarget().getX(), this.shooter.getTarget().getY(), this.shooter.getTarget().getZ());
         Vec3 mobPos = this.shooter.position();
         return mobPos.add(mobPos.subtract(targetPos).normalize().scale(3));
-    }
-
-    private void spawnBulletTrailParticles(ServerLevel level, Vec3 start, Vec3 direction, GunStats stats) {
-        if (level.getRandom().nextFloat() < 0.25F) {
-            int count = level.getRandom().nextFloat() < 0.35F ? 2 : 1;
-            level.sendParticles(
-                ParticleTypes.SMOKE,
-                start.x, start.y, start.z,
-                count, 0.02, 0.02, 0.02, 0.01
-            );
-        }
     }
 }

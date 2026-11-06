@@ -4,6 +4,7 @@ import com.mojang.serialization.MapCodec;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.InteractionResult;
@@ -105,6 +106,29 @@ public final class VehicleAssemblingTableBlock extends BaseEntityBlock {
         }
 
         return super.updateShape(state, levelReader, tickAccess, pos, direction, neighborPos, neighborState, random);
+    }
+
+    /**
+     * When any part of the table goes (mined, exploded, replaced), clear the other parts without drops. Left to the
+     * shape update above, each part was destroyed with its own drop and one table came back as several.
+     */
+    @Override
+    protected void affectNeighborsAfterRemoval(BlockState state, ServerLevel level, BlockPos pos, boolean movedByPiston) {
+        super.affectNeighborsAfterRemoval(state, level, pos, movedByPiston);
+        Direction facing = state.getValue(FACING);
+        BlockPos originalPos = state.getValue(BLOCK_PART).relativeNegative(pos, facing);
+        for (BlockPart part : BlockPart.values()) {
+            BlockPos partPos = part.relative(originalPos, facing);
+            if (partPos.equals(pos)) {
+                continue;
+            }
+            BlockState partState = level.getBlockState(partPos);
+            if (partState.is(this) && partState.getValue(FACING) == facing && partState.getValue(BLOCK_PART) == part) {
+                level.setBlock(partPos, Blocks.AIR.defaultBlockState(),
+                        Block.UPDATE_CLIENTS | Block.UPDATE_KNOWN_SHAPE | Block.UPDATE_SUPPRESS_DROPS);
+                level.levelEvent(2001, partPos, Block.getId(partState));
+            }
+        }
     }
 
     @Override

@@ -19,6 +19,8 @@ public final class GunRecoilHandler {
     private static final double GUN_RECOIL_IMPULSE = 2.1D;
     private static final int GUN_RECOIL_SUBSTEPS = 8;
     private static final double BURST_SETTLED_RECOIL = 0.15D;
+    private static final float FIRST_SHOT_SIDEWAYS_RECOIL = 0.5F;
+    private static final float BURST_SIDEWAYS_RECOIL = 0.12F;
 
     private static float recoil;
     private static float previous;
@@ -36,6 +38,7 @@ public final class GunRecoilHandler {
     private static float cameraRecoil;
     private static float progressCameraRecoil;
     private static int cameraRecoilDirection = 1;
+    private static float cameraRecoilSideways = FIRST_SHOT_SIDEWAYS_RECOIL;
     private static long suppressSprintPoseUntilNanos;
 
     private GunRecoilHandler() {}
@@ -58,7 +61,14 @@ public final class GunRecoilHandler {
         float recoilKick = parameters.kick() * modifiers.kickMultiplier();
         cameraRecoil = recoilAngle * adsReduction;
         progressCameraRecoil = 0.0F;
-        cameraRecoilDirection = RANDOM.nextBoolean() ? 1 : -1;
+        // One sideways direction per burst: re-rolling it every round shook the view left and right under automatic fire.
+        // Later rounds of a burst only nudge it, so the steady direction does not walk the view away to one side.
+        if (gunRecoilNormal < BURST_SETTLED_RECOIL) {
+            cameraRecoilDirection = RANDOM.nextBoolean() ? 1 : -1;
+            cameraRecoilSideways = FIRST_SHOT_SIDEWAYS_RECOIL;
+        } else {
+            cameraRecoilSideways = BURST_SIDEWAYS_RECOIL;
+        }
         if (recoilAngle > 0.0F || recoilKick > 0.0F) {
             // Slower guns settle more slowly; rapid fire stacks with diminishing returns instead of snapping to full kick.
             gunRecoilOmega = GUN_RECOIL_BASE_OMEGA * Mth.clamp(6.0D / Math.max(4, stats.fireDelay()), 0.4D, 1.0D);
@@ -111,10 +121,10 @@ public final class GunRecoilHandler {
 
         if (startProgress < 0.2F) {
             pitch -= (delta / 0.2F) * cameraRecoil;
-            yaw += cameraRecoilDirection * (delta / 0.2F) * cameraRecoil * 0.5F;
+            yaw += cameraRecoilDirection * (delta / 0.2F) * cameraRecoil * cameraRecoilSideways;
         } else {
             pitch += (delta / 0.8F) * cameraRecoil;
-            yaw -= cameraRecoilDirection * (delta / 0.8F) * cameraRecoil * 0.5F;
+            yaw -= cameraRecoilDirection * (delta / 0.8F) * cameraRecoil * cameraRecoilSideways;
         }
 
         minecraft.player.setXRot(Mth.clamp(pitch, -90.0F, 90.0F));

@@ -1,5 +1,7 @@
 package ttv.migami.jeg.network;
 
+import net.minecraft.world.phys.Vec3;
+import ttv.migami.jeg.vehicle.network.VehicleAimPayload;
 import java.util.HashMap;
 import java.util.Map;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
@@ -18,6 +20,7 @@ import net.minecraft.world.item.ItemStack;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import ttv.migami.jeg.gun.MinigunSpin;
 import ttv.migami.jeg.Config;
 import ttv.migami.jeg.Reference;
 import ttv.migami.jeg.event.AttachmentRuntimeEvents;
@@ -72,12 +75,15 @@ public final class NetworkHandler {
         PayloadTypeRegistry.serverboundPlay().register(TriggerReleasePayload.TYPE, TriggerReleasePayload.STREAM_CODEC);
         PayloadTypeRegistry.serverboundPlay().register(AimingStatePayload.TYPE, AimingStatePayload.STREAM_CODEC);
         PayloadTypeRegistry.serverboundPlay().register(VehicleInputPayload.TYPE, VehicleInputPayload.STREAM_CODEC);
+        PayloadTypeRegistry.serverboundPlay().register(VehicleAimPayload.TYPE, VehicleAimPayload.STREAM_CODEC);
+        PayloadTypeRegistry.clientboundPlay().register(CameraShakePayload.TYPE, CameraShakePayload.STREAM_CODEC);
         PayloadTypeRegistry.serverboundPlay().register(VehicleChangeSeatPayload.TYPE, VehicleChangeSeatPayload.STREAM_CODEC);
         PayloadTypeRegistry.serverboundPlay().register(VehicleDismountPayload.TYPE, VehicleDismountPayload.STREAM_CODEC);
         PayloadTypeRegistry.serverboundPlay().register(VehicleOpenMenuPayload.TYPE, VehicleOpenMenuPayload.STREAM_CODEC);
         PayloadTypeRegistry.serverboundPlay().register(AssembleTestVehiclePayload.TYPE, AssembleTestVehiclePayload.STREAM_CODEC);
         PayloadTypeRegistry.clientboundPlay().register(BulletTrailPayload.TYPE, BulletTrailPayload.STREAM_CODEC);
         PayloadTypeRegistry.clientboundPlay().register(GunFireFxPayload.TYPE, GunFireFxPayload.STREAM_CODEC);
+        PayloadTypeRegistry.clientboundPlay().register(MinigunStatePayload.TYPE, MinigunStatePayload.STREAM_CODEC);
         PayloadTypeRegistry.clientboundPlay().register(OffhandFullPromptPayload.TYPE, OffhandFullPromptPayload.STREAM_CODEC);
         PayloadTypeRegistry.clientboundPlay().register(HitMarkerPayload.TYPE, HitMarkerPayload.STREAM_CODEC);
         PayloadTypeRegistry.clientboundPlay().register(HeadshotMedalPayload.TYPE, HeadshotMedalPayload.STREAM_CODEC);
@@ -128,6 +134,14 @@ public final class NetworkHandler {
         });
         ServerPlayNetworking.registerGlobalReceiver(VehicleInputPayload.TYPE, (payload, context) -> {
             context.server().execute(() -> handleVehicleInput(payload, context.player()));
+        });
+        ServerPlayNetworking.registerGlobalReceiver(VehicleAimPayload.TYPE, (payload, context) -> {
+            context.server().execute(() -> {
+                ServerPlayer player = context.player();
+                if (player.getVehicle() instanceof VehicleEntity vehicle && vehicle.getId() == payload.vehicleId()) {
+                    vehicle.setPassengerAimPoint(player, new Vec3(payload.x(), payload.y(), payload.z()));
+                }
+            });
         });
         ServerPlayNetworking.registerGlobalReceiver(VehicleChangeSeatPayload.TYPE, (payload, context) -> {
             context.server().execute(() -> handleVehicleChangeSeat(payload, context.player()));
@@ -197,7 +211,14 @@ public final class NetworkHandler {
         if (GunItem.isHoldToFireWeapon(stack) && !hasCompletedHoldFire(player, stack)) {
             return;
         }
+        boolean minigun = MinigunSpin.isMinigun(stack);
+        if (minigun && !MinigunSpin.isSpunUp(player)) {
+            return;
+        }
         boolean shot = gun.tryShoot(player.level(), player, payload.hand());
+        if (shot && minigun) {
+            MinigunSpin.onShot(player);
+        }
         if (shot && GunItem.isHoldToFireWeapon(stack)) {
             HOLD_FIRE_START_TICKS.remove(player.getUUID());
         }
@@ -214,6 +235,7 @@ public final class NetworkHandler {
 
     private static void handleHoldFire(HoldFirePayload payload, ServerPlayer player) {
         ItemStack stack = player.getItemInHand(payload.hand());
+        MinigunSpin.setTrigger(player, payload.holding() && MinigunSpin.isMinigun(stack));
         if (!payload.holding() || !GunItem.isHoldToFireWeapon(stack)) {
             HOLD_FIRE_START_TICKS.remove(player.getUUID());
             return;

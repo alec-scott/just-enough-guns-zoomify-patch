@@ -1,5 +1,14 @@
 package ttv.migami.jeg.vehicle.projectile;
 
+import ttv.migami.jeg.network.CameraShakePayload;
+import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.sounds.SoundSource;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.core.particles.BlockParticleOption;
+import net.minecraft.core.BlockPos;
+import net.minecraft.network.syncher.EntityDataSerializers;
+import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.core.particles.ParticleOptions;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.network.syncher.SynchedEntityData;
@@ -31,6 +40,13 @@ public final class VehicleMissileEntity extends Entity {
     private static final double VEHICLE_DIRECT_HIT_FALLOFF_DISTANCE_SCALE = 1.7D;
     private static final int BMP2_NO_DROP_TICKS = 5;
 
+    /** Share of top speed a missile comes off the rail at, before the motor builds it up. */
+    public static final double LAUNCH_SPEED_SHARE = 0.25D;
+    private static final int MOTOR_BUILD_TICKS = 14;
+    private static final float BIGGEST_BLAST = 9.0F;
+    private static final double SHAKE_RANGE = 140.0D;
+    private static final EntityDataAccessor<String> DATA_WEAPON = SynchedEntityData.defineId(VehicleMissileEntity.class, EntityDataSerializers.STRING);
+
     private int ownerId = -1;
     private int targetId = -1;
     private int directHitVehicleId = -1;
@@ -46,12 +62,23 @@ public final class VehicleMissileEntity extends Entity {
         this.ownerId = owner.getId();
         this.targetId = target == null ? -1 : target.getId();
         this.weaponId = weaponId;
+        this.entityData.set(DATA_WEAPON, weaponId.toString());
         this.setPos(position);
         this.setDeltaMovement(velocity);
     }
 
     @Override
     protected void defineSynchedData(SynchedEntityData.Builder builder) {
+        builder.define(DATA_WEAPON, "jeg:vehicle_bmp2_missile");
+    }
+
+    public Identifier missileWeaponId() {
+        return Identifier.parse(this.entityData.get(DATA_WEAPON));
+    }
+
+    @Override
+    public boolean shouldRenderAtSqrDistance(double distance) {
+        return distance < 512.0D * 512.0D;
     }
 
     @Override
@@ -64,6 +91,9 @@ public final class VehicleMissileEntity extends Entity {
         }
         if (!this.level().isClientSide()) {
             this.steerServer();
+            if (!this.isRemoved()) {
+                this.applyMotorThrust(profile);
+            }
             this.setDeltaMovement(this.flattenBmp2StartupDrop(this.getDeltaMovement()));
             if (this.isRemoved()) {
                 return;
@@ -75,10 +105,39 @@ public final class VehicleMissileEntity extends Entity {
         }
         this.setPos(this.position().add(this.getDeltaMovement()));
         if (this.level().isClientSide()) {
-            Vec3 motion = this.getDeltaMovement();
-            this.level().addParticle(ParticleTypes.SMOKE, this.getX(), this.getY(), this.getZ(), -motion.x * 0.08D, -motion.y * 0.08D, -motion.z * 0.08D);
-            this.level().addParticle(ParticleTypes.FLAME, this.getX(), this.getY(), this.getZ(), -motion.x * 0.04D, -motion.y * 0.04D, -motion.z * 0.04D);
+            this.spawnExhaustTrail();
         }
+    }
+
+    /** A white plume laid along the path, visible from a long way off so the missile can be watched all the way in. */
+    private void spawnExhaustTrail() {
+        Vec3 motion = this.getDeltaMovement();
+        double length = motion.length();
+        int puffs = Math.max(1, Math.min(10, (int) Math.ceil(length / 0.45D)));
+        for (int puff = 0; puff < puffs; puff++) {
+            Vec3 at = this.position().subtract(motion.scale(puff / (double) puffs));
+            double driftX = (this.random.nextDouble() - 0.5D) * 0.03D;
+            double driftY = this.random.nextDouble() * 0.02D;
+            double driftZ = (this.random.nextDouble() - 0.5D) * 0.03D;
+            this.level().addAlwaysVisibleParticle(ParticleTypes.CLOUD, at.x, at.y, at.z, driftX, driftY, driftZ);
+            if (puff % 3 == 0) {
+                this.level().addAlwaysVisibleParticle(ParticleTypes.CAMPFIRE_COSY_SMOKE, at.x, at.y, at.z, driftX, driftY + 0.01D, driftZ);
+            }
+        }
+        this.level().addAlwaysVisibleParticle(ParticleTypes.FLAME, this.getX(), this.getY(), this.getZ(), 0.0D, 0.0D, 0.0D);
+    }
+
+    /** The motor builds speed through the first moments of flight. */
+    private void applyMotorThrust(VehicleMissileProfile profile) {
+        if (Reference.id("vehicle_bmp2_missile").equals(this.weaponId)) {
+            return;
+        }
+        Vec3 motion = this.getDeltaMovement();
+        if (motion.lengthSqr() < 1.0E-6D) {
+            return;
+        }
+        double build = Math.min(1.0D, LAUNCH_SPEED_SHARE + (1.0D - LAUNCH_SPEED_SHARE) * this.tickCount / MOTOR_BUILD_TICKS);
+        this.setDeltaMovement(motion.normalize().scale(profile.maxSpeed() * build));
     }
 
     private Vec3 flattenBmp2StartupDrop(Vec3 motion) {
@@ -115,7 +174,11 @@ public final class VehicleMissileEntity extends Entity {
                 this.explode();
             }
         } else if (profile.usesWireGuidance() && owner instanceof LivingEntity livingOwner) {
-            Vec3 desired = livingOwner.getViewVector(1.0F).normalize().scale(profile.maxSpeed());
+            // Toward what the crosshair is on, where that is known; the camera is well away from the launcher.
+            Vec3 aim = ownerVehicle instanceof VehicleEntity vehicle ? vehicle.freshAimPoint(livingOwner) : null;
+            Vec3 desired = (aim != null && aim.distanceToSqr(this.position()) > 9.0D
+                    ? aim.subtract(this.position()).normalize()
+                    : livingOwner.getViewVector(1.0F).normalize()).scale(profile.maxSpeed());
             this.setDeltaMovement(this.getDeltaMovement().scale(1.0D - profile.turnRate()).add(desired.scale(profile.turnRate())));
         }
     }
@@ -214,9 +277,36 @@ public final class VehicleMissileEntity extends Entity {
         this.discard();
     }
 
+    /** Scales with the warhead: a fireball, flying fire and earth, a column of smoke, a deep boom and a shake felt at a distance. */
     private void spawnMissileExplosionEffects(ServerLevel serverLevel) {
-        sendLongDistanceParticles(serverLevel, ModParticleTypes.SMALL_EXPLOSION.get(), this.getX(), this.getY(), this.getZ(), 8, 0.7D, 0.7D, 0.7D, 0.08D);
-        sendLongDistanceParticles(serverLevel, ModParticleTypes.SMOKE.get(), this.getX(), this.getY(), this.getZ(), 6, 0.8D, 0.8D, 0.8D, 0.02D);
+        float power = this.profile().explosionPower();
+        float size = power / BIGGEST_BLAST;
+        double spread = 0.5D + size * 2.5D;
+        double x = this.getX();
+        double y = this.getY();
+        double z = this.getZ();
+        sendLongDistanceParticles(serverLevel, ModParticleTypes.BIG_EXPLOSION.get(), x, y, z, 1 + (int) (size * 5.0F), spread * 0.35D, spread * 0.35D, spread * 0.35D, 0.01D);
+        sendLongDistanceParticles(serverLevel, ModParticleTypes.SMALL_EXPLOSION.get(), x, y, z, 8 + (int) (size * 40.0F), spread, spread, spread, 0.16D);
+        sendLongDistanceParticles(serverLevel, ModParticleTypes.FIRE.get(), x, y, z, 6 + (int) (size * 36.0F), spread, spread * 0.7D, spread, 0.12D);
+        sendLongDistanceParticles(serverLevel, ModParticleTypes.SMOKE.get(), x, y, z, 6 + (int) (size * 30.0F), spread, spread, spread, 0.05D);
+        sendLongDistanceParticles(serverLevel, ParticleTypes.CAMPFIRE_SIGNAL_SMOKE, x, y, z, 2 + (int) (size * 20.0F), spread * 0.6D, 0.6D, spread * 0.6D, 0.03D);
+        BlockState ground = serverLevel.getBlockState(BlockPos.containing(x, y - 0.5D, z));
+        if (ground.isAir()) {
+            ground = serverLevel.getBlockState(BlockPos.containing(x, y - 1.5D, z));
+        }
+        if (!ground.isAir()) {
+            sendLongDistanceParticles(serverLevel, new BlockParticleOption(ParticleTypes.BLOCK, ground), x, y, z, 10 + (int) (size * 90.0F), spread, spread * 0.5D, spread, 0.6D);
+        }
+        serverLevel.playSound(null, x, y, z, SoundEvents.GENERIC_EXPLODE.value(), SoundSource.BLOCKS, 8.0F + size * 18.0F, 0.75F - size * 0.2F);
+        serverLevel.playSound(null, x, y, z, SoundEvents.GENERIC_EXPLODE.value(), SoundSource.BLOCKS, 8.0F + size * 18.0F, 0.5F);
+
+        double range = SHAKE_RANGE * Math.sqrt(size);
+        for (ServerPlayer player : serverLevel.players()) {
+            double distance = player.position().distanceTo(this.position());
+            if (distance < range && ServerPlayNetworking.canSend(player, CameraShakePayload.TYPE)) {
+                ServerPlayNetworking.send(player, new CameraShakePayload((float) (size * (1.0D - distance / range))));
+            }
+        }
     }
 
     private static <T extends ParticleOptions> void sendLongDistanceParticles(
@@ -237,7 +327,7 @@ public final class VehicleMissileEntity extends Entity {
     }
 
     private VehicleMissileProfile profile() {
-        return VehicleMissileProfile.get(this.weaponId);
+        return VehicleMissileProfile.get(this.level().isClientSide() ? this.missileWeaponId() : this.weaponId);
     }
 
     @Override

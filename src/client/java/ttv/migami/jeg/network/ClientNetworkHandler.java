@@ -1,8 +1,14 @@
 package ttv.migami.jeg.network;
 
+import net.minecraft.world.phys.Vec3;
+import ttv.migami.jeg.client.GunCameraSwayHandler;
+import ttv.migami.jeg.network.CameraShakePayload;
+import ttv.migami.jeg.vehicle.network.VehicleAimPayload;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.InteractionHand;
+import ttv.migami.jeg.client.MinigunClient;
+import ttv.migami.jeg.network.MinigunStatePayload;
 import ttv.migami.jeg.Config;
 import ttv.migami.jeg.client.ClientUiConfig;
 import ttv.migami.jeg.client.CrosshairHandler;
@@ -44,6 +50,12 @@ public final class ClientNetworkHandler {
             });
         });
 
+        ClientPlayNetworking.registerGlobalReceiver(CameraShakePayload.TYPE, (payload, context) -> {
+            context.client().execute(() -> GunCameraSwayHandler.addShake(payload.strength()));
+        });
+        ClientPlayNetworking.registerGlobalReceiver(MinigunStatePayload.TYPE, (payload, context) -> {
+            context.client().execute(() -> MinigunClient.onRemoteState(payload.entityId(), payload.state()));
+        });
         ClientPlayNetworking.registerGlobalReceiver(GunFireFxPayload.TYPE, (payload, context) -> {
             context.client().execute(() -> FabricClientBootstrap.showMuzzleFlash(payload.shooterId(), payload.randomValue()));
         });
@@ -158,6 +170,12 @@ public final class ClientNetworkHandler {
 
     public static void sendAiming(boolean aiming) {
         ClientPlayNetworking.send(new AimingStatePayload(aiming));
+    }
+
+    public static void sendVehicleAim(int vehicleId, Vec3 point) {
+        if (ClientPlayNetworking.canSend(VehicleAimPayload.TYPE)) {
+            ClientPlayNetworking.send(new VehicleAimPayload(vehicleId, point.x, point.y, point.z));
+        }
     }
 
     public static void sendVehicleInput(int vehicleId, VehicleInput input) {

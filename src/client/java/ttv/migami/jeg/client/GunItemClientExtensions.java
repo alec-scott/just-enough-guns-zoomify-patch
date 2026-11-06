@@ -3,17 +3,13 @@ package ttv.migami.jeg.client;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.math.Axis;
 import java.util.Map;
-import net.minecraft.client.Minecraft;
 import net.minecraft.client.model.HumanoidModel;
 import net.minecraft.client.player.LocalPlayer;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
-import net.minecraft.tags.ItemTags;
 import net.minecraft.util.Mth;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.HumanoidArm;
 import net.minecraft.world.entity.LivingEntity;
-import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.client.extensions.common.IClientItemExtensions;
 import ttv.migami.jeg.Reference;
@@ -22,6 +18,7 @@ import ttv.migami.jeg.client.render.gun.GunAttachmentTransforms;
 import ttv.migami.jeg.client.render.gun.GunPoseProfile;
 import ttv.migami.jeg.gun.GunScopeSupport;
 import ttv.migami.jeg.gun.GunStats;
+import ttv.migami.jeg.gun.GunWeight;
 import ttv.migami.jeg.item.GunItem;
 import ttv.migami.jeg.item.attachment.AttachmentModifiers;
 import ttv.migami.jeg.item.attachment.AttachmentType;
@@ -147,10 +144,13 @@ public final class GunItemClientExtensions implements IClientItemExtensions {
             firstPersonScale *= SCOPED_BOLT_ACTION_SCALE_MULTIPLIER;
         }
         AdsSightOffset sightOffset = adsSightOffset(stack, stats.id(), firstPersonScale);
-        xOffset = Mth.lerp(adsTransition, xOffset, (float) sightOffset.x());
-        yOffset = Mth.lerp(adsTransition, yOffset, (float) sightOffset.y());
-        zOffset = Mth.lerp(adsTransition, zOffset, (float) sightOffset.z());
-        yaw = Mth.lerp(adsTransition, yaw, 0.0F);
+        // The minigun has no sights to look down: aiming only brings it in a little, from the hip.
+        if (!Reference.id("minigun").equals(stats.id())) {
+            xOffset = Mth.lerp(adsTransition, xOffset, (float) sightOffset.x());
+            yOffset = Mth.lerp(adsTransition, yOffset, (float) sightOffset.y());
+            zOffset = Mth.lerp(adsTransition, zOffset, (float) sightOffset.z());
+            yaw = Mth.lerp(adsTransition, yaw, 0.0F);
+        }
 
         poseStack.translate(direction * xOffset, yOffset, zOffset);
         poseStack.mulPose(Axis.YP.rotationDegrees(direction * yaw));
@@ -158,9 +158,11 @@ public final class GunItemClientExtensions implements IClientItemExtensions {
         poseStack.mulPose(Axis.XP.rotationDegrees(Mth.lerp(adsTransition, 4.0F, 0.8F)));
         poseStack.scale(firstPersonScale, firstPersonScale, firstPersonScale);
 
-        // Keep vanilla-like equip/swing movement to reduce "hard snap" while switching items.
+        // Lowered and raised on a curve when switching: the muzzle dips first and the gun drops away below the screen.
         float equip = Mth.clamp(equipProcess, 0.0F, 1.0F);
-        poseStack.translate(0.0F, -0.6F * equip, 0.0F);
+        float equipEased = equip * equip * (3.0F - 2.0F * equip);
+        poseStack.translate(0.0F, -0.6F * equipEased, 0.0F);
+        poseStack.mulPose(Axis.XP.rotationDegrees(-32.0F * equipEased));
         if (!isBow) {
             float swingRoot = Mth.sqrt(swingProcess);
             float swingX = -0.3F * Mth.sin(swingRoot * (float) Math.PI);
@@ -168,9 +170,8 @@ public final class GunItemClientExtensions implements IClientItemExtensions {
             poseStack.translate(direction * swingX * 0.08F, swingY * 0.05F, 0.0F);
         }
 
-        applyBobbingTransforms(poseStack, player, partialTick, ads);
-        applySwayTransforms(poseStack, player, partialTick, ads);
-        applySprintingTransforms(poseStack, player, stack, direction, ads);
+        GunViewModelMotion.applyCarry(poseStack, player, GunWeight.of(stats.id()), partialTick, ads);
+        GunViewModelMotion.applySprintCarry(poseStack, direction, partialTick, ads);
         applyRecoilTransforms(poseStack, partialTick, ads);
         return true;
     }
@@ -181,65 +182,6 @@ public final class GunItemClientExtensions implements IClientItemExtensions {
         }
         boolean mainHandArm = player.getMainArm() == arm;
         return mainHandArm ? player.getMainHandItem() : player.getOffhandItem();
-    }
-
-    private static void applyBobbingTransforms(PoseStack poseStack, Player player, float partialTick, float ads) {
-        Minecraft minecraft = Minecraft.getInstance();
-        if (!minecraft.options.bobView().get() || minecraft.getCameraEntity() != player) {
-            return;
-        }
-
-        if (player.onGround() && !player.isPassenger()) {
-            float speed = (float) player.getDeltaMovement().horizontalDistance();
-            float time = (player.tickCount + partialTick) * 0.5F;
-            float bobAmount = Mth.sin(time) * speed * 0.15F;
-            float adsDamping = 1.0F - ads * 0.7F;
-            poseStack.translate(0.0D, bobAmount * adsDamping, 0.0D);
-        }
-    }
-
-    private static void applySwayTransforms(PoseStack poseStack, LocalPlayer player, float partialTick, float ads) {
-        if (player.onGround() && !player.isPassenger()) {
-            float speed = (float) player.getDeltaMovement().horizontalDistance();
-            float time = (player.tickCount + partialTick) * 0.3F;
-            float swayX = Mth.sin(time) * speed * 2.0F;
-            float swayZ = Mth.cos(time * 0.7F) * speed * 2.0F;
-            float adsDamping = 1.0F - ads * 0.8F;
-            poseStack.mulPose(Axis.XP.rotationDegrees(swayX * adsDamping));
-            poseStack.mulPose(Axis.ZP.rotationDegrees(swayZ * adsDamping));
-        }
-
-        float fallDelta = (float) Mth.clamp(player.yo - player.getY(), -1.0D, 1.0D);
-        fallDelta *= (1.0F - ads * 0.5F) * (1.0F - Mth.abs(player.getXRot()) / 90.0F);
-        poseStack.mulPose(Axis.XP.rotationDegrees(fallDelta * 12.0F));
-    }
-
-    private static void applySprintingTransforms(PoseStack poseStack, LocalPlayer player, ItemStack stack, int direction, float ads) {
-        Minecraft minecraft = Minecraft.getInstance();
-        boolean attackDown = minecraft != null && minecraft.player == player && minecraft.options.keyAttack.isDown();
-        if (!player.isSprinting() || AimingHandler.get().isAiming() || attackDown
-                || GunRecoilHandler.isSuppressingSprintPose() || hasBayonet(stack)) {
-            return;
-        }
-
-        float transition = 1.0F - ads;
-        poseStack.translate(-0.18F * direction * transition, -0.08F * transition, 0.0F);
-        poseStack.mulPose(Axis.YP.rotationDegrees(30.0F * direction * transition));
-        poseStack.mulPose(Axis.XP.rotationDegrees(-18.0F * transition));
-    }
-
-    private static boolean hasBayonet(ItemStack stack) {
-        return GunAttachments.stack(stack, AttachmentType.BARREL)
-                .filter(GunItemClientExtensions::isBayonetStack)
-                .isPresent();
-    }
-
-    private static boolean isBayonetStack(ItemStack stack) {
-        if (stack.is(ItemTags.SWORDS)) {
-            return true;
-        }
-        Identifier id = BuiltInRegistries.ITEM.getKey(stack.getItem());
-        return id != null && id.getPath().endsWith("_sword");
     }
 
     private static void applyRecoilTransforms(PoseStack poseStack, float partialTick, float ads) {

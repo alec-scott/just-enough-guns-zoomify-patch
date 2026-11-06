@@ -22,11 +22,13 @@ import com.geckolib.renderer.base.GeoRenderState;
 import com.geckolib.renderer.base.RenderPassInfo;
 import ttv.migami.jeg.Reference;
 import ttv.migami.jeg.client.FabricClientBootstrap;
+import ttv.migami.jeg.client.MinigunClient;
 import ttv.migami.jeg.client.handler.AimingHandler;
 import ttv.migami.jeg.client.render.gun.layer.GunAttachmentLayer;
 import ttv.migami.jeg.client.render.gun.layer.GunFirstPersonArmsLayer;
 import ttv.migami.jeg.client.screen.AttachmentScreen;
 import ttv.migami.jeg.gun.GunScopeSupport;
+import ttv.migami.jeg.gun.MinigunSpin;
 import ttv.migami.jeg.item.AnimatedGunItem;
 
 public final class AnimatedGunRenderer extends GeoItemRenderer<AnimatedGunItem> {
@@ -47,6 +49,7 @@ public final class AnimatedGunRenderer extends GeoItemRenderer<AnimatedGunItem> 
             DataTicket.create("jeg:item_stack", ItemStack.class);
     private static final DataTicket<Boolean> USING_VANILLA_NON_FIRST_PERSON =
             DataTicket.create("jeg:using_vanilla_non_first_person", Boolean.class);
+    private static final DataTicket<Float> BARREL_ANGLE = DataTicket.create("jeg:barrel_angle", Float.class);
     private static final Set<String> FIRST_PERSON_ARM_BONES =
             Set.of("left_arm", "right_arm", "fake_left_arm", "fake_right_arm");
 
@@ -125,6 +128,12 @@ public final class AnimatedGunRenderer extends GeoItemRenderer<AnimatedGunItem> 
             renderState.addGeckolibData(VANILLA_ITEM_STATE, context.vanillaRenderState());
         }
         renderState.addGeckolibData(USING_VANILLA_NON_FIRST_PERSON, shouldUseVanillaNonFirstPerson(perspective, renderState.getOrDefaultGeckolibData(VANILLA_ITEM_STATE, (ItemStackRenderState) null), renderState, animatable.getStats().id().getPath()));
+        if (MinigunSpin.isMinigun(stack)) {
+            var owner = context != null && context.itemOwner() != null ? context.itemOwner().asLivingEntity() : null;
+            Minecraft minecraft = Minecraft.getInstance();
+            int holder = owner != null ? owner.getId() : minecraft.player != null ? minecraft.player.getId() : -1;
+            renderState.addGeckolibData(BARREL_ANGLE, MinigunClient.barrelAngle(holder, partialTick));
+        }
     }
 
     @Override
@@ -278,6 +287,10 @@ public final class AnimatedGunRenderer extends GeoItemRenderer<AnimatedGunItem> 
         ItemStack gunStack = renderState.getOrDefaultGeckolibData(ITEM_STACK, ItemStack.EMPTY);
         ItemDisplayContext ctx = resolveStableContext(renderState);
         passInfo.addBoneUpdater((info, snapshots) -> GunAttachmentVisibility.apply(finalGunId, gunStack, snapshots));
+        if (renderState.hasGeckolibData(BARREL_ANGLE)) {
+            float barrelRadians = (float) Math.toRadians(renderState.getGeckolibData(BARREL_ANGLE));
+            passInfo.addBoneUpdater((info, snapshots) -> snapshots.ifPresent("barrel", snapshot -> snapshot.setRotZ(barrelRadians)));
+        }
         if (isThirdPerson(ctx) && Reference.id("rocket_launcher").equals(finalGunId)) {
             passInfo.addBoneUpdater((info, snapshots) ->
                     snapshots.ifPresent("missile", snapshot -> snapshot.skipRender(true))

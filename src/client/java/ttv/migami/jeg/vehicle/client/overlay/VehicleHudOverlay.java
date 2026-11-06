@@ -341,10 +341,6 @@ public final class VehicleHudOverlay {
         if (vehicle.maxVehicleEnergy() > 0 && vehicle.vehicleEnergy() <= 0) {
             return "message.jeg.vehicle.helicopter_power_loss_warning";
         }
-        boolean forcedDescent = !vehicle.onGround() && vehicle.getControllingPassenger() == null;
-        if (forcedDescent && Math.abs(vehicle.getDeltaMovement().y) <= HELICOPTER_SAFE_DESCENT_SPEED) {
-            return "message.jeg.vehicle.helicopter_low_speed_warning";
-        }
         return null;
     }
 

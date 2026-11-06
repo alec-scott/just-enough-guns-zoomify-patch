@@ -179,8 +179,8 @@ public record GunPoseProfile(
             Map.entry(Reference.id("minigun"), of(
                     ArmMode.HEAVY,
                     true,
-                    0.32F, -0.31F, -0.97F,
-                    0.34F, -0.36F, -1.02F,
+                    0.20F, -0.30F, -1.20F,
+                    0.13F, -0.27F, -1.20F,
                     1.8F, 3.0F, 1.10F,
                     arm(-1.40F, -0.46F, 1.75F, -8.0F, -31.0F, -75.0F, 0.52F, 0.66F, 0.52F),
                     arm(0.18F, -0.10F, -0.04F, -4.0F, 2.0F, -8.0F, 0.54F, 0.68F, 0.54F),

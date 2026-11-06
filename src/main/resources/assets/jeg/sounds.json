@@ -1469,7 +1469,7 @@
     "subtitle": "subtitle.jeg.vehicle.fire",
     "sounds": [
       {
-        "name": "jeg:vehicle/ah6/cannon_fire"
+        "name": "jeg:vehicle/ah6/gun_loop"
       }
     ]
   },
@@ -1477,9 +1477,14 @@
     "subtitle": "subtitle.jeg.vehicle.engine",
     "sounds": [
       {
-        "name": "jeg:vehicle/ah6/engine"
+        "name": "jeg:vehicle/ah6/flight",
+        "attenuation_distance": 128
       }
     ]
+  },
+  "vehicle.ah6.startup": {
+    "subtitle": "subtitle.jeg.vehicle.engine",
+    "sounds": [{ "name": "jeg:vehicle/ah6/startup", "attenuation_distance": 128 }]
   },
   "vehicle.bmp2.cannon_fire": {
     "subtitle": "subtitle.jeg.vehicle.fire",
@@ -1549,9 +1554,14 @@
     "subtitle": "subtitle.jeg.vehicle.engine",
     "sounds": [
       {
-        "name": "jeg:vehicle/mi28/engine"
+        "name": "jeg:vehicle/mi28/flight",
+        "attenuation_distance": 128
       }
     ]
+  },
+  "vehicle.mi28.startup": {
+    "subtitle": "subtitle.jeg.vehicle.engine",
+    "sounds": [{ "name": "jeg:vehicle/mi28/startup", "attenuation_distance": 128 }]
   },
   "vehicle.speedboat.engine": {
     "subtitle": "subtitle.jeg.vehicle.engine",
@@ -1591,6 +1601,56 @@
       },
       {
         "name": "jeg:vehicle/waveforce_tower/fire_4"
+      }
+    ]
+  },
+  "item.minigun.fire": {
+    "subtitle": "subtitle.jeg.fire",
+    "sounds": [
+      {
+        "name": "jeg:item/minigun/fire"
+      }
+    ]
+  },
+  "item.minigun.spool_up": {
+    "subtitle": "subtitle.jeg.fire",
+    "sounds": [
+      {
+        "name": "jeg:item/minigun/spool_up"
+      }
+    ]
+  },
+  "item.minigun.spin_loop": {
+    "subtitle": "subtitle.jeg.fire",
+    "sounds": [
+      {
+        "name": "jeg:item/minigun/spin_loop",
+        "stream": true
+      }
+    ]
+  },
+  "item.minigun.spin_down": {
+    "subtitle": "subtitle.jeg.fire",
+    "sounds": [
+      {
+        "name": "jeg:item/minigun/spin_down"
+      }
+    ]
+  },
+  "item.minigun.fire_loop": {
+    "subtitle": "subtitle.jeg.fire",
+    "sounds": [
+      {
+        "name": "jeg:item/minigun/fire_loop",
+        "stream": true
+      }
+    ]
+  },
+  "item.minigun.fire_stop": {
+    "subtitle": "subtitle.jeg.fire",
+    "sounds": [
+      {
+        "name": "jeg:item/minigun/fire_stop"
       }
     ]
   }

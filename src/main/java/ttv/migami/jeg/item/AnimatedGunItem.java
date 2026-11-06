@@ -37,6 +37,12 @@ import ttv.migami.jeg.item.attachment.GunAttachments;
 import ttv.migami.jeg.network.NetworkHandler;
 
 public final class AnimatedGunItem extends GunItem implements GeoItem {
+    /**
+     * Always holds the idle pose underneath everything else. Whenever another controller is between animations it has no
+     * pose for that frame, and without this layer the bones fell back to the model's bind pose: the arms flashed huge in the
+     * middle of the screen on every weapon swap.
+     */
+    public static final String BASE_CONTROLLER = "base_pose";
     public static final String CONTROLLER = "controller";
     /**
      * Shots play on their own controller, layered over the main one. Switching a controller to a new animation leaves
@@ -99,7 +105,8 @@ public final class AnimatedGunItem extends GunItem implements GeoItem {
     private static ItemStack clientDrawResetStack = ItemStack.EMPTY;
     private static long clientDrawResetDeadlineNanos;
     private static long clientSprintAnimationBlockedUntilNanos;
-    private static final int STATE_BLEND_TICKS = 3;
+    private static boolean clientDrawFinished;
+    private static final int STATE_BLEND_TICKS = 6;
     private static final long SHOT_NO_BLEND_WINDOW_NANOS = 400_000_000L;
     private static long clientLastShotNanos;
     private static String lastFirstPersonGunId = "";
@@ -111,6 +118,7 @@ public final class AnimatedGunItem extends GunItem implements GeoItem {
 
     @Override
     public void registerControllers(AnimatableManager.ControllerRegistrar controllers) {
+        controllers.add(new AnimationController<>(BASE_CONTROLLER, 0, this::basePosePredicate));
         controllers.add(new AnimationController<>(
                 CONTROLLER,
                 0,
@@ -132,6 +140,10 @@ public final class AnimatedGunItem extends GunItem implements GeoItem {
         controllers.add(new AnimationController<>(SHOOT_CONTROLLER, 0, this::shootPredicate));
     }
 
+    private PlayState basePosePredicate(AnimationTest<AnimatedGunItem> test) {
+        return isNonFirstPersonPerspective(test) ? PlayState.STOP : test.setAndContinue(IDLE);
+    }
+
     private PlayState shootPredicate(AnimationTest<AnimatedGunItem> test) {
         if (isNonFirstPersonPerspective(test)) {
             return PlayState.STOP;
@@ -145,6 +157,16 @@ public final class AnimatedGunItem extends GunItem implements GeoItem {
     }
 
     private PlayState animationPredicate(AnimationTest<AnimatedGunItem> test) {
+        PlayState state = this.chooseAnimation(test);
+        // A blend needs a pose to blend from. Straight after a reset there is none, and GeckoLib would blend in from the
+        // model's bind pose instead: the hands swept in from the middle of the screen every time a gun was drawn.
+        if (test.controller().getCurrentTimelineTime() <= 0.0D) {
+            test.controller().setTransitionTicks(0);
+        }
+        return state;
+    }
+
+    private PlayState chooseAnimation(AnimationTest<AnimatedGunItem> test) {
         if (isNonFirstPersonPerspective(test)) {
             return PlayState.STOP;
         }
@@ -187,7 +209,7 @@ public final class AnimatedGunItem extends GunItem implements GeoItem {
         if (shouldBayonetSprintInterruptInspect(test, stack)) {
             clearPendingClientInspect();
             test.controller().reset();
-            return setSprintOrBayonetSprintAnimation(test, stack);
+            return test.setAndContinue(IDLE);
         }
 
         if (triggerPendingClientInspect(test, stack)) {
@@ -215,14 +237,8 @@ public final class AnimatedGunItem extends GunItem implements GeoItem {
             return PlayState.CONTINUE;
         }
 
-        if (isFirstPersonRender(test, stack)) {
-            Player player = clientPlayer();
-            if (player != null && player.isSprinting() && !isClientAiming() && !isLocalAttackDown(player)
-                    && !isClientSprintAnimationBlocked() && canApplySprintingAnimation(stack)) {
-                return setSprintOrBayonetSprintAnimation(test, stack);
-            }
-        }
-
+        // Sprinting needs no animation: the low carry is eased in and out in the hand transform for every gun, whereas the
+        // authored sprint animations carried the gun right off the screen and snapped back when the sprint ended.
         return test.setAndContinue(IDLE);
     }
 
@@ -252,6 +268,11 @@ public final class AnimatedGunItem extends GunItem implements GeoItem {
             return DRAW;
         }
         if (stack.getOrDefault(ModDataComponents.GUN_DRAW_TICKS_REMAINING.get(), 0) <= 0) {
+            clientDrawFinished = false;
+            return null;
+        }
+        // The draw lock can outlast the animation by a tick or two; do not start the animation over for those.
+        if (clientDrawFinished) {
             return null;
         }
         rememberDrawAnimation(stack);
@@ -269,20 +290,6 @@ public final class AnimatedGunItem extends GunItem implements GeoItem {
             controller.reset();
         }
         lastFirstPersonGunId = currentId;
-    }
-
-    private static PlayState setSprintAnimation(AnimationTest<AnimatedGunItem> test) {
-        if (hasAnimation(test.controller().getCurrentRawAnimation(), ANIM_SPRINT)) {
-            return PlayState.CONTINUE;
-        }
-        return test.setAndContinue(SPRINT);
-    }
-
-    private static PlayState setSprintOrBayonetSprintAnimation(AnimationTest<AnimatedGunItem> test, ItemStack stack) {
-        if (hasBayonet(stack)) {
-            return test.setAndContinue(IDLE);
-        }
-        return setSprintAnimation(test);
     }
 
     private static ItemStack animationStateStack(AnimationTest<AnimatedGunItem> test, ItemStack renderStack) {
@@ -526,12 +533,14 @@ public final class AnimatedGunItem extends GunItem implements GeoItem {
     }
 
     static void restartDrawAnimation(ItemStack stack) {
+        clientDrawFinished = false;
         clearRecentDrawAnimation();
         rememberDrawAnimation(stack);
     }
 
     static void restartDrawAnimationAfterReloadCancel(ItemStack stack) {
         clearReloadVisualState(stack);
+        clientDrawFinished = false;
         clearRecentDrawAnimation();
         if (stack == null || stack.isEmpty()) {
             return;
@@ -600,6 +609,8 @@ public final class AnimatedGunItem extends GunItem implements GeoItem {
         }
         controller.reset();
         clearDrawAnimationReset();
+        // This is the start the pending draw was queued for; playing that too would run the draw again from the top.
+        clearPendingClientDraw();
         return true;
     }
 
@@ -654,11 +665,8 @@ public final class AnimatedGunItem extends GunItem implements GeoItem {
             return true;
         }
         clearRecentDrawAnimation();
+        clientDrawFinished = true;
         return false;
-    }
-
-    private static boolean isClientSprintAnimationBlocked() {
-        return System.nanoTime() < clientSprintAnimationBlockedUntilNanos;
     }
 
     private static boolean shouldDiscardReleasedAutomaticShot(ItemStack renderStack) {
@@ -995,19 +1003,6 @@ public final class AnimatedGunItem extends GunItem implements GeoItem {
             Class<?> aimingHandlerClass = Class.forName("ttv.migami.jeg.client.handler.AimingHandler");
             Object handler = aimingHandlerClass.getMethod("get").invoke(null);
             return (Boolean) aimingHandlerClass.getMethod("isAiming").invoke(handler);
-        } catch (ReflectiveOperationException e) {
-            return false;
-        }
-    }
-
-    private static boolean canApplySprintingAnimation(ItemStack stack) {
-        if (!(stack.getItem() instanceof AnimatedGunItem gun)) {
-            return false;
-        }
-        try {
-            Class<?> profileClass = Class.forName("ttv.migami.jeg.client.render.gun.GunPoseProfile");
-            Object profile = profileClass.getMethod("forGun", gun.getStats().id().getClass()).invoke(null, gun.getStats().id());
-            return (Boolean) profileClass.getMethod("canApplySprintingAnimation").invoke(profile);
         } catch (ReflectiveOperationException e) {
             return false;
         }

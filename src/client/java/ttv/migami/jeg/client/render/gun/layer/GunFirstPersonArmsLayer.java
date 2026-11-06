@@ -13,6 +13,7 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.world.entity.player.PlayerModelPart;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemDisplayContext;
+import com.geckolib.animation.state.BoneSnapshot;
 import com.geckolib.cache.model.GeoBone;
 import com.geckolib.constant.DataTickets;
 import com.geckolib.renderer.GeoItemRenderer;
@@ -83,14 +84,24 @@ public final class GunFirstPersonArmsLayer extends GeoRenderLayer<AnimatedGunIte
         }
     }
 
+    /** Every gun's animations hold the arms away from the bind pose, so a bone sitting exactly on it has not been posed yet. */
+    private static boolean isPosed(BoneSnapshot snapshot) {
+        return snapshot.getRotX() != 0.0F || snapshot.getRotY() != 0.0F || snapshot.getRotZ() != 0.0F
+                || snapshot.getTranslateX() != 0.0F || snapshot.getTranslateY() != 0.0F || snapshot.getTranslateZ() != 0.0F;
+    }
+
     private static void registerArmBone(RenderPassInfo<GeoRenderState> passInfo, ArmSide side) {
         String fake = side == ArmSide.LEFT ? "fake_left_arm" : "fake_right_arm";
         String normal = side == ArmSide.LEFT ? "left_arm" : "right_arm";
         // Prefer normal arm bones; fake_* are often emergency anchors that can drift into camera.
-        passInfo.model().getBone(normal).ifPresentOrElse(
-                bone -> passInfo.addPerBoneRender(bone, new ArmRenderTask(side)),
-                () -> passInfo.model().getBone(fake).ifPresent(bone -> passInfo.addPerBoneRender(bone, new ArmRenderTask(side)))
-        );
+        passInfo.model().getBone(normal).or(() -> passInfo.model().getBone(fake)).ifPresent(bone -> {
+            ArmRenderTask task = new ArmRenderTask(side);
+            // Check only the bone this task renders. Unposed fake arms must not hide a posed normal arm, and each
+            // render pass needs its own result when two guns are held or a weapon is being switched.
+            passInfo.addBoneUpdater((info, snapshots) ->
+                    snapshots.ifPresent(bone.name(), snapshot -> task.posed = isPosed(snapshot)));
+            passInfo.addPerBoneRender(bone, task);
+        });
     }
 
     private enum ArmSide {
@@ -99,6 +110,7 @@ public final class GunFirstPersonArmsLayer extends GeoRenderLayer<AnimatedGunIte
 
     private static final class ArmRenderTask implements PerBoneRender<GeoRenderState> {
         private final ArmSide side;
+        private boolean posed;
 
         private ArmRenderTask(ArmSide side) {
             this.side = side;
@@ -108,6 +120,10 @@ public final class GunFirstPersonArmsLayer extends GeoRenderLayer<AnimatedGunIte
         public void submitRenderTask(RenderPassInfo<GeoRenderState> passInfo, GeoBone bone, SubmitNodeCollector collector) {
             AbstractClientPlayer player = Minecraft.getInstance().player;
             if (player == null || player.isInvisible()) {
+                return;
+            }
+            // On the frame an animation starts the arm has no pose yet; drawn anyway it flashes up spread out from the screen.
+            if (!this.posed) {
                 return;
             }
 

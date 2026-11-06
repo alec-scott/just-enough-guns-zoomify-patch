@@ -56,6 +56,7 @@ import ttv.migami.jeg.gun.RecoilProfiles;
 import ttv.migami.jeg.init.ModBlocks;
 import ttv.migami.jeg.init.ModDataComponents;
 import ttv.migami.jeg.init.ModItems;
+import ttv.migami.jeg.gun.MinigunSpin;
 import ttv.migami.jeg.init.ModParticleTypes;
 import ttv.migami.jeg.init.ModSounds;
 import ttv.migami.jeg.item.attachment.AttachmentModifiers;
@@ -257,6 +258,7 @@ public class GunItem extends Item {
             "typhoonee"
     );
     private static final float MINIGUN_SPREAD_FLOOR = 0.85F;
+    private static final float MINIGUN_CASING_CHANCE = 0.3F;
     private static final double MOVEMENT_THRESHOLD_SQR = 0.0036D;
     private static final float RIFLE_FIRE_SPREAD_CAP = 2.70F;
     private static final float SIDEARM_FIRE_SPREAD_CAP = 1.725F;
@@ -983,7 +985,10 @@ public class GunItem extends Item {
             player.getCooldowns().addCooldown(stack, Math.max(1, stats.fireDelay()));
         }
 
-        playFireSound(level, player, stack, fireSoundFor(stack));
+        // A player's minigun is heard through its charge-up and firing loops (MinigunClient), in step with its barrels.
+        if (!MinigunSpin.isMinigun(stack)) {
+            playFireSound(level, player, stack, fireSoundFor(stack));
+        }
         playAttachmentFireSounds(level, player, stack);
         return true;
     }
@@ -1332,13 +1337,6 @@ public class GunItem extends Item {
                     bullet.sendTrailToClients(serverLevel);
                 }
 
-                // Add bullet trail particles for all guns EXCEPT flamethrower
-                // (flamethrower already has its own particle effects)
-                if (!stats.flameTrail() && level instanceof ServerLevel serverLevel) {
-                    // Use penetration-aware raycast to spawn particles along actual bullet path
-                    spawnBulletTrailParticles(serverLevel, muzzle, direction, stats, shooter);
-                }
-
                 // NeoForge 1.21.11: keep fire feedback to recoil-only for first person.
                 // Disabling shoot trigger avoids intermittent invisibility caused by per-shot animated state.
             }
@@ -1387,11 +1385,6 @@ public class GunItem extends Item {
                 level.addFreshEntity(bullet);
                 if (level instanceof ServerLevel serverLevel && isBulletClassWeapon(stats.id())) {
                     bullet.sendTrailToClients(serverLevel);
-                }
-
-                if (!stats.flameTrail() && level instanceof ServerLevel serverLevel) {
-                    // Use penetration-aware raycast to spawn particles along actual bullet path
-                    spawnBulletTrailParticles(serverLevel, muzzle, normalized, stats, shooter);
                 }
 
                 // NeoForge 1.21.11: keep fire feedback to recoil-only for first person.
@@ -1494,6 +1487,14 @@ public class GunItem extends Item {
                 .add(forward.scale(divisor))
                 .add(0.0D, shooter.getEyeHeight() - 0.4D, 0.0D);
         Vec3 velocity = right.scale(0.05D).add(0.0D, 0.02D, 0.0D);
+        if (isMinigunWeapon(this.stats.id())) {
+            // Twenty rounds a second out of the side of the gun: show a few, falling away below it.
+            if (shooter.getRandom().nextFloat() > MINIGUN_CASING_CHANCE) {
+                return;
+            }
+            particlePos = particlePos.add(0.0D, -0.35D, 0.0D);
+            velocity = right.scale(0.08D).add(0.0D, -0.42D, 0.0D);
+        }
 
         level.sendParticles(
                 particle,
@@ -2783,33 +2784,6 @@ public class GunItem extends Item {
             }
         }
         return Math.min(removed, needed); // Cap at needed amount
-    }
-
-    /**
-     * Spawn bullet trail particles with penetration-aware raycast.
-     * Particles have proper depth testing and won't render through blocks.
-     */
-    private void spawnBulletTrailParticles(ServerLevel level, Vec3 start, Vec3 direction, GunStats stats, LivingEntity shooter) {
-        if ("minigun".equals(stats.id().getPath())) {
-            if (shooter.getRandom().nextFloat() < 0.15F) {
-                level.sendParticles(
-                    ParticleTypes.SMOKE,
-                    start.x, start.y, start.z,
-                    1, 0.02, 0.02, 0.02, 0.01
-                );
-            }
-            return;
-        }
-
-        // Muzzle-only black dust with chance per shot to avoid constant spam.
-        if (shooter.getRandom().nextFloat() < 0.25F) {
-            int count = shooter.getRandom().nextFloat() < 0.35F ? 2 : 1;
-            level.sendParticles(
-                ParticleTypes.SMOKE,
-                start.x, start.y, start.z,
-                count, 0.02, 0.02, 0.02, 0.01
-            );
-        }
     }
 
     @Override

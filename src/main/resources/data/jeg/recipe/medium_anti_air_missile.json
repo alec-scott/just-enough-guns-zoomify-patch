@@ -8,7 +8,7 @@
   ],
   "key": {
     "B": "minecraft:iron_bars",
-    "E": "minecraft:ender_eye",
+    "E": "minecraft:redstone_torch",
     "I": "minecraft:iron_ingot",
     "T": "minecraft:tnt",
     "M": "jeg:missile_engine"

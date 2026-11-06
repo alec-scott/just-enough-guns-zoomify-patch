@@ -47,7 +47,8 @@ public class HelicopterWeightyFlightClientGameTest implements FabricClientGameTe
 
         StringBuilder log = new StringBuilder();
         context.getInput().holdKey(options -> options.keyJump);
-        this.record(context, log, id + " climb", 160);
+        int startup = context.computeOnClient(mc -> vehicle(mc).helicopterStartupTicks());
+        this.record(context, log, id + " climb", startup + 160);
         context.getInput().releaseKey(options -> options.keyJump);
         this.record(context, log, id + " climb-release", 40);
 

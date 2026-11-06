@@ -1,5 +1,33 @@
 # Changelog
 
+## 1.7.2+mc26.1.2.yftm.7 - 2026-11-06
+
+### Changed
+- Helicopters stay off when boarded. Pressing Space starts an eight-second AH-6 or twelve-second MI-28 rotor wind-up; lift remains disabled until operating RPM.
+- Replaced AH-6 and MI-28 startup/flight audio with the supplied Freesound recordings 410604 and 81454, using mono positional loops and relative-motion Doppler pitch.
+- Used the selected 1:26–1:36 section for MI-28 flight audio and a 46-second AH-6 flight bed with a two-second equal-power crossfade to soften repetition.
+- Set the MI-28 gun to the minigun firing loop and the AH-6 gun to a seamless A-10-derived firing loop at 80% amplitude.
+- Reduced the MI-28 gun flash to 20% size, 50% opacity, and a one-tick lifetime.
+- Increased 70 mm rocket direct/blast damage to 110/60 with a 7-block blast radius, and 80 mm rocket damage to 125/75 with a 9-block radius.
+- Increased medium ground missiles to 240 vehicle/90 living damage over 10 blocks, and large ground missiles to 600 vehicle/110 living damage over 24 blocks.
+- Replaced medium missile Eyes of Ender with redstone torches and the large missile's Eye of Ender with a redstone block, retaining the higher explosive/engine costs of larger missiles.
+- Smoothed first-person gun sprint carry, movement sway, and weapon raising/lowering, with handling and movement speed based on weapon weight.
+- Retuned helicopter coasting, braking, strafing, lift, and yaw inertia, with steadier cameras during stops and a flight ceiling above the world's build limit.
+- Added hover assistance while crew remain aboard with the pilot seat empty.
+- Added minigun barrel spin-up and spin-down, synchronized firing audio, muzzle flares, and brighter tracers.
+- Improved helicopter weapon crosshair alignment, missile models, acceleration, exhaust trails, and explosion feedback.
+- Added configurable helicopter gun damage to foliage and glass, with block-break permission checks.
+
+### Fixed
+- Kept gun arms on their animated grip poses during weapon changes and removed per-shot equip dips.
+- Scoped arm-pose checks to the bone and render pass being drawn so unused fallback bones cannot hide the holding hand.
+- Made vehicle assembly tables drop once and remove all remaining parts when broken.
+- Accepted older vehicle input packets that omit the barrel-roll field.
+- Sent vehicle aim updates before firing input so a newly fired round uses the matching crosshair point.
+- Made helicopter client prediction check fuel before spinning the rotor.
+- Enabled helicopter gun loop activation and gave firing loops an audible initial volume; added checks for actual sound-channel playback and stopping after trigger release.
+- Separated Power damage checks from Punch and Flame effects and rejected damage samples with no bullet hits.
+
 ## 1.7.2 - 2026-06-24
 
 ### Changed

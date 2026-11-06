@@ -1,5 +1,6 @@
 package ttv.migami.jeg.entity;
 
+import ttv.migami.jeg.gun.VehicleGunBlockDamage;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Predicate;
@@ -108,6 +109,7 @@ public class BulletEntity extends Projectile {
     // Punch: like a Punch arrow (0.6 blocks/tick per level), split across a shotgun's pellets.
     private static final double PUNCH_KNOCKBACK_PER_LEVEL = 0.6D;
     private static final int FLAME_SECONDS = 5;
+    private boolean helicopterGunRound;
     private int punchLevel;
     private boolean flame;
     private static final float ROCKET_EXPLOSION_POWER = 6.8F;
@@ -133,6 +135,7 @@ public class BulletEntity extends Projectile {
     private static final EntityDataAccessor<Integer> DATA_FLARE_COLOR = SynchedEntityData.defineId(BulletEntity.class, EntityDataSerializers.INT);
     private static final String DYING_TAG = "JEGDying";
     private static final int NO_FLARE_COLOR = -1;
+    private static final int HELICOPTER_GUN_LIFE_TICKS = 60;
     private static final float EXPLOSIVE_MUZZLE_WOOD_BREAK_CHANCE = 0.1F;
     private static final float EXPLOSIVE_MUZZLE_STONE_BREAK_CHANCE = 0.05F;
     private static final float EXPLOSIVE_MUZZLE_ARMOR_PIERCING_MULTIPLIER = 0.75F;
@@ -174,8 +177,19 @@ public class BulletEntity extends Projectile {
         this.setOldPosAndRot();
     }
 
+    /** Fired from a helicopter's gun: flies flat and far, and tears up flimsy blocks on the way. */
+    public void setHelicopterGunRound() {
+        this.helicopterGunRound = true;
+        this.entityData.set(DATA_LIFE, Math.max(this.entityData.get(DATA_LIFE), HELICOPTER_GUN_LIFE_TICKS));
+    }
+
     public void setKillEffect(Identifier itemId) {
         this.entityData.set(DATA_KILL_EFFECT, itemId.toString());
+    }
+
+    @Override
+    public boolean shouldRenderAtSqrDistance(double distance) {
+        return distance < 256.0D * 256.0D;
     }
 
     public void setMedalsEnabled(boolean medalsEnabled) {
@@ -256,7 +270,7 @@ public class BulletEntity extends Projectile {
             }
 
             this.setPos(this.getX() + motion.x, this.getY() + motion.y, this.getZ() + motion.z);
-            this.setDeltaMovement(applyGravity(motion, gunStats));
+            this.setDeltaMovement(this.helicopterGunRound ? motion : applyGravity(motion, gunStats));
 
             if (this.entityData.get(DATA_TICKS_LIVED) > this.entityData.get(DATA_LIFE)) {
                 this.discard();
@@ -273,6 +287,9 @@ public class BulletEntity extends Projectile {
         Vec3 currentPos = this.position();
         Vec3 nextPos = currentPos.add(motion);
         boolean legacyBulletClass = shouldSendBulletTrail(gunStats);
+        if (this.helicopterGunRound && this.level() instanceof ServerLevel serverLevel && this.getOwner() != null) {
+            VehicleGunBlockDamage.alongPath(serverLevel, currentPos, nextPos, this.getOwner(), this);
+        }
 
         // SERVER SIDE: Full collision detection with continuous penetration checking
         if (!this.level().isClientSide()) {
@@ -363,7 +380,7 @@ public class BulletEntity extends Projectile {
             // Move bullet to final position (if not stopped by solid block)
             this.setPos(nextPos.x, nextPos.y, nextPos.z);
 
-            this.setDeltaMovement(applyGravity(motion, gunStats));
+            this.setDeltaMovement(this.helicopterGunRound ? motion : applyGravity(motion, gunStats));
         }
         // CLIENT SIDE: Handle particle effects and movement
         else {
@@ -383,7 +400,7 @@ public class BulletEntity extends Projectile {
                 spawnTyphooneeTrailParticles();
             }
 
-            this.setDeltaMovement(applyGravity(motion, gunStats));
+            this.setDeltaMovement(this.helicopterGunRound ? motion : applyGravity(motion, gunStats));
         }
 
         // Check lifetime (both sides)
@@ -1075,15 +1092,15 @@ public class BulletEntity extends Projectile {
     }
 
     private static float vehicleRocketExplosionPower(Identifier id) {
-        return id.equals(VEHICLE_80MM_ROCKET_ID) ? 3.0F : 2.5F;
+        return id.equals(VEHICLE_80MM_ROCKET_ID) ? 4.0F : 3.2F;
     }
 
     private static float vehicleRocketBlastDamage(Identifier id) {
-        return id.equals(VEHICLE_80MM_ROCKET_ID) ? 42.0F : 40.0F;
+        return id.equals(VEHICLE_80MM_ROCKET_ID) ? 75.0F : 60.0F;
     }
 
     private static double vehicleRocketBlastRadius(Identifier id) {
-        return id.equals(VEHICLE_80MM_ROCKET_ID) ? 6.0D : 5.0D;
+        return id.equals(VEHICLE_80MM_ROCKET_ID) ? 9.0D : 7.0D;
     }
 
     private static float vehicleCannonBlastDamage(Identifier id) {
@@ -1614,7 +1631,7 @@ public class BulletEntity extends Projectile {
         float size = this.entityData.get(DATA_SIZE);
         int life = this.entityData.get(DATA_LIFE);
 
-        double gravity = -getGravityAcceleration(stats);
+        double gravity = this.helicopterGunRound ? 0.0D : -getGravityAcceleration(stats);
 
         Entity owner = this.getOwner();
         int shooterId = owner != null ? owner.getId() : -1;
@@ -1648,7 +1665,7 @@ public class BulletEntity extends Projectile {
     }
 
     private static double getGravityAcceleration(GunStats stats) {
-        if (stats.id().equals(SUPERSONIC_SHOTGUN_ID)) {
+        if (stats.id().equals(SUPERSONIC_SHOTGUN_ID) || isVehicleRocket(stats.id())) {
             return 0.0D;
         }
 

@@ -72,7 +72,8 @@ public record VehicleInputPayload(
                     buf.readFloat(),
                     buf.readFloat(),
                     buf.readFloat(),
-                    buf.readByte()
+                    // Clients from before yftm.6 send no barrel-roll byte; read it as "no roll" instead of kicking them.
+                    buf.isReadable() ? buf.readByte() : 0
             )
     );
 

@@ -20,12 +20,14 @@ public final class GunMuzzleFlashParticle extends ExplodeParticle {
             double xSpeed,
             double ySpeed,
             double zSpeed,
-            SpriteSet sprites
+            SpriteSet sprites,
+            float sizeScale
     ) {
         super(level, x, y, z, xSpeed, ySpeed, zSpeed, sprites);
         this.sprites = sprites;
-        this.lifetime = 2;
-        this.quadSize = 1.15F + this.random.nextFloat() * 0.25F;
+        this.lifetime = sizeScale < 1.0F ? 1 : 2;
+        this.quadSize = (1.15F + this.random.nextFloat() * 0.25F) * sizeScale;
+        this.alpha = sizeScale < 1.0F ? 0.5F : 1.0F;
         this.hasPhysics = false;
         this.gravity = 0.0F;
         this.xd = xSpeed * 0.1D;
@@ -57,9 +59,15 @@ public final class GunMuzzleFlashParticle extends ExplodeParticle {
 
     public static final class Provider implements ParticleProvider<SimpleParticleType> {
         private final SpriteSet sprites;
+        private final float sizeScale;
 
         public Provider(SpriteSet sprites) {
+            this(sprites, 1.0F);
+        }
+
+        public Provider(SpriteSet sprites, float sizeScale) {
             this.sprites = sprites;
+            this.sizeScale = sizeScale;
         }
 
         @Override
@@ -74,7 +82,7 @@ public final class GunMuzzleFlashParticle extends ExplodeParticle {
                 double zSpeed,
                 RandomSource random
         ) {
-            return new GunMuzzleFlashParticle(level, x, y, z, xSpeed, ySpeed, zSpeed, this.sprites);
+            return new GunMuzzleFlashParticle(level, x, y, z, xSpeed, ySpeed, zSpeed, this.sprites, this.sizeScale);
         }
     }
 }

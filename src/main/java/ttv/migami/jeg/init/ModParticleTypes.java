@@ -44,6 +44,8 @@ public class ModParticleTypes {
             REGISTER.register("blue_flame", FabricParticleTypes::simple);
     public static final DeferredHolder<ParticleType<?>, SimpleParticleType> GUN_MUZZLE_FLASH =
             REGISTER.register("gun_muzzle_flash", FabricParticleTypes::simple);
+    public static final DeferredHolder<ParticleType<?>, SimpleParticleType> SMALL_GUN_MUZZLE_FLASH =
+            REGISTER.register("small_gun_muzzle_flash", FabricParticleTypes::simple);
     public static final DeferredHolder<ParticleType<?>, SimpleParticleType> CASING_PARTICLE =
             REGISTER.register("casing", FabricParticleTypes::simple);
     public static final DeferredHolder<ParticleType<?>, SimpleParticleType> SHELL_PARTICLE =

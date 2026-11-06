@@ -4,6 +4,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.util.Mth;
 import net.minecraft.world.item.ItemStack;
+import ttv.migami.jeg.gun.GunWeight;
 import ttv.migami.jeg.item.GunItem;
 import ttv.migami.jeg.item.attachment.GunAttachments;
 
@@ -96,9 +97,10 @@ public final class AimingHandler {
 
     private static float aimSpeed(LocalPlayer player) {
         ItemStack mainHand = player.getMainHandItem();
-        if (!(mainHand.getItem() instanceof GunItem)) {
+        if (!(mainHand.getItem() instanceof GunItem gun)) {
             return AIM_SPEED;
         }
-        return Math.max(0.05F, AIM_SPEED * (float) GunAttachments.modifiers(mainHand).adsSpeedMultiplier());
+        float heft = Mth.sqrt(GunWeight.of(gun.getStats().id()).handling());
+        return Math.max(0.05F, AIM_SPEED / heft * (float) GunAttachments.modifiers(mainHand).adsSpeedMultiplier());
     }
 }

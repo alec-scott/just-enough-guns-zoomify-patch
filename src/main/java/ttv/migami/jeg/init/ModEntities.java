@@ -259,7 +259,7 @@ public final class ModEntities {
             "vehicle_missile",
             () -> EntityType.Builder.<VehicleMissileEntity>of(VehicleMissileEntity::new, MobCategory.MISC)
                     .sized(0.45F, 0.45F)
-                    .clientTrackingRange(10)
+                    .clientTrackingRange(32)
                     .updateInterval(1)
                     .build(entityKey("vehicle_missile"))
     );

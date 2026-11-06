@@ -28,7 +28,7 @@ public final class CasingParticle extends SingleQuadParticle {
         this.xd = xSpeed;
         this.yd = ySpeed + this.random.nextFloat() * 0.225F + 0.22F;
         this.zd = zSpeed;
-        this.quadSize = 0.35F;
+        this.quadSize = 0.14F;
         this.lifetime = (int) (16.0D / (this.random.nextDouble() * 0.8D + 0.2D));
     }
 

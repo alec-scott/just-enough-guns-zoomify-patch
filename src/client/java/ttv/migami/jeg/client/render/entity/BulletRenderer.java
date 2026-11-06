@@ -1,13 +1,13 @@
 package ttv.migami.jeg.client.render.entity;
 
 import com.mojang.blaze3d.vertex.PoseStack;
-import net.minecraft.client.renderer.MultiBufferSource;
+import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.entity.EntityRenderer;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
 import net.minecraft.client.renderer.entity.state.EntityRenderState;
+import net.minecraft.client.renderer.state.level.CameraRenderState;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.phys.Vec3;
-import ttv.migami.jeg.client.render.BulletTrailRenderer;
 import ttv.migami.jeg.entity.BulletEntity;
 
 public final class BulletRenderer extends EntityRenderer<BulletEntity, BulletRenderer.State> {
@@ -22,14 +22,10 @@ public final class BulletRenderer extends EntityRenderer<BulletEntity, BulletRen
         super(context);
     }
 
-    public void submit(State state, PoseStack poseStack, MultiBufferSource bufferSource, int packedLight) {
-        if (state.isSlowBullet && state.position != null) {
-            BulletTrailRenderer.updateDynamicTrail(
-                    state.entityId,
-                    state.position,
-                    state.trailColor,
-                    state.size
-            );
+    @Override
+    public void submit(State state, PoseStack poseStack, SubmitNodeCollector collector, CameraRenderState camera) {
+        if (state.rocket) {
+            MissileModel.submit(poseStack, collector, state.motion, 1.1F, 0.2F, state.lightCoords, state.flicker);
         }
     }
 
@@ -45,10 +41,13 @@ public final class BulletRenderer extends EntityRenderer<BulletEntity, BulletRen
         state.size = entity.getProjectileSize();
         state.trailColor = entity.getTrailColor();
         state.position = entity.position();
+        state.motion = entity.getDeltaMovement();
+        state.flicker = (entity.tickCount * 0.137F) % 1.0F;
 
         // Determine if this is a slow bullet that needs dynamic trail tracking
         Identifier gunId = Identifier.parse(entity.getGunId());
         state.isSlowBullet = isSlowBullet(gunId);
+        state.rocket = gunId.getPath().contains("rocket") && gunId.getPath().startsWith("vehicle_");
     }
 
     private boolean isSlowBullet(Identifier gunId) {
@@ -66,5 +65,8 @@ public final class BulletRenderer extends EntityRenderer<BulletEntity, BulletRen
         int trailColor;
         boolean isSlowBullet;
         Vec3 position = Vec3.ZERO;
+        Vec3 motion = Vec3.ZERO;
+        boolean rocket;
+        float flicker;
     }
 }

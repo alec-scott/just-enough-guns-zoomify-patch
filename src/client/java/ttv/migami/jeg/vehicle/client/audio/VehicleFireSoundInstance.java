@@ -8,6 +8,7 @@ import net.minecraft.util.Mth;
 import ttv.migami.jeg.vehicle.entity.base.VehicleEntity;
 
 public final class VehicleFireSoundInstance extends AbstractTickableSoundInstance {
+    private static final float MIN_VOLUME = 3.5F;
     private static final float MAX_VOLUME = 6.5F;
     private final VehicleEntity vehicle;
     private final SoundEvent sound;
@@ -18,7 +19,8 @@ public final class VehicleFireSoundInstance extends AbstractTickableSoundInstanc
         this.sound = sound;
         this.looping = true;
         this.delay = 0;
-        this.volume = 0.0F;
+        // SoundEngine discards zero-volume sounds before the first tick unless canStartSilent is enabled.
+        this.volume = MIN_VOLUME;
         this.pitch = 1.0F;
         this.attenuation = Attenuation.LINEAR;
         this.updatePosition();
@@ -36,7 +38,7 @@ public final class VehicleFireSoundInstance extends AbstractTickableSoundInstanc
         }
         this.updatePosition();
         double speed = this.vehicle.getDeltaMovement().length();
-        this.volume = Mth.clamp(3.5F + (float) speed * 4.0F, 3.5F, MAX_VOLUME);
+        this.volume = Mth.clamp(MIN_VOLUME + (float) speed * 4.0F, MIN_VOLUME, MAX_VOLUME);
         this.pitch = Mth.clamp(0.96F + (float) speed * 0.08F, 0.96F, 1.08F);
     }
 

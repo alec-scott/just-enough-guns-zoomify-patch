@@ -7,7 +7,7 @@
     "MTM"
   ],
   "key": {
-    "E": "minecraft:ender_eye",
+    "E": "minecraft:redstone_block",
     "C": "minecraft:copper_ingot",
     "T": "minecraft:tnt",
     "M": "jeg:missile_engine"

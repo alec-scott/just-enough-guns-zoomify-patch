@@ -1,5 +1,8 @@
 package ttv.migami.jeg.client;
 
+import net.minecraft.sounds.SoundSource;
+import ttv.migami.jeg.init.ModSounds;
+import ttv.migami.jeg.gun.GunWeight;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -53,6 +56,7 @@ import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.client.extensions.common.RegisterClientExtensionsEvent;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
+import ttv.migami.jeg.gun.MinigunSpin;
 import ttv.migami.jeg.Config;
 import ttv.migami.jeg.Reference;
 import ttv.migami.jeg.client.audio.StunRingingSound;
@@ -329,6 +333,10 @@ public final class FabricClientBootstrap {
         ClientTickEvents.START_CLIENT_TICK.register(FabricClientBootstrap::handleOffhandSwapOverride);
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             GunRecoilHandler.tick();
+            GunViewModelMotion.tick(client);
+            GunCameraSwayHandler.tickShake();
+            MinigunClient.tick(client);
+            ttv.migami.jeg.vehicle.client.audio.HelicopterEngineAudio.tick(client);
             MedalManager.tick();
             if (NetworkHandler.shouldRenderLegacyBulletTrail()) {
                 BulletTrailRenderer.tick();
@@ -354,6 +362,7 @@ public final class FabricClientBootstrap {
         });
 
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
+            ttv.migami.jeg.vehicle.client.audio.HelicopterEngineAudio.clear(client);
             Config.setSyncedMagazineFeedEnabled(null);
             Config.setSyncedHelicopterFlight(null);
             BulletTrailRenderer.clear();
@@ -404,6 +413,12 @@ public final class FabricClientBootstrap {
                     || !vehicle.isWeaponFiring()
                     || vehicle.distanceToSqr(player) > 16384.0D) {
                 minecraft.getSoundManager().stop(entry.getValue());
+                // The barrels run on for a moment after the gun stops firing.
+                var fireLoop = ModSounds.ALL.get(Reference.id("item.minigun.fire_loop"));
+                var fireStop = ModSounds.ALL.get(Reference.id("item.minigun.fire_stop"));
+                if (entity != null && fireLoop != null && fireStop != null && entry.getValue().matches(fireLoop.get())) {
+                    minecraft.level.playLocalSound(entity.getX(), entity.getY(), entity.getZ(), fireStop.get(), SoundSource.PLAYERS, 5.0F, 1.0F, false);
+                }
                 return true;
             }
             var sound = vehicle.activeVehicleFireSound();
@@ -508,6 +523,8 @@ public final class FabricClientBootstrap {
                 resetRocketHold(true);
                 nextVisualShotTickMain = 0L;
                 GunRecoilHandler.stopImmediate();
+            } else if (MinigunSpin.isMinigun(heldMain)) {
+                tickMinigun(player, heldMain, gun, attackDown, aiming, nowTick);
             } else if (GunItem.isHoldToFireWeapon(heldMain)) {
                 tickHoldToFire(player, heldMain, gun, attackDown, nowTick);
             } else if (attackDown) {
@@ -873,6 +890,30 @@ public final class FabricClientBootstrap {
         MUZZLE_FLASHES.put(entityId, new MuzzleFlashState(2, random));
     }
 
+    /** Aiming or the trigger spins the barrels up; only the trigger fires, and only once they are up to speed. */
+    private static void tickMinigun(LocalPlayer player, ItemStack stack, GunItem gun, boolean attackDown, boolean aiming, long nowTick) {
+        if (attackDown != rocketHoldStartSent) {
+            ClientNetworkHandler.sendHoldFire(InteractionHand.MAIN_HAND, attackDown);
+            rocketHoldStartSent = attackDown;
+        }
+        boolean canFire = !(gun.usesOverheatMechanic() && gun.getOverheatPercent(stack) >= 100) && hasShootableAmmo(player, stack, gun);
+        boolean spunUp = MinigunClient.updateLocal(player, attackDown || aiming, attackDown && canFire);
+        if (!attackDown) {
+            nextVisualShotTickMain = 0L;
+            GunRecoilHandler.releaseTrigger();
+            return;
+        }
+        if (!spunUp || !canFire) {
+            return;
+        }
+        ClientNetworkHandler.sendShoot(InteractionHand.MAIN_HAND);
+        if (shouldApplyVisualRecoil(player, stack, gun, false, nowTick)) {
+            applyLocalVisualRecoil(player, stack, gun);
+            GunItem.recordClientShotSpread(player, gun.getStats());
+            CrosshairHandler.onGunFired();
+        }
+    }
+
     private static void tickHoldToFire(LocalPlayer player, ItemStack stack, GunItem gun, boolean attackDown, long nowTick) {
         if (!attackDown) {
             if (rocketHoldStartSent) {
@@ -926,6 +967,22 @@ public final class FabricClientBootstrap {
         rocketShotSent = false;
     }
 
+    public static boolean hasMuzzleFlash(int entityId) {
+        return MUZZLE_FLASHES.containsKey(entityId);
+    }
+
+    /** Actual sound-engine playback, rather than just a selected sound event or a cached loop object. */
+    public static boolean isVehicleFireAudioActive(int entityId) {
+        VehicleFireSoundInstance sound = VEHICLE_FIRE_SOUNDS.get(entityId);
+        return sound != null && sound.getVolume() > 0.0F && Minecraft.getInstance().getSoundManager().isActive(sound);
+    }
+
+    /** The pose the first-person gun last rendered at for that arm, or null if it has not rendered yet. */
+    public static Matrix4f firstPersonGunPose(HumanoidArm arm) {
+        FirstPersonGunPoseState state = firstPersonGunPose;
+        return state != null && state.arm == arm ? new Matrix4f(state.pose) : null;
+    }
+
     public static void captureFirstPersonGunPose(HumanoidArm arm, Matrix4f pose) {
         firstPersonGunPose = new FirstPersonGunPoseState(arm, new Matrix4f(pose));
     }
@@ -971,6 +1028,15 @@ public final class FabricClientBootstrap {
             MuzzleFlashProfile flash = muzzleFlashProfile(held);
             poseStack.pushPose();
             poseStack.translate(muzzlePos.x - cameraPos.x, muzzlePos.y - cameraPos.y, muzzlePos.z - cameraPos.z);
+            float flareScale = flareScale(held);
+            if (flareScale > 0.0F) {
+                // Fires along the barrel, so it is turned to where the gun points rather than to face the camera.
+                poseStack.mulPose(Axis.YP.rotationDegrees(180.0F - living.getViewYRot(partialTick)));
+                poseStack.mulPose(Axis.XP.rotationDegrees(-living.getViewXRot(partialTick)));
+                GunFlare.render(poseStack, bufferSource.getBuffer(GunFlare.RENDER_TYPE), entry.getValue().random, flareScale);
+                poseStack.popPose();
+                continue;
+            }
             poseStack.mulPose(camera.rotation());
             poseStack.mulPose(Axis.ZP.rotationDegrees(entry.getValue().random * 360.0F));
             poseStack.mulPose(Axis.XP.rotationDegrees(entry.getValue().random >= 0.5F ? 180.0F : 0.0F));
@@ -1009,6 +1075,13 @@ public final class FabricClientBootstrap {
         poseStack.pushPose();
         try {
             poseStack.translate(xOffset * 0.0625D, (flash.yOffset() - bonePivotY) * 0.0625D, (flash.zOffset() - bonePivotZ) * 0.0625D);
+            float flareScale = flareScale(held);
+            if (flareScale > 0.0F) {
+                float seed = state.random;
+                collector.submitCustomGeometry(poseStack, GunFlare.RENDER_TYPE,
+                        (pose, buffer) -> GunFlare.render(pose.pose(), buffer, seed, flareScale));
+                return;
+            }
             poseStack.mulPose(Axis.ZP.rotationDegrees(state.random * 360.0F));
             poseStack.mulPose(Axis.XP.rotationDegrees(state.random >= 0.5F ? 180.0F : 0.0F));
             poseStack.scale((float) flash.size(), (float) flash.size(), 1.0F);
@@ -1088,6 +1161,29 @@ public final class FabricClientBootstrap {
         }
 
         return eye.add(look.scale(forwardMul + THIRD_PERSON_MUZZLE_FORWARD_OFFSET)).add(side.scale(sideMul)).add(0.0D, heightMul, 0.0D);
+    }
+
+    /**
+     * How big a gun's muzzle flame is: a pistol spits, a rifle barks and a shotgun blooms. A suppressor all but hides it, and
+     * energy and fantasy weapons keep their own flash (0).
+     */
+    private static float flareScale(ItemStack held) {
+        if (!(held.getItem() instanceof GunItem gun) || usesAlternateMuzzleFlash(held) || held.isEnchanted()
+                || muzzleFlashProfile(held).size() <= 0.0D) {
+            return 0.0F;
+        }
+        float scale = switch (GunWeight.of(gun.getStats().id())) {
+            case PISTOL -> 0.45F;
+            case SMG -> 0.55F;
+            case RIFLE -> 0.75F;
+            case MARKSMAN -> 0.9F;
+            case SHOTGUN -> 1.05F;
+            case MACHINE_GUN -> 0.95F;
+            case LAUNCHER -> 1.1F;
+            case MINIGUN -> 1.0F;
+            case BOW -> 0.0F;
+        };
+        return GunAttachments.modifiers(held).silenced() ? scale * 0.3F : scale;
     }
 
     private static MuzzleFlashProfile muzzleFlashProfile(ItemStack held) {
