@@ -23,6 +23,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.block.state.properties.BooleanProperty;
+import net.minecraft.world.level.block.state.properties.IntegerProperty;
 import net.minecraft.world.level.material.FluidState;
 import net.minecraft.world.level.material.Fluids;
 import net.minecraft.world.level.material.MapColor;
@@ -37,6 +38,9 @@ import ttv.migami.jeg.block.entity.DynamicLightBlockEntity;
 public final class DynamicLightBlock extends BaseEntityBlock implements SimpleWaterloggedBlock {
     public static final MapCodec<DynamicLightBlock> CODEC = simpleCodec(DynamicLightBlock::new);
     public static final BooleanProperty WATERLOGGED = BlockStateProperties.WATERLOGGED;
+    /** How bright this light is: a gun's flare sets it to match the size of its muzzle flash. */
+    public static final IntegerProperty LIGHT = BlockStateProperties.LEVEL;
+    public static final int DEFAULT_LIGHT = 8;
 
     public DynamicLightBlock(BlockBehaviour.Properties properties) {
         super(properties
@@ -45,12 +49,12 @@ public final class DynamicLightBlock extends BaseEntityBlock implements SimpleWa
                 .mapColor(MapColor.NONE)
                 .sound(SoundType.GLASS)
                 .strength(1.0F, 10.0F)
-                .lightLevel(state -> 8)
+                .lightLevel(state -> state.getValue(LIGHT))
                 .noCollision()
                 .noOcclusion()
                 .pushReaction(PushReaction.IGNORE)
                 .isRedstoneConductor((state, level, pos) -> false));
-        this.registerDefaultState(this.getStateDefinition().any().setValue(WATERLOGGED, false));
+        this.registerDefaultState(this.getStateDefinition().any().setValue(WATERLOGGED, false).setValue(LIGHT, DEFAULT_LIGHT));
     }
 
     @Override
@@ -60,7 +64,7 @@ public final class DynamicLightBlock extends BaseEntityBlock implements SimpleWa
 
     @Override
     protected void createBlockStateDefinition(StateDefinition.Builder<Block, BlockState> builder) {
-        builder.add(WATERLOGGED);
+        builder.add(WATERLOGGED, LIGHT);
     }
 
     @Override

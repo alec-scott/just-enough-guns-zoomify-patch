@@ -2,6 +2,13 @@ package ttv.migami.jeg.gametest;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
+import org.joml.Matrix4d;
+import org.joml.Vector3d;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestServerContext;
@@ -31,16 +38,23 @@ public class Mi28GunnerAimClientGameTest implements FabricClientGameTest {
     private static final float LOOK_YAW = 35.0F;
     private static final float LOOK_PITCH = 12.0F;
 
-    private record Shot(Vec3 position, Vec3 velocity) {
+    private record Shot(Vec3 position, Vec3 velocity, Vec3 modelMuzzle) {
     }
+
+    private record Geometry(Vec3 turret, Vec3 barrel, Vec3 spin, Vec3 muzzle) {}
+    private Geometry geometry;
+    private VehicleEntity firingVehicle;
 
     @Override
     public void runTest(ClientGameTestContext context) {
+        this.geometry = modelGeometry("mi28");
+        assertCenteredSpin(this.geometry);
+        assertCenteredSpin(modelGeometry("lod/mi28_lod1"));
         List<Shot> shots = new ArrayList<>();
         ServerEntityEvents.ENTITY_LOAD.register((entity, level) -> {
             if (entity instanceof BulletEntity || entity instanceof VehicleMissileEntity) {
                 synchronized (shots) {
-                    shots.add(new Shot(entity.position(), entity.getDeltaMovement()));
+                    shots.add(new Shot(entity.position(), entity.getDeltaMovement(), modelMuzzle(this.firingVehicle, this.geometry)));
                 }
             }
         });
@@ -50,7 +64,8 @@ public class Mi28GunnerAimClientGameTest implements FabricClientGameTest {
             TestServerContext server = world.getServer();
             server.runCommand("gamemode creative @a");
             server.runCommand("time set noon");
-            server.runCommand("tp @a 0 ~ 0 0 0");
+            server.runCommand("fill -2 -51 4 2 -51 8 minecraft:stone");
+            server.runCommand("tp @a 0 -50 0 0 0");
             server.runCommand("execute as @p at @s run summon jeg:mi28 ~ ~ ~6 {Rotation:[0f,0f]}");
             context.waitTicks(5);
             server.runOnServer(minecraftServer -> {
@@ -111,10 +126,10 @@ public class Mi28GunnerAimClientGameTest implements FabricClientGameTest {
         }
         float[] hull = new float[2];
         context.getInput().holdKey(options -> options.keyAttack);
-        for (int tick = 0; tick < 12; tick++) {
+        for (int tick = 0; tick < VehicleEntity.ROTARY_GUN_SPOOL_TICKS + 12; tick++) {
             this.pose(context, server, hullPitch);
-            if (tick == 6) {
-                context.takeScreenshot("mi28_gunner_" + label);
+            if (tick == 10 || tick == 20 || tick == 35) {
+                context.takeScreenshot("mi28_gunner_" + label + "_t" + tick);
             }
             context.waitTick();
         }
@@ -128,17 +143,35 @@ public class Mi28GunnerAimClientGameTest implements FabricClientGameTest {
         synchronized (shots) {
             fired = new ArrayList<>(shots);
         }
+        if (fired.isEmpty()) {
+            throw new AssertionError("No MI-28 rounds fired during " + label);
+        }
         report.append(String.format("%s: hullPitch=%.1f look=(%.3f,%.3f,%.3f) shots=%d%n",
                 label, hullPitch, look.x, look.y, look.z, fired.size()));
         double yawRadians = Math.toRadians(vehicleYaw);
         for (Shot shot : fired) {
+            double muzzleError = shot.position().distanceTo(shot.modelMuzzle());
+            if (muzzleError > 0.002D) {
+                throw new AssertionError("MI-28 round missed the model's barrel tip by " + muzzleError
+                        + " blocks: spawn=" + shot.position() + ", model=" + shot.modelMuzzle());
+            }
             Vec3 offset = shot.position().subtract(vehiclePos);
             // Hull-local position (yaw only): x right-left, z forward.
             double localX = offset.x * Math.cos(yawRadians) + offset.z * Math.sin(yawRadians);
             double localZ = -offset.x * Math.sin(yawRadians) + offset.z * Math.cos(yawRadians);
             double angle = Math.toDegrees(Math.acos(Math.max(-1.0D, Math.min(1.0D, shot.velocity().normalize().dot(look)))));
-            report.append(String.format("   spawn local=(%.2f, %.2f, %.2f) offAim=%.1fdeg%n", localX, offset.y, localZ, angle));
+            report.append(String.format("   spawn local=(%.2f, %.2f, %.2f) offAim=%.1fdeg muzzleError=%.6f%n", localX, offset.y, localZ, angle, muzzleError));
         }
+        this.checkCamera(context, false);
+        context.getInput().holdKey(options -> options.keyUse);
+        for (int tick = 0; tick < 5; tick++) {
+            this.pose(context, server, hullPitch);
+            context.waitTick();
+        }
+        this.checkCamera(context, true);
+        context.takeScreenshot("mi28_boresight_" + label);
+        context.getInput().releaseKey(options -> options.keyUse);
+        context.waitTicks(5);
     }
 
     /** Holds the gunner's view and the hull pitch in place on both sides each tick. */
@@ -146,6 +179,7 @@ public class Mi28GunnerAimClientGameTest implements FabricClientGameTest {
         server.runOnServer(minecraftServer -> {
             for (Entity entity : minecraftServer.overworld().getAllEntities()) {
                 if (entity instanceof VehicleEntity vehicle) {
+                    this.firingVehicle = vehicle;
                     vehicle.setXRot(hullPitch);
                     vehicle.xRotO = hullPitch;
                     for (Entity passenger : vehicle.getPassengers()) {
@@ -168,5 +202,98 @@ public class Mi28GunnerAimClientGameTest implements FabricClientGameTest {
 
     private static VehicleEntity vehicle(Minecraft mc) {
         return mc.player != null && mc.player.getVehicle() instanceof VehicleEntity vehicle ? vehicle : null;
+    }
+
+    private void checkCamera(ClientGameTestContext context, boolean zoom) {
+        context.runOnClient(mc -> {
+            VehicleEntity heli = vehicle(mc);
+            Vec3 tip = modelMuzzle(heli, this.geometry);
+            Geometry behind = new Geometry(this.geometry.turret(), this.geometry.barrel(), this.geometry.spin(),
+                    this.geometry.muzzle().add(0.0D, 0.0D, -1.0D));
+            Vec3 bore = tip.subtract(modelMuzzle(heli, behind)).normalize();
+            Vec3 camera = heli.cameraPositionFor(mc.player, 1.0F);
+            Vec3 rotation = heli.cameraRotationFor(mc.player, 1.0F);
+            Vec3 look = Vec3.directionFromRotation((float) rotation.y, (float) rotation.x);
+            if (look.dot(bore) < 0.9999D) {
+                throw new AssertionError("The MI-28 camera must point along the model's barrel");
+            }
+            if (zoom) {
+                Vec3 offset = camera.subtract(tip);
+                if (offset.cross(bore).length() > 0.002D || offset.dot(bore) < 0.01D || offset.dot(bore) > 0.1D) {
+                    throw new AssertionError("The zoom camera must sit on the bore, clear of the muzzle: " + offset);
+                }
+            } else {
+                Vec3 right = new Vec3(-bore.z, 0.0D, bore.x).normalize();
+                if (Math.abs(tip.subtract(camera).dot(right)) > 0.05D || camera.distanceTo(tip) > 2.0D) {
+                    throw new AssertionError("The gunner camera must follow the barrel instead of orbiting away from it");
+                }
+            }
+        });
+    }
+
+    private static Geometry modelGeometry(String model) {
+        String path = "/assets/jeg/geckolib/models/entity/vehicle/" + model + ".geo.json";
+        try (var input = Mi28GunnerAimClientGameTest.class.getResourceAsStream(path)) {
+            if (input == null) {
+                throw new AssertionError("Missing model " + path);
+            }
+            JsonArray bones = JsonParser.parseReader(new InputStreamReader(input, StandardCharsets.UTF_8))
+                    .getAsJsonObject().getAsJsonArray("minecraft:geometry").get(0).getAsJsonObject().getAsJsonArray("bones");
+            JsonObject turret = bone(bones, "turret");
+            JsonObject barrel = bone(bones, "barrel");
+            JsonObject spin = bone(bones, "barrel2");
+            JsonObject shaft = bone(bones, "bone72");
+            JsonArray axis = shaft.getAsJsonArray("cubes").get(0).getAsJsonObject().getAsJsonArray("pivot");
+            JsonObject tip = model.startsWith("lod/") ? shaft : bone(bones, "breaker");
+            double tipZ = Double.POSITIVE_INFINITY;
+            for (var element : tip.getAsJsonArray("cubes")) {
+                tipZ = Math.min(tipZ, element.getAsJsonObject().getAsJsonArray("origin").get(2).getAsDouble());
+            }
+            Vec3 muzzle = new Vec3(axis.get(0).getAsDouble() / 16.0D, axis.get(1).getAsDouble() / 16.0D, -tipZ / 16.0D);
+            return new Geometry(modelPoint(turret.getAsJsonArray("pivot")), modelPoint(barrel.getAsJsonArray("pivot")),
+                    modelPoint(spin.getAsJsonArray("pivot")), muzzle);
+        } catch (java.io.IOException e) {
+            throw new AssertionError(e);
+        }
+    }
+
+    private static JsonObject bone(JsonArray bones, String name) {
+        for (var element : bones) {
+            JsonObject bone = element.getAsJsonObject();
+            if (name.equals(bone.get("name").getAsString())) {
+                return bone;
+            }
+        }
+        throw new AssertionError("Missing model bone " + name);
+    }
+
+    private static Vec3 modelPoint(JsonArray point) {
+        return new Vec3(point.get(0).getAsDouble() / 16.0D, point.get(1).getAsDouble() / 16.0D, -point.get(2).getAsDouble() / 16.0D);
+    }
+
+    private static void assertCenteredSpin(Geometry model) {
+        double radius = Math.hypot(model.spin().x - model.muzzle().x, model.spin().y - model.muzzle().y);
+        if (radius > 0.0001D) {
+            throw new AssertionError("The spinning barrel orbits its bore by " + radius + " blocks");
+        }
+    }
+
+    /** Derive the tip from the rendered model pivots, independently of the vehicle's configured muzzle. */
+    private static Vec3 modelMuzzle(VehicleEntity vehicle, Geometry model) {
+        if (vehicle == null) {
+            throw new AssertionError("No MI-28 was selected for muzzle validation");
+        }
+        Vec3 origin = vehicle.position();
+        double pivotY = vehicle.rotateOffsetHeight();
+        Vec3 barrelOffset = model.barrel().subtract(model.turret());
+        Vec3 tipOffset = model.muzzle().subtract(model.barrel());
+        Matrix4d transform = new Matrix4d().translate(origin.x, origin.y + pivotY, origin.z)
+                .rotateY(Math.toRadians(-vehicle.getYRot())).rotateX(Math.toRadians(vehicle.getXRot()))
+                .rotateZ(Math.toRadians(vehicle.roll())).translate(0.0D, -pivotY, 0.0D)
+                .translate(model.turret().x, model.turret().y, model.turret().z)
+                .rotateY(Math.toRadians(vehicle.turretYaw())).translate(barrelOffset.x, barrelOffset.y, barrelOffset.z)
+                .rotateX(Math.toRadians(vehicle.turretPitch())).translate(tipOffset.x, tipOffset.y, tipOffset.z);
+        Vector3d tip = transform.transformPosition(new Vector3d());
+        return new Vec3(tip.x, tip.y, tip.z);
     }
 }

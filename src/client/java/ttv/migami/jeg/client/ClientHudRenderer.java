@@ -36,11 +36,15 @@ public final class ClientHudRenderer {
             return;
         }
 
-        int width = minecraft.getWindow().getGuiScaledWidth();
-        int height = minecraft.getWindow().getGuiScaledHeight();
-        int startX = (int) (width * 0.95F - 120.0F);
-        int startY = height - 65;
-        int textWidth = Math.max(70, width - startX - 8);
+        int width = guiGraphics.guiWidth();
+        int height = guiGraphics.guiHeight();
+        String current = formatCurrent(data.currentAmmo());
+        int currentWidth = minecraft.font.width(current) * 2;
+        int reserveOffset = currentWidth + 6;
+        int ammoWidth = reserveOffset + minecraft.font.width(data.reserveText());
+        int textWidth = Math.min(Math.max(ammoWidth, minecraft.font.width(data.name())), Math.max(0, width - 16));
+        int startX = Math.max(8, width - textWidth - 8);
+        int startY = Math.max(20, height - 65);
 
         guiGraphics.text(minecraft.font, fit(minecraft, data.name(), textWidth), startX, startY - 10, data.nameColor(), true);
 
@@ -48,10 +52,10 @@ public final class ClientHudRenderer {
         pose.pushMatrix();
         pose.translate(startX, startY);
         pose.scale(2.0F, 2.0F);
-        guiGraphics.text(minecraft.font, formatCurrent(data.currentAmmo()), 0, 0, 0xFFFFFFFF, true);
+        guiGraphics.text(minecraft.font, current, 0, 0, 0xFFFFFFFF, true);
         pose.popMatrix();
 
-        guiGraphics.text(minecraft.font, data.reserveText(), startX + 38, startY, 0xFF878787, true);
+        guiGraphics.text(minecraft.font, data.reserveText(), startX + reserveOffset, startY, 0xFF878787, true);
     }
 
     private static HudData buildGunHud(LocalPlayer player, ItemStack stack, GunItem gun) {

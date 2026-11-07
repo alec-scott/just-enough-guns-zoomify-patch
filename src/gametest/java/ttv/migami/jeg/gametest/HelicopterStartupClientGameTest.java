@@ -5,12 +5,15 @@ import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestServerContext;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext;
 import net.minecraft.client.CameraType;
+import net.minecraft.client.resources.sounds.SoundInstance;
 import net.minecraft.world.phys.Vec3;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import ttv.migami.jeg.vehicle.client.audio.HelicopterEngineAudio;
 import ttv.migami.jeg.vehicle.client.audio.VehicleDoppler;
 import ttv.migami.jeg.vehicle.entity.base.VehicleEntity;
+import java.lang.reflect.Field;
+import java.util.Map;
 
 /** Cold entry, a latched ignition, gradual rotor speed, no early lift, and the transition into flight audio. */
 public class HelicopterStartupClientGameTest implements FabricClientGameTest {
@@ -69,6 +72,21 @@ public class HelicopterStartupClientGameTest implements FabricClientGameTest {
         context.waitTicks(duration / 2 - 6);
         State beforeLift = this.state(context);
         this.check(beforeLift.progress() < 1.0F && Math.abs(beforeLift.y() - cold.y()) < 0.3D, "No lift before operating RPM", beforeLift);
+        SoundInstance flightLoop = context.computeOnClient(mc -> {
+            int vehicleId = ((VehicleEntity) mc.player.getVehicle()).getId();
+            SoundInstance startupSound = engineSound("FADING", vehicleId);
+            SoundInstance loop = engineSound("SOUNDS", vehicleId);
+            if (startupSound == null || loop == null || startupSound == loop
+                    || !mc.getSoundManager().isActive(startupSound) || !mc.getSoundManager().isActive(loop)
+                    || startupSound.getVolume() <= 0.01F || loop.getVolume() <= 0.01F) {
+                throw new AssertionError("Startup and flight must overlap on active nonzero-volume channels");
+            }
+            double energy = Math.pow(startupSound.getVolume() / 0.65F, 2.0D) + Math.pow(loop.getVolume() / 0.65F, 2.0D);
+            if (energy < 0.65D || energy > 1.1D) {
+                throw new AssertionError("The engine crossfade must maintain a steady level: " + energy);
+            }
+            return loop;
+        });
         context.takeScreenshot("startup_" + id + "_before_lift");
         context.waitTicks(50);
         State flying = this.state(context);
@@ -81,6 +99,11 @@ public class HelicopterStartupClientGameTest implements FabricClientGameTest {
         });
         this.check(serverFlying, "The authoritative server must agree that takeoff completed", flying);
         context.getInput().releaseKey(options -> options.keyJump);
+        context.getInput().holdKey(options -> options.keyUp);
+        context.waitTicks(20);
+        this.check(context.computeOnClient(mc -> engineSound("SOUNDS", ((VehicleEntity) mc.player.getVehicle()).getId()) == flightLoop
+                && mc.getSoundManager().isActive(flightLoop)), "Taking off and accelerating must keep the same engine loop", flying);
+        context.getInput().releaseKey(options -> options.keyUp);
         context.takeScreenshot("startup_" + id + "_flying");
         LOGGER.info("[heli-startup] {} duration={} cold={} quarter={} half={} beforeLift={} flying={}", id, duration, cold, quarter, half, beforeLift, flying);
     }
@@ -110,6 +133,16 @@ public class HelicopterStartupClientGameTest implements FabricClientGameTest {
             VehicleEntity vehicle = (VehicleEntity) mc.player.getVehicle();
             return new State(vehicle.getY(), vehicle.propellerSpeed(), vehicle.helicopterStartupProgress(), HelicopterEngineAudio.phase(vehicle.getId()));
         });
+    }
+
+    private static SoundInstance engineSound(String mapName, int id) {
+        try {
+            Field field = HelicopterEngineAudio.class.getDeclaredField(mapName);
+            field.setAccessible(true);
+            return (SoundInstance) ((Map<?, ?>) field.get(null)).get(id);
+        } catch (ReflectiveOperationException e) {
+            throw new AssertionError(e);
+        }
     }
 
     private void check(boolean condition, String message, State state) {

@@ -1616,7 +1616,8 @@
     "subtitle": "subtitle.jeg.fire",
     "sounds": [
       {
-        "name": "jeg:item/minigun/spool_up"
+        "name": "jeg:item/minigun/spool_up",
+        "attenuation_distance": 48
       }
     ]
   },
@@ -1625,6 +1626,7 @@
     "sounds": [
       {
         "name": "jeg:item/minigun/spin_loop",
+        "attenuation_distance": 48,
         "stream": true
       }
     ]
@@ -1633,7 +1635,8 @@
     "subtitle": "subtitle.jeg.fire",
     "sounds": [
       {
-        "name": "jeg:item/minigun/spin_down"
+        "name": "jeg:item/minigun/spin_down",
+        "attenuation_distance": 48
       }
     ]
   },
@@ -1642,6 +1645,7 @@
     "sounds": [
       {
         "name": "jeg:item/minigun/fire_loop",
+        "attenuation_distance": 128,
         "stream": true
       }
     ]
@@ -1650,7 +1654,8 @@
     "subtitle": "subtitle.jeg.fire",
     "sounds": [
       {
-        "name": "jeg:item/minigun/fire_stop"
+        "name": "jeg:item/minigun/fire_stop",
+        "attenuation_distance": 96
       }
     ]
   }

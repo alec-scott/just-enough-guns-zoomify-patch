@@ -913,6 +913,18 @@
 							}
 						}
 					]
+				},
+				{
+					"name": "left_grip",
+					"parent": "gun_body",
+					"pivot": [0, 3.8, 4.5],
+					"rotation": [75, 0, 35]
+				},
+				{
+					"name": "right_grip",
+					"parent": "gun_body",
+					"pivot": [0, 1.8, 14.4],
+					"rotation": [75, 0, -35]
 				}
 			]
 		}

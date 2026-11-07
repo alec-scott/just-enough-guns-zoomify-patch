@@ -1,6 +1,8 @@
 package ttv.migami.jeg.vehicle.projectile;
 
 import ttv.migami.jeg.network.CameraShakePayload;
+import ttv.migami.jeg.network.MissileBlastPayload;
+import net.minecraft.util.random.WeightedList;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.sounds.SoundSource;
@@ -28,6 +30,17 @@ import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import net.minecraft.core.Direction;
+import net.minecraft.util.Mth;
+import net.minecraft.world.level.BlockGetter;
+import net.minecraft.world.level.EntityBasedExplosionDamageCalculator;
+import net.minecraft.world.level.Explosion;
+import net.minecraft.world.level.ExplosionDamageCalculator;
+import net.minecraft.world.level.block.BaseFireBlock;
+import net.minecraft.world.level.material.FluidState;
 import ttv.migami.jeg.Reference;
 import ttv.migami.jeg.init.ModEntities;
 import ttv.migami.jeg.init.ModParticleTypes;
@@ -45,6 +58,24 @@ public final class VehicleMissileEntity extends Entity {
     private static final int MOTOR_BUILD_TICKS = 14;
     private static final float BIGGEST_BLAST = 9.0F;
     private static final double SHAKE_RANGE = 140.0D;
+    private static final double BLAST_VISIBLE_RANGE = 512.0D;
+    /**
+     * How much of a block's blast resistance a warhead has to overcome. Medium missiles punch through stone and brick
+     * walls; a large one flattens a building. Blocks meant to stop explosions (obsidian and tougher) keep their resistance.
+     */
+    private static final Map<Identifier, Float> BLOCK_RESISTANCE_SCALE = Map.of(
+            Reference.id("vehicle_bmp2_missile"), 0.45F,
+            Reference.id("vehicle_9m120_driver_missile"), 0.45F,
+            Reference.id("vehicle_9m120_passenger_missile"), 0.45F,
+            Reference.id("vehicle_9m336_missile"), 0.45F,
+            Reference.id("vehicle_kh39_missile"), 0.2F
+    );
+    private static final float BLAST_PROOF_RESISTANCE = 1200.0F;
+    /** Incendiary warheads: the MI-28 pilot's 9M-120 sets the ground around the blast alight. */
+    private static final Set<Identifier> INCENDIARY = Set.of(Reference.id("vehicle_9m120_driver_missile"));
+    private static final double INCENDIARY_RADIUS = 6.5D;
+    private static final float INCENDIARY_COVERAGE = 0.55F;
+    private static final int INCENDIARY_BURN_SECONDS = 8;
     private static final EntityDataAccessor<String> DATA_WEAPON = SynchedEntityData.defineId(VehicleMissileEntity.class, EntityDataSerializers.STRING);
 
     private int ownerId = -1;
@@ -104,27 +135,7 @@ public final class VehicleMissileEntity extends Entity {
             }
         }
         this.setPos(this.position().add(this.getDeltaMovement()));
-        if (this.level().isClientSide()) {
-            this.spawnExhaustTrail();
-        }
-    }
-
-    /** A white plume laid along the path, visible from a long way off so the missile can be watched all the way in. */
-    private void spawnExhaustTrail() {
-        Vec3 motion = this.getDeltaMovement();
-        double length = motion.length();
-        int puffs = Math.max(1, Math.min(10, (int) Math.ceil(length / 0.45D)));
-        for (int puff = 0; puff < puffs; puff++) {
-            Vec3 at = this.position().subtract(motion.scale(puff / (double) puffs));
-            double driftX = (this.random.nextDouble() - 0.5D) * 0.03D;
-            double driftY = this.random.nextDouble() * 0.02D;
-            double driftZ = (this.random.nextDouble() - 0.5D) * 0.03D;
-            this.level().addAlwaysVisibleParticle(ParticleTypes.CLOUD, at.x, at.y, at.z, driftX, driftY, driftZ);
-            if (puff % 3 == 0) {
-                this.level().addAlwaysVisibleParticle(ParticleTypes.CAMPFIRE_COSY_SMOKE, at.x, at.y, at.z, driftX, driftY + 0.01D, driftZ);
-            }
-        }
-        this.level().addAlwaysVisibleParticle(ParticleTypes.FLAME, this.getX(), this.getY(), this.getZ(), 0.0D, 0.0D, 0.0D);
+        // The motor's glow and smoke trail are drawn client-side by MissileTrailRenderer.
     }
 
     /** The motor builds speed through the first moments of flight. */
@@ -240,7 +251,14 @@ public final class VehicleMissileEntity extends Entity {
             Entity owner = this.ownerId < 0 ? null : this.level().getEntity(this.ownerId);
             boolean directHitVehicle = this.directHitVehicleId >= 0;
             float explosionPower = directHitVehicle ? profile.explosionPower() * VEHICLE_DIRECT_HIT_BLOCK_DAMAGE_SCALE : profile.explosionPower();
-            this.level().explode(this, this.getX(), this.getY(), this.getZ(), explosionPower, ExplosionInteraction.MOB);
+            boolean incendiary = INCENDIARY.contains(this.weaponId);
+            // The blast is drawn by clients from a MissileBlastPayload; vanilla's own puffs would sit on top of it.
+            this.level().explode(this, null, this.blockBreakingCalculator(), this.getX(), this.getY(), this.getZ(),
+                    explosionPower, incendiary, ExplosionInteraction.MOB, ParticleTypes.SMOKE, ParticleTypes.SMOKE,
+                    WeightedList.of(), SoundEvents.GENERIC_EXPLODE);
+            if (incendiary) {
+                this.igniteSurroundings(serverLevel);
+            }
             Entity ownerVehicle = owner == null ? null : owner.getVehicle();
             Vec3 explosionPos = this.position();
             for (VehicleEntity target : this.level().getEntitiesOfClass(VehicleEntity.class, this.getBoundingBox().inflate(profile.blastRadius()))) {
@@ -277,6 +295,45 @@ public final class VehicleMissileEntity extends Entity {
         this.discard();
     }
 
+    /** Vanilla's explosion, with block resistance scaled down by the warhead's class (see BLOCK_RESISTANCE_SCALE). */
+    private ExplosionDamageCalculator blockBreakingCalculator() {
+        float scale = BLOCK_RESISTANCE_SCALE.getOrDefault(this.weaponId, 1.0F);
+        return new EntityBasedExplosionDamageCalculator(this) {
+            @Override
+            public Optional<Float> getBlockExplosionResistance(Explosion explosion, BlockGetter level, BlockPos pos, BlockState state, FluidState fluid) {
+                Optional<Float> resistance = super.getBlockExplosionResistance(explosion, level, pos, state, fluid);
+                if (scale >= 1.0F || !fluid.isEmpty()) {
+                    return resistance;
+                }
+                return resistance.map(value -> value >= BLAST_PROOF_RESISTANCE ? value : value * scale);
+            }
+        };
+    }
+
+    /** Spreads fire over the ground around the blast and sets everything caught in it burning. */
+    private void igniteSurroundings(ServerLevel level) {
+        BlockPos centre = this.blockPosition();
+        int radius = Mth.ceil(INCENDIARY_RADIUS);
+        for (BlockPos pos : BlockPos.betweenClosed(centre.offset(-radius, -radius, -radius), centre.offset(radius, radius, radius))) {
+            if (pos.distSqr(centre) > INCENDIARY_RADIUS * INCENDIARY_RADIUS || this.random.nextFloat() > INCENDIARY_COVERAGE) {
+                continue;
+            }
+            if (level.getBlockState(pos).isAir() && BaseFireBlock.canBePlacedAt(level, pos, Direction.UP)) {
+                level.setBlockAndUpdate(pos, BaseFireBlock.getState(level, pos));
+            }
+        }
+        for (Entity entity : level.getEntities(this, this.getBoundingBox().inflate(INCENDIARY_RADIUS))) {
+            if (!entity.fireImmune() && entity.distanceToSqr(this) <= INCENDIARY_RADIUS * INCENDIARY_RADIUS
+                    && !(entity instanceof VehicleEntity)) {
+                entity.igniteForSeconds(INCENDIARY_BURN_SECONDS);
+            }
+        }
+        double spread = INCENDIARY_RADIUS * 0.6D;
+        sendLongDistanceParticles(level, ParticleTypes.FLAME, this.getX(), this.getY() + 0.5D, this.getZ(), 220, spread, 0.8D, spread, 0.08D);
+        sendLongDistanceParticles(level, ParticleTypes.LAVA, this.getX(), this.getY() + 0.5D, this.getZ(), 40, spread * 0.6D, 0.5D, spread * 0.6D, 0.0D);
+        level.playSound(null, this.getX(), this.getY(), this.getZ(), SoundEvents.FIRECHARGE_USE, SoundSource.BLOCKS, 6.0F, 0.6F);
+    }
+
     /** Scales with the warhead: a fireball, flying fire and earth, a column of smoke, a deep boom and a shake felt at a distance. */
     private void spawnMissileExplosionEffects(ServerLevel serverLevel) {
         float power = this.profile().explosionPower();
@@ -285,17 +342,13 @@ public final class VehicleMissileEntity extends Entity {
         double x = this.getX();
         double y = this.getY();
         double z = this.getZ();
-        sendLongDistanceParticles(serverLevel, ModParticleTypes.BIG_EXPLOSION.get(), x, y, z, 1 + (int) (size * 5.0F), spread * 0.35D, spread * 0.35D, spread * 0.35D, 0.01D);
-        sendLongDistanceParticles(serverLevel, ModParticleTypes.SMALL_EXPLOSION.get(), x, y, z, 8 + (int) (size * 40.0F), spread, spread, spread, 0.16D);
-        sendLongDistanceParticles(serverLevel, ModParticleTypes.FIRE.get(), x, y, z, 6 + (int) (size * 36.0F), spread, spread * 0.7D, spread, 0.12D);
-        sendLongDistanceParticles(serverLevel, ModParticleTypes.SMOKE.get(), x, y, z, 6 + (int) (size * 30.0F), spread, spread, spread, 0.05D);
-        sendLongDistanceParticles(serverLevel, ParticleTypes.CAMPFIRE_SIGNAL_SMOKE, x, y, z, 2 + (int) (size * 20.0F), spread * 0.6D, 0.6D, spread * 0.6D, 0.03D);
-        BlockState ground = serverLevel.getBlockState(BlockPos.containing(x, y - 0.5D, z));
-        if (ground.isAir()) {
-            ground = serverLevel.getBlockState(BlockPos.containing(x, y - 1.5D, z));
-        }
-        if (!ground.isAir()) {
-            sendLongDistanceParticles(serverLevel, new BlockParticleOption(ParticleTypes.BLOCK, ground), x, y, z, 10 + (int) (size * 90.0F), spread, spread * 0.5D, spread, 0.6D);
+        MissileBlastPayload blast = new MissileBlastPayload(this.position(), power, (float) this.profile().blastRadius(),
+                INCENDIARY.contains(this.weaponId));
+        for (ServerPlayer player : serverLevel.players()) {
+            if (player.position().distanceToSqr(this.position()) < BLAST_VISIBLE_RANGE * BLAST_VISIBLE_RANGE
+                    && ServerPlayNetworking.canSend(player, MissileBlastPayload.TYPE)) {
+                ServerPlayNetworking.send(player, blast);
+            }
         }
         serverLevel.playSound(null, x, y, z, SoundEvents.GENERIC_EXPLODE.value(), SoundSource.BLOCKS, 8.0F + size * 18.0F, 0.75F - size * 0.2F);
         serverLevel.playSound(null, x, y, z, SoundEvents.GENERIC_EXPLODE.value(), SoundSource.BLOCKS, 8.0F + size * 18.0F, 0.5F);

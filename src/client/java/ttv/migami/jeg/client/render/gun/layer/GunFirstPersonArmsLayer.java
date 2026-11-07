@@ -93,9 +93,17 @@ public final class GunFirstPersonArmsLayer extends GeoRenderLayer<AnimatedGunIte
     private static void registerArmBone(RenderPassInfo<GeoRenderState> passInfo, ArmSide side) {
         String fake = side == ArmSide.LEFT ? "fake_left_arm" : "fake_right_arm";
         String normal = side == ArmSide.LEFT ? "left_arm" : "right_arm";
+        String grip = side == ArmSide.LEFT ? "left_grip" : "right_grip";
+        // The minigun's hands stay on fixed handles in every animation. Anchor the wrist to the actual handle,
+        // rather than using the old shoulder-based arm pose, which leaves the hand raised beside the gun.
+        var gripBone = passInfo.model().getBone(grip);
+        if (gripBone.isPresent()) {
+            passInfo.addPerBoneRender(gripBone.get(), new ArmRenderTask(side, true));
+            return;
+        }
         // Prefer normal arm bones; fake_* are often emergency anchors that can drift into camera.
         passInfo.model().getBone(normal).or(() -> passInfo.model().getBone(fake)).ifPresent(bone -> {
-            ArmRenderTask task = new ArmRenderTask(side);
+            ArmRenderTask task = new ArmRenderTask(side, false);
             // Check only the bone this task renders. Unposed fake arms must not hide a posed normal arm, and each
             // render pass needs its own result when two guns are held or a weapon is being switched.
             passInfo.addBoneUpdater((info, snapshots) ->
@@ -110,10 +118,13 @@ public final class GunFirstPersonArmsLayer extends GeoRenderLayer<AnimatedGunIte
 
     private static final class ArmRenderTask implements PerBoneRender<GeoRenderState> {
         private final ArmSide side;
+        private final boolean wristAnchor;
         private boolean posed;
 
-        private ArmRenderTask(ArmSide side) {
+        private ArmRenderTask(ArmSide side, boolean wristAnchor) {
             this.side = side;
+            this.wristAnchor = wristAnchor;
+            this.posed = wristAnchor;
         }
 
         @Override
@@ -143,9 +154,9 @@ public final class GunFirstPersonArmsLayer extends GeoRenderLayer<AnimatedGunIte
                     (pose, buffer) -> {
                         PoseStack armPose = new PoseStack();
                         armPose.last().set(pose);
-                        renderPreparedArmPart(armPart, armPose, buffer, light, side);
+                        renderPreparedArmPart(armPart, armPose, buffer, light, side, wristAnchor);
                         if (sleeveVisible) {
-                            renderPreparedArmPart(sleevePart, armPose, buffer, light, side);
+                            renderPreparedArmPart(sleevePart, armPose, buffer, light, side, wristAnchor);
                         }
                     }
             );
@@ -156,22 +167,24 @@ public final class GunFirstPersonArmsLayer extends GeoRenderLayer<AnimatedGunIte
                 PoseStack poseStack,
                 com.mojang.blaze3d.vertex.VertexConsumer buffer,
                 int light,
-                ArmSide side
+                ArmSide side,
+                boolean wristAnchor
         ) {
             PartState state = PartState.capture(part);
             try {
-                prepareArmPart(part, side);
+                prepareArmPart(part, side, wristAnchor);
                 part.render(poseStack, buffer, light, OverlayTexture.NO_OVERLAY);
             } finally {
                 state.restore(part);
             }
         }
 
-        private static void prepareArmPart(ModelPart part, ArmSide side) {
+        private static void prepareArmPart(ModelPart part, ArmSide side, boolean wristAnchor) {
             part.resetPose();
             part.visible = true;
             float xOffset = side == ArmSide.LEFT ? -ARM_X_OFFSET_PIXELS : ARM_X_OFFSET_PIXELS;
-            float yOffset = side == ArmSide.LEFT ? LEFT_ARM_Y_OFFSET_PIXELS : RIGHT_ARM_Y_OFFSET_PIXELS;
+            float yOffset = wristAnchor ? -10.0F * ARM_HEIGHT_SCALE
+                    : side == ArmSide.LEFT ? LEFT_ARM_Y_OFFSET_PIXELS : RIGHT_ARM_Y_OFFSET_PIXELS;
             part.setPos(xOffset, yOffset, 0.0F);
             part.xRot = 0.0F;
             part.yRot = 0.0F;

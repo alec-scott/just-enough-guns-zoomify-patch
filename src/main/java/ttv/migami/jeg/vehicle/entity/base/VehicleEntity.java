@@ -120,7 +120,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     private static final double VEHICLE_IDLE_SYNC_Y_DELTA = 1.0E-3D;
     private static final float OTHER_VEHICLE_COLLISION_LENGTH_SCALE = 1.2F;
     /** Vehicle weapons reload 20% faster than the same gun carried by hand. */
-    private static final float VEHICLE_RELOAD_TIME_SCALE = 0.8F;
+    private static final float VEHICLE_RELOAD_TIME_SCALE = 0.64F;
     private static final float SPEEDBOAT_COLLISION_LENGTH_SCALE = 1.2F;
     private static final double SPEEDBOAT_COLLISION_FORWARD_SHIFT = 0.15D;
     private static final double BOAT_WATER_PROBE_BELOW = 0.2D;
@@ -167,7 +167,11 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     private static final EntityDataAccessor<Integer> DATA_HELICOPTER_STARTUP = SynchedEntityData.defineId(VehicleEntity.class, EntityDataSerializers.INT);
     private static final EntityDataAccessor<Float> DATA_ROLL = SynchedEntityData.defineId(VehicleEntity.class, EntityDataSerializers.FLOAT);
     private static final EntityDataAccessor<Boolean> DATA_WEAPON_FIRING = SynchedEntityData.defineId(VehicleEntity.class, EntityDataSerializers.BOOLEAN);
+    private static final EntityDataAccessor<Float> DATA_ROTARY_GUN_SPIN = SynchedEntityData.defineId(VehicleEntity.class, EntityDataSerializers.FLOAT);
+    private static final EntityDataAccessor<Boolean> DATA_ROTARY_GUN_REQUESTED = SynchedEntityData.defineId(VehicleEntity.class, EntityDataSerializers.BOOLEAN);
     private static final EntityDataAccessor<Integer> DATA_ACTIVE_FIRE_WEAPON = SynchedEntityData.defineId(VehicleEntity.class, EntityDataSerializers.INT);
+    /** The dye the vehicle is painted with (DyeColor id), or -1 for its factory finish. */
+    private static final EntityDataAccessor<Integer> DATA_PAINT = SynchedEntityData.defineId(VehicleEntity.class, EntityDataSerializers.INT);
     private static final Identifier RIFLE_AMMO = Reference.id("rifle_ammo");
     private static final Identifier FLARE_AMMO = Reference.id("flare");
     private static final int FLARE_DECOY_COOLDOWN_TICKS = 400;
@@ -199,6 +203,11 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     private static final String TAG_ENGINE_HEALTH = "EngineHealth";
     private static final String TAG_SUB_ENGINE_HEALTH = "SubEngineHealth";
     private static final String TAG_TURRET_HEALTH = "TurretHealth";
+    private static final String TAG_PAINT = "Paint";
+    private static final double TAIL_CAMERA_SIDE_OFFSET = 0.35D;
+    private static final double TAIL_CAMERA_HEIGHT = 0.45D;
+    private static final double TAIL_CAMERA_INSET = 0.5D;
+    private static final float TAIL_CAMERA_DOWN_TILT = 7.0F;
     private static final String TAG_PERSISTENT_DATA = "PersistentData";
     private static final String GECKO_CONTROLLER = "Vehicle";
     private static final Map<String, String> VEHICLE_IDLE_ANIMATIONS = Map.of(
@@ -244,6 +253,8 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     private static final double HELICOPTER_DANGEROUS_DESCENT_WARNING_MIN_ALTITUDE = 8.0D;
     // Below this horizontal speed a fast descent is dangerous; with forward airspeed it is a normal descent.
     private static final double HELICOPTER_LOW_AIRSPEED_THRESHOLD = 0.2D;
+    private static final double HELICOPTER_FORCED_DESCENT_WARNING_MIN_ALTITUDE = 3.0D;
+    private static final double HELICOPTER_FORCED_DESCENT_WARNING_SINK_SPEED = 0.08D;
     // Tracked vehicles: minimum turn rate (degrees per tick per unit of steering), about 40 degrees a second on the spot.
     private static final double TRACK_PIVOT_TURN_RATE = 6.0D;
     private static final double TRACK_PIVOT_POWER_THRESHOLD = 0.05D;
@@ -394,6 +405,11 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     private double airborneMaxY = Double.NaN;
     private int weaponControllerId = -1;
     private boolean weaponFireInput;
+    private float rotaryGunAngle;
+    private float rotaryGunAngleO;
+
+    public static final int ROTARY_GUN_SPOOL_TICKS = 30;
+    public static final int ROTARY_GUN_STOP_TICKS = 45;
     private int seekControllerId = -1;
     private boolean seekInput;
     private int pendingFlareBurstTicks = -1;
@@ -678,7 +694,21 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         builder.define(DATA_HELICOPTER_STARTUP, 0);
         builder.define(DATA_ROLL, 0.0F);
         builder.define(DATA_WEAPON_FIRING, false);
+        builder.define(DATA_ROTARY_GUN_SPIN, 0.0F);
+        builder.define(DATA_ROTARY_GUN_REQUESTED, false);
         builder.define(DATA_ACTIVE_FIRE_WEAPON, -1);
+        builder.define(DATA_PAINT, -1);
+    }
+
+    /** The dye this vehicle has been painted with, or null for its original colours. */
+    @Nullable
+    public net.minecraft.world.item.DyeColor paint() {
+        int id = this.entityData.get(DATA_PAINT);
+        return id < 0 ? null : net.minecraft.world.item.DyeColor.byId(id);
+    }
+
+    public void setPaint(@Nullable net.minecraft.world.item.DyeColor color) {
+        this.entityData.set(DATA_PAINT, color == null ? -1 : color.getId());
     }
 
     public VehicleData vehicleData() {
@@ -1122,6 +1152,22 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         return this.entityData.get(DATA_WEAPON_FIRING);
     }
 
+    public float rotaryGunSpin() {
+        return this.entityData.get(DATA_ROTARY_GUN_SPIN);
+    }
+
+    public boolean rotaryGunRequested() {
+        return this.entityData.get(DATA_ROTARY_GUN_REQUESTED);
+    }
+
+    public float rotaryGunAngle(float partialTick) {
+        return Mth.lerp(partialTick, this.rotaryGunAngleO, this.rotaryGunAngle);
+    }
+
+    public int helicopterShutdownTicks() {
+        return "mi28".equals(this.vehicleDataId().getPath()) ? 360 : 240;
+    }
+
     @Nullable
     public SoundEvent activeVehicleFireSound() {
         VehicleWeaponInfo weapon = this.activeFireWeapon();
@@ -1427,6 +1473,12 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
 
     @Override
     public void tick() {
+        this.rotaryGunAngleO = this.rotaryGunAngle;
+        this.rotaryGunAngle += this.rotaryGunSpin() * this.rotaryGunSpin() * 54.0F;
+        if (this.rotaryGunAngle >= 360.0F) {
+            this.rotaryGunAngle -= 360.0F;
+            this.rotaryGunAngleO -= 360.0F;
+        }
         this.turretYawO = this.turretYaw();
         this.turretPitchO = this.turretPitch();
         this.propellerRotO = this.propellerRot();
@@ -1517,7 +1569,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         }
         VehicleType vehicleType = this.vehicleData().defaults().vehicleType();
         if (vehicleType == VehicleType.HELICOPTER || vehicleType == VehicleType.AIRCRAFT) {
-            this.applyAirVehicleImpactDamage(vehicleType, requestedMovement);
+            this.applyAirVehicleImpactDamage(vehicleType, requestedMovement, wasVerticallySupported);
             return;
         }
         boolean landVehicle = vehicleType == VehicleType.LAND;
@@ -1570,18 +1622,21 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         this.needsSync = true;
     }
 
-    private void applyAirVehicleImpactDamage(VehicleType vehicleType, Vec3 requestedMovement) {
-        if (!this.verticalCollision && !this.horizontalCollision) {
+    private void applyAirVehicleImpactDamage(VehicleType vehicleType, Vec3 requestedMovement, boolean wasVerticallySupported) {
+        // Sitting on the ground, gravity keeps pressing the hull into it; that is resting, not landing. Counting it as an
+        // impact bounced parked helicopters, chipped their health and clanked every few ticks.
+        boolean landing = this.verticalCollision && !wasVerticallySupported;
+        if (!landing && !this.horizontalCollision) {
             return;
         }
-        float damageAmount = this.airVehicleImpactDamage(vehicleType);
+        float damageAmount = this.airVehicleImpactDamage(vehicleType, landing);
         if (damageAmount <= 0.0F) {
             return;
         }
         this.resetAirborneImpactTracking();
         this.ramDamageCooldown = VEHICLE_IMPACT_DAMAGE_COOLDOWN_TICKS;
         Direction bounceDirection = this.impactBounceDirection(requestedMovement);
-        if (this.verticalCollision) {
+        if (landing) {
             this.bounceVertical(bounceDirection);
         }
         if (this.horizontalCollision) {
@@ -1599,9 +1654,9 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         this.hurtVehicleStrikeWithArmor(source, damageAmount);
     }
 
-    private float airVehicleImpactDamage(VehicleType vehicleType) {
+    private float airVehicleImpactDamage(VehicleType vehicleType, boolean landing) {
         double horizontalImpactSpeed = this.horizontalCollision ? this.lastTickHorizontalSpeed : 0.0D;
-        double verticalImpactSpeed = this.verticalCollision ? Math.abs(this.lastTickVerticalSpeed) : 0.0D;
+        double verticalImpactSpeed = landing ? Math.abs(this.lastTickVerticalSpeed) : 0.0D;
         if (vehicleType == VehicleType.HELICOPTER) {
             return (float) (this.vehicleImpactDamage(horizontalImpactSpeed, 0.0D, 0.0D)
                     + this.helicopterVerticalImpactDamage(verticalImpactSpeed));
@@ -2138,6 +2193,8 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     private void tickServerWeapon() {
         if (!this.hasVehicleWeapons()) {
             this.entityData.set(DATA_WEAPON_FIRING, false);
+            this.entityData.set(DATA_ROTARY_GUN_REQUESTED, false);
+            this.entityData.set(DATA_ROTARY_GUN_SPIN, 0.0F);
             this.entityData.set(DATA_ACTIVE_FIRE_WEAPON, -1);
             return;
         }
@@ -2151,7 +2208,8 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         int[] activeFireWeaponSlot = {-1};
         LivingEntity shooter = this.weaponController();
         VehicleWeaponInfo selectedWeapon = shooter == null ? null : this.selectedWeapon(shooter);
-        if (this.shouldLoopVehicleFireSound(shooter, selectedWeapon, this.weaponFireInput)) {
+        this.tickRotaryGun(shooter, selectedWeapon);
+        if (this.vehicleGunReady(selectedWeapon) && this.shouldLoopVehicleFireSound(shooter, selectedWeapon, this.weaponFireInput)) {
             anyFiring[0] = true;
             activeFireWeaponSlot[0] = this.selectedVehicleWeaponIndex(shooter);
         }
@@ -2165,7 +2223,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
                 return true;
             }
             VehicleWeaponInfo aiWeapon = this.selectedWeapon(aiShooter);
-            if (this.shouldLoopVehicleFireSound(aiShooter, aiWeapon, entry.getValue().fire())) {
+            if (this.vehicleGunReady(aiWeapon) && this.shouldLoopVehicleFireSound(aiShooter, aiWeapon, entry.getValue().fire())) {
                 anyFiring[0] = true;
                 activeFireWeaponSlot[0] = this.selectedVehicleWeaponIndex(aiShooter);
             }
@@ -2203,6 +2261,9 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         } else if (!this.hasAmmo(weapon.ammoId())) {
             return false;
         }
+        if (!this.vehicleGunReady(weapon)) {
+            return false;
+        }
         Vec3 direction = this.weaponAimDirection(shooter);
         if (direction.lengthSqr() < 1.0E-4D || !this.consumeEnergy(weapon.energyCost())) {
             return false;
@@ -2229,6 +2290,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         float damage = helicopterGun ? stats.damage() * HELICOPTER_GUN_DAMAGE_MULTIPLIER : stats.damage();
         Vec3 shot = helicopterGun ? this.withGunDispersion(direction) : direction;
         BulletEntity bullet = new BulletEntity(this.level(), shooter, stats, shot.scale(stats.projectileSpeed()), damage, false);
+        bullet.setVehicleRound();
         if (helicopterGun) {
             bullet.setHelicopterGunRound();
         }
@@ -2295,6 +2357,14 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         var flash = "mi28".equals(this.vehicleDataId().getPath())
                 ? ModParticleTypes.SMALL_GUN_MUZZLE_FLASH.get() : ModParticleTypes.GUN_MUZZLE_FLASH.get();
         level.sendParticles(flash, muzzle.x, muzzle.y, muzzle.z, 0, forward.x, forward.y, forward.z, 0.12D);
+        // A rotary gun on a helicopter barks: a hot flare and a breath of smoke on top of the flash. Not on the MI-28's
+        // chin gun, whose zoomed sight sits right on the muzzle: the smoke would fill the gunner's whole view.
+        if (this.vehicleData().defaults().vehicleType() == VehicleType.HELICOPTER && !"mi28".equals(this.vehicleDataId().getPath())) {
+            this.spawnVehicleMuzzleFlareParticle(level, new CannonMuzzleFlareOption(1.0F, 0.88F, 0.6F, 3, 0.75F, 1, 0.12F), muzzle, direction, 2, 0.04D, 0.22D);
+            if (this.random.nextInt(3) == 0) {
+                this.spawnVehicleMuzzleFlareParticle(level, new CannonMuzzleFlareOption(0.5F, 0.47F, 0.44F, 16, 0.6F, 2, 0.02F), muzzle, direction, 1, 0.0D, 0.08D);
+            }
+        }
     }
 
     private void spawnVehicleMuzzleFlareParticle(ServerLevel level, CannonMuzzleFlareOption option, Vec3 center, Vec3 direction, int count, double radius, double speed) {
@@ -2330,6 +2400,29 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         }
         var sound = start ? stats.reloadStartSoundEvent() : stats.reloadEndSoundEvent().or(() -> stats.reloadLoadSoundEvent());
         sound.ifPresent(value -> this.level().playSound(null, this.getX(), this.getY(), this.getZ(), value, SoundSource.PLAYERS, 2.0F, 1.0F));
+    }
+
+    private boolean isRotaryGun(@Nullable VehicleWeaponInfo weapon) {
+        return weapon != null && "mi28".equals(this.vehicleDataId().getPath())
+                && VehicleSoundHelper.isHelicopterGun(this, weapon);
+    }
+
+    private boolean vehicleGunReady(@Nullable VehicleWeaponInfo weapon) {
+        return !this.isRotaryGun(weapon) || this.rotaryGunSpin() >= 1.0F;
+    }
+
+    private void tickRotaryGun(@Nullable LivingEntity shooter, @Nullable VehicleWeaponInfo weapon) {
+        boolean requested = this.isRotaryGun(weapon) && this.shouldLoopVehicleFireSound(shooter, weapon, this.weaponFireInput);
+        for (var entry : this.aiWeaponControlBySeat.entrySet()) {
+            LivingEntity controller = this.aiWeaponController(entry.getValue(), entry.getKey());
+            VehicleWeaponInfo aiWeapon = controller == null ? null : this.selectedWeapon(controller);
+            requested |= this.isRotaryGun(aiWeapon) && this.shouldLoopVehicleFireSound(controller, aiWeapon, entry.getValue().fire());
+        }
+        float spin = this.rotaryGunSpin();
+        this.entityData.set(DATA_ROTARY_GUN_REQUESTED, requested);
+        this.entityData.set(DATA_ROTARY_GUN_SPIN, requested
+                ? Math.min(1.0F, spin + 1.0F / ROTARY_GUN_SPOOL_TICKS)
+                : Math.max(0.0F, spin - 1.0F / ROTARY_GUN_STOP_TICKS));
     }
 
     private boolean shouldLoopVehicleFireSound(@Nullable LivingEntity shooter, @Nullable VehicleWeaponInfo weapon, boolean fireInput) {
@@ -3928,6 +4021,32 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         return this.interpolatedVehiclePosition(partialTick).add(offset);
     }
 
+    /**
+     * The helicopter's tail camera: an action camera bolted to the top of the tail boom near its end, looking back along
+     * the boom at the cabin and rotor. It is rigid, so it pitches and banks with the airframe.
+     */
+    public Vec3 tailCameraPosition(float partialTick) {
+        OBBInfo.Box tail = null;
+        for (OBBInfo.Box box : this.vehicleData().defaults().obb().boxes()) {
+            if (tail == null || box.z() - box.halfDepth() < tail.z() - tail.halfDepth()) {
+                tail = box;
+            }
+        }
+        double x = TAIL_CAMERA_SIDE_OFFSET;
+        double y = tail == null ? 2.0D : tail.y() + tail.halfHeight() + TAIL_CAMERA_HEIGHT;
+        double z = tail == null ? -4.0D : tail.z() - tail.halfDepth() + TAIL_CAMERA_INSET;
+        return this.interpolatedVehiclePosition(partialTick).add(this.rotateLocalOffsetWithPose(x, y, z, partialTick));
+    }
+
+    /** Yaw, pitch and roll of the tail camera: the hull's own attitude, tipped down a little towards the cabin. */
+    public Vec3 tailCameraRotation(float partialTick) {
+        return new Vec3(
+                Mth.rotLerp(partialTick, this.yRotO, this.getYRot()),
+                Mth.lerp(partialTick, this.xRotO, this.getXRot()) + TAIL_CAMERA_DOWN_TILT,
+                this.roll(partialTick)
+        );
+    }
+
     public Vec3 aircraftCameraRotationFor(float partialTick) {
         return new Vec3(
                 Mth.rotLerp(partialTick, this.yRotO, this.getYRot()),
@@ -4749,7 +4868,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         boolean altitudeLimited = altitudeLimitFactor <= 0.0D;
         boolean lowHealthDescent = this.isLowHealthDecayActive();
         boolean forcedDescent = !this.onGround() && ((pilot == null && !autopilot) || !hasEnergy || lowHealthDescent);
-        boolean rotorIdleLocked = this.onGround() && pilot == null && currentRotorSpeed <= 0.005F;
+        boolean rotorIdleLocked = this.onGround() && pilot == null && currentRotorSpeed <= 0.0005F;
         if (rotorIdleLocked) {
             up = false;
             down = false;
@@ -4935,14 +5054,24 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
             this.holdPowerTick = 0;
         }
 
-        float nextRotorSpeed = (float) Mth.lerp(0.18F, currentRotorSpeed, (float) this.enginePower);
+        // Once landed, the unpowered rotor coasts independently of engine power. Braking must not snap it to a stop.
+        boolean coasting = this.onGround() && !up && (this.engineStartOver || !this.engineStart);
+        if (coasting) {
+            this.enginePower = 0.0D;
+            this.engineStart = false;
+            this.engineStartOver = false;
+        }
+        float nextRotorSpeed = coasting
+                ? Math.max(0.0F, currentRotorSpeed - (float) HELICOPTER_HOVER_POWER / this.helicopterShutdownTicks())
+                : Mth.lerp(0.18F, currentRotorSpeed, (float) this.enginePower);
         // The rotor winds up on the ground; collective cannot lift the helicopter before operating RPM.
-        float liftRotorSpeed = this.engineStart && !this.engineStartOver ? 0.0F : nextRotorSpeed;
+        float liftRotorSpeed = coasting || (this.engineStart && !this.engineStartOver) ? 0.0F : nextRotorSpeed;
         if (rotorIdleLocked) {
             nextRotorSpeed = 0.0F;
             liftRotorSpeed = 0.0F;
         }
-        if (!rotorIdleLocked && !this.onGround() && (velocity.y < -1.0E-4D || forcedDescent)) {
+        if (!rotorIdleLocked && !this.onGround() && (velocity.y < -1.0E-4D || forcedDescent)
+                && (this.engineStartOver || currentRotorSpeed >= HELICOPTER_DESCENT_ROTOR_SPEED)) {
             nextRotorSpeed = Math.max(nextRotorSpeed, HELICOPTER_DESCENT_ROTOR_SPEED);
         }
         this.entityData.set(DATA_PROPELLER_SPEED, rotorIdleLocked ? 0.0F : nextRotorSpeed * 0.9995F);
@@ -5281,6 +5410,12 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     }
 
     private void warnHelicopterDangerousDescent(boolean forcedDescent, double altitude) {
+        // A parked helicopter with its engine off is not falling, even on a tick where it is briefly off the ground
+        // (boarding it, settling on its skids): only warn of a forced descent when it is high up and actually dropping.
+        if (forcedDescent && (altitude <= HELICOPTER_FORCED_DESCENT_WARNING_MIN_ALTITUDE
+                || this.getDeltaMovement().y > -HELICOPTER_FORCED_DESCENT_WARNING_SINK_SPEED)) {
+            return;
+        }
         if (this.level().isClientSide()
                 || (!forcedDescent && (altitude <= HELICOPTER_DANGEROUS_DESCENT_WARNING_MIN_ALTITUDE
                 || this.getDeltaMovement().y >= -HELICOPTER_SAFE_DESCENT_SPEED
@@ -5646,6 +5781,10 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         output.putFloat(TAG_ENGINE_HEALTH, this.engineHealth);
         output.putFloat(TAG_SUB_ENGINE_HEALTH, this.subEngineHealth);
         output.putFloat(TAG_TURRET_HEALTH, this.turretHealth);
+        net.minecraft.world.item.DyeColor paint = this.paint();
+        if (paint != null) {
+            output.putString(TAG_PAINT, paint.getName());
+        }
         if (!this.persistentData.isEmpty()) {
             output.store(TAG_PERSISTENT_DATA, CompoundTag.CODEC, this.persistentData.copy());
         }
@@ -5678,6 +5817,8 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         this.engineHealth = input.getFloatOr(TAG_ENGINE_HEALTH, PART_MAX_HEALTH);
         this.subEngineHealth = input.getFloatOr(TAG_SUB_ENGINE_HEALTH, PART_MAX_HEALTH);
         this.turretHealth = input.getFloatOr(TAG_TURRET_HEALTH, PART_MAX_HEALTH);
+        String paint = input.getStringOr(TAG_PAINT, "");
+        this.setPaint(paint.isEmpty() ? null : net.minecraft.world.item.DyeColor.byName(paint, null));
         this.clearPersistentData();
         input.read(TAG_PERSISTENT_DATA, CompoundTag.CODEC).ifPresent(this.persistentData::merge);
         this.readSeatAssignments(input);
@@ -6067,6 +6208,10 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
             this.discard();
             return InteractionResult.CONSUME;
         }
+        InteractionResult painted = this.tryPaint(player, hand, stack);
+        if (painted != null) {
+            return painted;
+        }
         if (!this.level().isClientSide() && player.isShiftKeyDown() && player instanceof ServerPlayer serverPlayer) {
             serverPlayer.openMenu(this);
             return InteractionResult.CONSUME;
@@ -6075,6 +6220,36 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
             player.startRiding(this);
         }
         return this.level().isClientSide() ? InteractionResult.SUCCESS : InteractionResult.SUCCESS_SERVER;
+    }
+
+    /**
+     * Right-clicking with a dye paints the vehicle that colour, using up the dye; a water bucket washes the paint off.
+     * Returns null when the held item does neither, so the click goes on to board or open the vehicle.
+     */
+    @Nullable
+    private InteractionResult tryPaint(Player player, InteractionHand hand, ItemStack stack) {
+        net.minecraft.world.item.DyeColor dye = stack.get(net.minecraft.core.component.DataComponents.DYE);
+        if (dye != null && stack.getItem() instanceof net.minecraft.world.item.DyeItem) {
+            if (dye == this.paint()) {
+                // Already that colour: keep the dye, and do not climb in either.
+                return this.level().isClientSide() ? InteractionResult.SUCCESS : InteractionResult.SUCCESS_SERVER;
+            }
+            if (!this.level().isClientSide()) {
+                this.setPaint(dye);
+                this.level().playSound(null, this.getX(), this.getY(), this.getZ(), SoundEvents.DYE_USE, SoundSource.PLAYERS, 1.0F, 1.0F);
+                this.level().playSound(null, this.getX(), this.getY(), this.getZ(), SoundEvents.SLIME_BLOCK_PLACE, SoundSource.PLAYERS, 0.6F, 0.8F);
+                stack.consume(1, player);
+            }
+            return this.level().isClientSide() ? InteractionResult.SUCCESS : InteractionResult.SUCCESS_SERVER;
+        }
+        if (this.paint() != null && stack.is(net.minecraft.world.item.Items.WATER_BUCKET)) {
+            if (!this.level().isClientSide()) {
+                this.setPaint(null);
+                this.level().playSound(null, this.getX(), this.getY(), this.getZ(), SoundEvents.GENERIC_SPLASH, SoundSource.PLAYERS, 0.8F, 1.0F);
+            }
+            return this.level().isClientSide() ? InteractionResult.SUCCESS : InteractionResult.SUCCESS_SERVER;
+        }
+        return null;
     }
 
     @Override

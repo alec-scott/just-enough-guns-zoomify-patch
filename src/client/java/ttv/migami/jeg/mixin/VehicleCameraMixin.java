@@ -70,6 +70,12 @@ public abstract class VehicleCameraMixin implements VehicleCameraHandler.Vehicle
         boolean detached = !cameraType.isFirstPerson();
         boolean thirdPersonReverse = cameraType.isMirrored();
         if (detached) {
+            if (VehicleCameraHandler.isTailCameraActive(vehicle)) {
+                Vec3 position = vehicle.tailCameraPosition(partialTick);
+                this.jeg$setCameraRotation(vehicle.tailCameraRotation(partialTick));
+                this.setPosition(position.x, position.y, position.z);
+                return;
+            }
             if (!vehicle.usesVehiclePoseTransform()) {
                 VehicleCameraHandler.applyThirdPersonCameraOffset((Camera) (Object) this);
                 return;
@@ -145,8 +151,10 @@ public abstract class VehicleCameraMixin implements VehicleCameraHandler.Vehicle
             return;
         }
         this.rotation.rotationYXZ((float) Math.PI - yaw * DEG_TO_RAD, -pitch * DEG_TO_RAD, roll * DEG_TO_RAD);
-        this.forwards.set(0.0F, 0.0F, 1.0F).rotate(this.rotation);
+        // Same basis as vanilla's setRotation (forward -Z, left -X). With +Z and +X here, a banking vehicle's camera
+        // reported its forward and left reversed, so anything reading them (the sound listener among others) was backwards.
+        this.forwards.set(0.0F, 0.0F, -1.0F).rotate(this.rotation);
         this.up.set(0.0F, 1.0F, 0.0F).rotate(this.rotation);
-        this.left.set(1.0F, 0.0F, 0.0F).rotate(this.rotation);
+        this.left.set(-1.0F, 0.0F, 0.0F).rotate(this.rotation);
     }
 }

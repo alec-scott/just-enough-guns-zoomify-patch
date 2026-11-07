@@ -22,8 +22,8 @@ import ttv.migami.jeg.init.ModSounds;
  */
 public final class MinigunClient {
     private static final float MAX_BARREL_DEGREES_PER_TICK = 54.0F;
-    private static final float WHIR_VOLUME = 2.0F;
-    private static final float FIRE_VOLUME = 7.5F;
+    private static final float WHIR_VOLUME = 0.3F;
+    private static final float FIRE_VOLUME = 0.75F;
     private static final float WHIR_MIN_PITCH = 0.55F;
     // Below this the barrels are as good as stopped, so starting again plays the full charge-up.
     private static final float RESTART_FROM_STOPPED = 0.15F;
@@ -56,7 +56,9 @@ public final class MinigunClient {
             this.delay = 0;
             this.volume = volume;
             this.pitch = 1.0F;
-            this.attenuation = Attenuation.LINEAR;
+            // A world-space source at the shooter's last tick position moves around the listener as they turn.
+            this.relative = entity == Minecraft.getInstance().player;
+            this.attenuation = this.relative ? Attenuation.NONE : Attenuation.LINEAR;
             this.follow();
         }
 
@@ -78,9 +80,9 @@ public final class MinigunClient {
         }
 
         private void follow() {
-            this.x = this.entity.getX();
-            this.y = this.entity.getEyeY();
-            this.z = this.entity.getZ();
+            this.x = this.relative ? 0.0D : this.entity.getX();
+            this.y = this.relative ? 0.0D : this.entity.getEyeY();
+            this.z = this.relative ? 0.0D : this.entity.getZ();
         }
     }
 

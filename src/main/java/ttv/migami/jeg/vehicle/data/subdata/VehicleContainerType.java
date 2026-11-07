@@ -4,6 +4,8 @@ public enum VehicleContainerType {
     NONE(0, 0),
     MINI(1, 9),
     SMALL(3, 9),
+    /** A helicopter's cabin: five rows. */
+    CABIN(5, 9),
     MEDIUM(6, 9),
     LARGE(6, 13),
     HUGE(6, 17);

@@ -50,6 +50,9 @@ public final class AnimatedGunRenderer extends GeoItemRenderer<AnimatedGunItem> 
     private static final DataTicket<Boolean> USING_VANILLA_NON_FIRST_PERSON =
             DataTicket.create("jeg:using_vanilla_non_first_person", Boolean.class);
     private static final DataTicket<Float> BARREL_ANGLE = DataTicket.create("jeg:barrel_angle", Float.class);
+    /** Who holds the gun, and whether this is the hand they shoot with, so its muzzle can be tracked. */
+    private static final DataTicket<Integer> HOLDER_ID = DataTicket.create("jeg:holder_id", Integer.class);
+    private static final DataTicket<Boolean> SHOOTING_HAND = DataTicket.create("jeg:shooting_hand", Boolean.class);
     private static final Set<String> FIRST_PERSON_ARM_BONES =
             Set.of("left_arm", "right_arm", "fake_left_arm", "fake_right_arm");
 
@@ -128,10 +131,17 @@ public final class AnimatedGunRenderer extends GeoItemRenderer<AnimatedGunItem> 
             renderState.addGeckolibData(VANILLA_ITEM_STATE, context.vanillaRenderState());
         }
         renderState.addGeckolibData(USING_VANILLA_NON_FIRST_PERSON, shouldUseVanillaNonFirstPerson(perspective, renderState.getOrDefaultGeckolibData(VANILLA_ITEM_STATE, (ItemStackRenderState) null), renderState, animatable.getStats().id().getPath()));
+        var owner = context != null && context.itemOwner() != null ? context.itemOwner().asLivingEntity() : null;
+        Minecraft minecraft = Minecraft.getInstance();
+        int holder = owner != null ? owner.getId() : minecraft.player != null ? minecraft.player.getId() : -1;
+        renderState.addGeckolibData(HOLDER_ID, holder);
+        var holderEntity = owner != null ? owner : minecraft.player;
+        boolean shootingHand = holderEntity != null && (perspective == (holderEntity.getMainArm() == HumanoidArm.LEFT
+                ? ItemDisplayContext.THIRD_PERSON_LEFT_HAND : ItemDisplayContext.THIRD_PERSON_RIGHT_HAND)
+                || perspective == (holderEntity.getMainArm() == HumanoidArm.LEFT
+                ? ItemDisplayContext.FIRST_PERSON_LEFT_HAND : ItemDisplayContext.FIRST_PERSON_RIGHT_HAND));
+        renderState.addGeckolibData(SHOOTING_HAND, shootingHand);
         if (MinigunSpin.isMinigun(stack)) {
-            var owner = context != null && context.itemOwner() != null ? context.itemOwner().asLivingEntity() : null;
-            Minecraft minecraft = Minecraft.getInstance();
-            int holder = owner != null ? owner.getId() : minecraft.player != null ? minecraft.player.getId() : -1;
             renderState.addGeckolibData(BARREL_ANGLE, MinigunClient.barrelAngle(holder, partialTick));
         }
     }
@@ -295,6 +305,9 @@ public final class AnimatedGunRenderer extends GeoItemRenderer<AnimatedGunItem> 
             passInfo.addBoneUpdater((info, snapshots) ->
                     snapshots.ifPresent("missile", snapshot -> snapshot.skipRender(true))
             );
+        }
+        if ((isFirstPerson(ctx) || isThirdPerson(ctx)) && renderState.getOrDefaultGeckolibData(SHOOTING_HAND, false)) {
+            GunMuzzleTracker.track(passInfo, renderState.getOrDefaultGeckolibData(HOLDER_ID, -1), isFirstPerson(ctx));
         }
         if (isFirstPerson(ctx)) {
             passInfo.addBoneUpdater((info, snapshots) ->

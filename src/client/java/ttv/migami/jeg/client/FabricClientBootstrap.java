@@ -87,6 +87,7 @@ import ttv.migami.jeg.network.NetworkHandler;
 import ttv.migami.jeg.vehicle.client.VehicleClientState;
 import ttv.migami.jeg.vehicle.client.VehicleInputHandler;
 import ttv.migami.jeg.vehicle.client.audio.VehicleFireSoundInstance;
+import ttv.migami.jeg.vehicle.client.audio.VehicleRotaryGunAudio;
 import ttv.migami.jeg.vehicle.entity.base.VehicleEntity;
 import ttv.migami.jeg.vehicle.client.render.A10Renderer;
 import ttv.migami.jeg.vehicle.client.render.Ah6Renderer;
@@ -328,6 +329,8 @@ public final class FabricClientBootstrap {
                 BulletTrailRenderer.render(context.poseStack(), context.bufferSource(), partialTick);
             }
             renderMuzzleFlashes(context.poseStack(), context.bufferSource(), partialTick);
+            ttv.migami.jeg.client.render.MissileTrailRenderer.render(context.poseStack(), context.bufferSource(), partialTick);
+            ttv.migami.jeg.client.render.MissileBlastRenderer.render(context.poseStack(), context.bufferSource(), partialTick);
         });
 
         ClientTickEvents.START_CLIENT_TICK.register(FabricClientBootstrap::handleOffhandSwapOverride);
@@ -342,6 +345,8 @@ public final class FabricClientBootstrap {
                 BulletTrailRenderer.tick();
             }
             tickMuzzleFlashState();
+            ttv.migami.jeg.client.render.MissileBlastRenderer.tick();
+            ttv.migami.jeg.client.render.MissileTrailRenderer.tick();
             CrosshairHandler.tick();
             tickTransientPrompts(client);
 
@@ -363,6 +368,7 @@ public final class FabricClientBootstrap {
 
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
             ttv.migami.jeg.vehicle.client.audio.HelicopterEngineAudio.clear(client);
+            VehicleRotaryGunAudio.clear(client);
             Config.setSyncedMagazineFeedEnabled(null);
             Config.setSyncedHelicopterFlight(null);
             BulletTrailRenderer.clear();
@@ -403,6 +409,7 @@ public final class FabricClientBootstrap {
 
     private static void tickVehicleFireAudio(LocalPlayer player) {
         Minecraft minecraft = Minecraft.getInstance();
+        VehicleRotaryGunAudio.tick(minecraft);
         if (minecraft.level == null) {
             VEHICLE_FIRE_SOUNDS.clear();
             return;
@@ -416,13 +423,14 @@ public final class FabricClientBootstrap {
                 // The barrels run on for a moment after the gun stops firing.
                 var fireLoop = ModSounds.ALL.get(Reference.id("item.minigun.fire_loop"));
                 var fireStop = ModSounds.ALL.get(Reference.id("item.minigun.fire_stop"));
-                if (entity != null && fireLoop != null && fireStop != null && entry.getValue().matches(fireLoop.get())) {
-                    minecraft.level.playLocalSound(entity.getX(), entity.getY(), entity.getZ(), fireStop.get(), SoundSource.PLAYERS, 5.0F, 1.0F, false);
+                if (entity instanceof VehicleEntity vehicle && fireLoop != null && fireStop != null
+                        && entry.getValue().matches(fireLoop.get())) {
+                    VehicleRotaryGunAudio.playStop(minecraft, vehicle);
                 }
                 return true;
             }
             var sound = vehicle.activeVehicleFireSound();
-            if (sound == null || !entry.getValue().matches(sound)) {
+            if (sound == null || !entry.getValue().matches(sound) || !entry.getValue().listenerModeMatches()) {
                 minecraft.getSoundManager().stop(entry.getValue());
                 return true;
             }
@@ -746,8 +754,8 @@ public final class FabricClientBootstrap {
             return;
         }
 
-        int screenWidth = minecraft.getWindow().getGuiScaledWidth();
-        int screenHeight = minecraft.getWindow().getGuiScaledHeight();
+        int screenWidth = guiGraphics.guiWidth();
+        int screenHeight = guiGraphics.guiHeight();
         int x = screenWidth / 2 - TIMER_BAR_WIDTH / 2;
         int y = screenHeight / 2 + 24;
         ItemStack held = player.getMainHandItem();
@@ -992,6 +1000,7 @@ public final class FabricClientBootstrap {
         if (minecraft.level == null) {
             MUZZLE_FLASHES.clear();
             firstPersonGunPose = null;
+            ttv.migami.jeg.client.render.gun.GunMuzzleTracker.clear();
             return;
         }
         MUZZLE_FLASHES.entrySet().removeIf(entry -> {
@@ -1024,7 +1033,11 @@ public final class FabricClientBootstrap {
                 continue;
             }
 
-            Vec3 muzzlePos = computeMuzzlePosition(living, held, partialTick);
+            // The flash sits on the gun's muzzle as it was last drawn; the old estimate from the eye only stands in for it.
+            Vec3 muzzlePos = ttv.migami.jeg.client.render.gun.GunMuzzleTracker.muzzle(living.getId(), false);
+            if (muzzlePos == null) {
+                muzzlePos = computeMuzzlePosition(living, held, partialTick);
+            }
             MuzzleFlashProfile flash = muzzleFlashProfile(held);
             poseStack.pushPose();
             poseStack.translate(muzzlePos.x - cameraPos.x, muzzlePos.y - cameraPos.y, muzzlePos.z - cameraPos.z);

@@ -1800,7 +1800,7 @@
 				{
 					"name": "barrel2",
 					"parent": "barrel",
-					"pivot": [0, 8.795, -58.557]
+					"pivot": [0,10.554,-58.557]
 				},
 				{
 					"name": "breaker",

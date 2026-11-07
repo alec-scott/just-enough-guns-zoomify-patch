@@ -35,7 +35,14 @@ public final class DefaultVehicleResource {
         return modelExists(typeModel) ? typeModel : FALLBACK_MODEL;
     }
 
+    /** The vehicle's texture, repainted when it has been dyed. */
     public static Identifier texture(VehicleEntity vehicle) {
+        Identifier base = baseTexture(vehicle);
+        var paint = vehicle != null ? vehicle.paint() : null;
+        return paint == null || base == FALLBACK_TEXTURE ? base : VehiclePaintTextures.painted(base, paint);
+    }
+
+    private static Identifier baseTexture(VehicleEntity vehicle) {
         String vehiclePath = vehiclePath(vehicle);
         Identifier lodTexture = lodResource(vehicle, TEXTURE_LOD_ROOT, ".png");
         if (lodTexture != null) {

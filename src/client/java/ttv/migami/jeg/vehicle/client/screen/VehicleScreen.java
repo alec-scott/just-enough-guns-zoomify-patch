@@ -18,6 +18,7 @@ public final class VehicleScreen extends AbstractContainerScreen<VehicleMenu> {
     private static final int TEXTURE_X_OFFSET = 8;
     private static final Identifier MINI = Reference.id("textures/gui/vehicle/inventory/mini.png");
     private static final Identifier SMALL = Reference.id("textures/gui/vehicle/inventory/small.png");
+    private static final Identifier CABIN = Reference.id("textures/gui/vehicle/inventory/cabin.png");
     private static final Identifier MEDIUM = Reference.id("textures/gui/vehicle/inventory/medium.png");
     private static final Identifier LARGE = Reference.id("textures/gui/vehicle/inventory/large.png");
     private static final Identifier HUGE = Reference.id("textures/gui/vehicle/inventory/huge.png");
@@ -88,6 +89,7 @@ public final class VehicleScreen extends AbstractContainerScreen<VehicleMenu> {
         return switch (this.menu.vehicleRows()) {
             case 1 -> MINI;
             case 3 -> SMALL;
+            case 5 -> CABIN;
             case 6 -> MEDIUM;
             default -> null;
         };

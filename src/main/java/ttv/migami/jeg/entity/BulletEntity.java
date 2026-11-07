@@ -110,6 +110,7 @@ public class BulletEntity extends Projectile {
     private static final double PUNCH_KNOCKBACK_PER_LEVEL = 0.6D;
     private static final int FLAME_SECONDS = 5;
     private boolean helicopterGunRound;
+    private boolean vehicleRound;
     private int punchLevel;
     private boolean flame;
     private static final float ROCKET_EXPLOSION_POWER = 6.8F;
@@ -175,6 +176,11 @@ public class BulletEntity extends Projectile {
         // DO NOT use noPhysics for flare gun - it prevents proper ticking
         this.refreshDimensions();
         this.setOldPosAndRot();
+    }
+
+    /** Fired by a vehicle's own gun; clients draw it as a heavier tracer leaving the vehicle's muzzle. */
+    public void setVehicleRound() {
+        this.vehicleRound = true;
     }
 
     /** Fired from a helicopter's gun: flies flat and far, and tears up flimsy blocks on the way. */
@@ -393,7 +399,8 @@ public class BulletEntity extends Projectile {
             }
 
             // Spawn rocket trail particles on client side (3x density)
-            else if (gunId.equals(ROCKET_LAUNCHER_ID) || isVehicleRocket(gunId)) {
+            else if (gunId.equals(ROCKET_LAUNCHER_ID)) {
+                // Vehicle rockets get their motor glow and smoke from MissileTrailRenderer instead.
                 spawnRocketTrailParticles();
             }
             else if (gunId.equals(TYPHOONEE_ID)) {
@@ -1015,8 +1022,16 @@ public class BulletEntity extends Projectile {
                 Entity owner = this.getOwner();
                 boolean directHitVehicle = result instanceof EntityHitResult entityHit && entityHit.getEntity() instanceof VehicleEntity;
                 float explosionPower = directHitVehicle ? power * VEHICLE_DIRECT_HIT_BLOCK_DAMAGE_SCALE : power;
-                spawnCustomExplosionEffects((ServerLevel) this.level(), this.position(), id);
-                this.level().explode(this, this.getX(), this.getY(), this.getZ(), explosionPower, ExplosionInteraction.TNT);
+                if (isVehicleRocket(id)) {
+                    // Drawn by clients like a missile's blast, scaled to the rocket's smaller warhead.
+                    sendVehicleRocketBlast((ServerLevel) this.level(), power);
+                    this.level().explode(this, null, null, this.getX(), this.getY(), this.getZ(), explosionPower, false,
+                            ExplosionInteraction.TNT, ParticleTypes.SMOKE, ParticleTypes.SMOKE,
+                            net.minecraft.util.random.WeightedList.of(), net.minecraft.sounds.SoundEvents.GENERIC_EXPLODE);
+                } else {
+                    spawnCustomExplosionEffects((ServerLevel) this.level(), this.position(), id);
+                    this.level().explode(this, this.getX(), this.getY(), this.getZ(), explosionPower, ExplosionInteraction.TNT);
+                }
                 if (id.equals(ROCKET_LAUNCHER_ID)) {
                     applyRocketBlastDamage(owner, directHitVehicle);
                 } else if (isVehicleRocket(id)) {
@@ -1209,6 +1224,16 @@ public class BulletEntity extends Projectile {
         sendLongDistanceParticles(serverLevel, ModParticleTypes.SMALL_EXPLOSION.get(), pos.x, pos.y, pos.z, smallCount, 1.1D, 1.1D, 1.1D, 0.12D);
         sendLongDistanceParticles(serverLevel, ModParticleTypes.SMOKE.get(), pos.x, pos.y, pos.z, 12, 1.2D, 1.2D, 1.2D, 0.02D);
         sendLongDistanceParticles(serverLevel, ModParticleTypes.FIRE.get(), pos.x, pos.y, pos.z, 10, 0.9D, 0.9D, 0.9D, 0.04D);
+    }
+
+    private void sendVehicleRocketBlast(ServerLevel serverLevel, float power) {
+        var blast = new ttv.migami.jeg.network.MissileBlastPayload(this.position(), power, 4.0F, false);
+        for (ServerPlayer player : serverLevel.players()) {
+            if (player.distanceToSqr(this) < 512.0D * 512.0D
+                    && net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking.canSend(player, ttv.migami.jeg.network.MissileBlastPayload.TYPE)) {
+                net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking.send(player, blast);
+            }
+        }
     }
 
     private void spawnVehicleCannonExplosionEffects(ServerLevel serverLevel, Vec3 pos) {
@@ -1649,7 +1674,8 @@ public class BulletEntity extends Projectile {
                 life,
                 gravity,
                 shooterId,
-                trailVisible
+                trailVisible,
+                this.vehicleRound
         );
 
         // Send to all nearby players

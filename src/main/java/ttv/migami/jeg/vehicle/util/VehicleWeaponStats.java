@@ -128,7 +128,7 @@ public final class VehicleWeaponStats {
                         1,
                         120,
                         0,
-                        100,
+                        50,
                         600.0F,
                         0.95F,
                         120,
@@ -241,19 +241,19 @@ public final class VehicleWeaponStats {
         );
         stats.put(
                 Reference.id("vehicle_9m120_driver_missile"),
-                vehicleMissileStats(Reference.id("vehicle_9m120_driver_missile"), MEDIUM_ANTI_GROUND_MISSILE, 4, 240, 100, 650.0F)
+                vehicleMissileStats(Reference.id("vehicle_9m120_driver_missile"), MEDIUM_ANTI_GROUND_MISSILE, 4, 240, 40, 650.0F)
         );
         stats.put(
                 Reference.id("vehicle_9m120_passenger_missile"),
-                vehicleMissileStats(Reference.id("vehicle_9m120_passenger_missile"), MEDIUM_ANTI_GROUND_MISSILE, 8, 240, 100, 650.0F)
+                vehicleMissileStats(Reference.id("vehicle_9m120_passenger_missile"), MEDIUM_ANTI_GROUND_MISSILE, 8, 240, 40, 650.0F)
         );
         stats.put(
                 Reference.id("vehicle_kh39_missile"),
-                vehicleMissileStats(Reference.id("vehicle_kh39_missile"), LARGE_ANTI_GROUND_MISSILE, 2, 260, 120, 1100.0F)
+                vehicleMissileStats(Reference.id("vehicle_kh39_missile"), LARGE_ANTI_GROUND_MISSILE, 2, 260, 60, 1100.0F)
         );
         stats.put(
                 Reference.id("vehicle_9m336_missile"),
-                vehicleMissileStats(Reference.id("vehicle_9m336_missile"), MEDIUM_ANTI_AIR_MISSILE, 4, 260, 120, 260.0F)
+                vehicleMissileStats(Reference.id("vehicle_9m336_missile"), MEDIUM_ANTI_AIR_MISSILE, 4, 260, 50, 260.0F)
         );
         return Map.copyOf(stats);
     }

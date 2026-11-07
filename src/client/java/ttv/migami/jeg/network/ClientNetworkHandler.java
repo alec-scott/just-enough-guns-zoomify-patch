@@ -50,6 +50,9 @@ public final class ClientNetworkHandler {
             });
         });
 
+        ClientPlayNetworking.registerGlobalReceiver(ttv.migami.jeg.network.MissileBlastPayload.TYPE, (payload, context) -> {
+            context.client().execute(() -> ttv.migami.jeg.client.render.MissileBlastRenderer.add(payload));
+        });
         ClientPlayNetworking.registerGlobalReceiver(CameraShakePayload.TYPE, (payload, context) -> {
             context.client().execute(() -> GunCameraSwayHandler.addShake(payload.strength()));
         });

@@ -1,5 +1,37 @@
 # Changelog
 
+## 1.7.2+mc26.1.2.yftm.8 - 2026-11-07
+
+### Fixed
+- Anchored the minigun's first-person hands to its handles, fixing the raised arm beside the gun.
+- Kept the ammo HUD inside the current GUI viewport and measured the spacing between ammo and reserve text.
+- Reduced minigun firing and spin volume, and centered the shooter's own audio so turning does not move it around the listener.
+- Centered helicopter engine and gun audio for occupants, with quieter cockpit engine volume and positional playback for observers.
+- Crossfaded helicopter startup into the flight loop over 1.5 seconds and smoothed RPM gain changes. Taking off and accelerating keep the same flight sound channel.
+- Centered MI-28 barrel rotation on the bore in both model detail levels and aligned bullet/flash origins with the model's muzzle tip.
+- Attached the MI-28 gunner camera to the barrel, with a stable view over the gun and an unobstructed zoomed view directly along the bore.
+- Gun tracers and third-person muzzle flashes start at the gun's drawn muzzle instead of the shooter's eyes, for the shooter in first and third person, for everyone watching, and for passengers firing out of a helicopter. Tracers meet the bullet's true path where it lands, so aim is unchanged.
+- Tracers run all the way to whatever stops them, including mobs and players, instead of vanishing a tick early.
+- Parked helicopters no longer clank, bounce or lose health from resting on the ground, and no longer sound "Airspeed too low" when boarded.
+- Banking vehicle cameras report their forward and left directions correctly (they were reversed while rolled).
+
+### Added
+- Right-click a vehicle with a dye to paint it. The body paint takes the dye's colour and keeps its shading, while markings, lights, seats and tyres stay as they are. A water bucket washes it off. Paint is saved and survives packing the vehicle into a crate.
+- The MI-28 pilot's 9M-120 is now an incendiary missile: same warhead and the same anti-ground missile ammo as the gunner's, but it sets the ground and anyone caught in the blast alight.
+- New missile and helicopter-rocket visuals: a modelled missile with nose, seeker band and swept fins, a white-hot motor glow and flame, and a thick smoke trail that billows and lingers.
+- New missile explosions: a white flash, a billowing fireball that cools to soot, a shock bubble and a dust ring racing out across the ground, debris and embers, and a rising smoke column. They are visible up to 512 blocks away.
+- In a helicopter, the reversed third-person view (F5 twice) is a wide-angle action camera on the tail boom, looking up the boom at the cabin and banking with the airframe.
+
+### Changed
+- Helicopter guns read as heavy rotary guns: thicker, longer, hotter tracers with a bright head, a stronger muzzle flare, and a dust-and-spark puff where each round lands, visible at any distance. Through the MI-28 gunner's zoomed sight, rounds can now be watched all the way to impact.
+- Medium missiles break stone and brick far more easily, and large missiles flatten buildings: medium warheads meet 45% of a block's blast resistance, large ones 20%. Obsidian-class blocks are unaffected.
+- Missiles fire again sooner: medium anti-ground every 2 seconds (was 5), anti-air 2.5 seconds (was 6), large 3 seconds (was 6), BMP-2 2.5 seconds (was 5).
+- Vehicle weapons reload 20% faster again (0.64× their base reload time).
+- Gunfire light is brighter and matches the muzzle flare: light level 12 for pistols up to 15 for shotguns, machine guns and launchers (was 8), placed at the muzzle.
+- The AH-6 and MI-28 hold two more rows of cargo (45 slots).
+- Helicopter rotors coast down after touchdown, for up to twelve seconds on the AH-6 and eighteen seconds on the MI-28. Rotor animation, engine pitch and volume follow the same declining speed.
+- The MI-28 gun takes 1.5 seconds to spin up from rest before firing. Barrel rotation and mechanical audio accelerate together; releasing the trigger lets the barrels coast down.
+
 ## 1.7.2+mc26.1.2.yftm.7 - 2026-11-06
 
 ### Changed

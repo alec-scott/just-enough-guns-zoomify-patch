@@ -257,6 +257,9 @@ public class HelicopterWeaponsClientGameTest implements FabricClientGameTest {
             this.shots.clear();
         }
         context.getInput().holdKey(options -> options.keyAttack);
+        if (label.contains("mi28") && label.contains("gun")) {
+            context.waitTicks(VehicleEntity.ROTARY_GUN_SPOOL_TICKS);
+        }
         context.waitTicks(16);
         boolean gun = label.contains("gun");
         boolean audioActive = context.computeOnClient(mc -> FabricClientBootstrap.isVehicleFireAudioActive(vehicle(mc).getId()));

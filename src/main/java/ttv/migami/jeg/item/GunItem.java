@@ -1421,7 +1421,10 @@ public class GunItem extends Item {
 
         Vec3 eye = shooter.getEyePosition();
         Vec3 look = shooter.getLookAngle();
+        int light = this.gunfireLightLevel();
+        // The flash lights up from the muzzle, about a block out, falling back closer in when that is blocked.
         BlockPos[] candidates = new BlockPos[] {
+                BlockPos.containing(eye.add(look.scale(1.0D))),
                 BlockPos.containing(eye.add(look.scale(0.45D))),
                 BlockPos.containing(eye),
                 BlockPos.containing(eye.add(0.0D, 0.35D, 0.0D))
@@ -1430,23 +1433,37 @@ public class GunItem extends Item {
         for (BlockPos pos : candidates) {
             BlockState state = level.getBlockState(pos);
             if (state.is(ModBlocks.DYNAMIC_LIGHT.get())) {
+                if (state.getValue(DynamicLightBlock.LIGHT) < light) {
+                    level.setBlock(pos, state.setValue(DynamicLightBlock.LIGHT, light), 3);
+                }
                 DynamicLightBlock.setDelay(level, pos, 0.5D);
                 return;
             }
             if (state.isAir()) {
-                level.setBlock(pos, ModBlocks.DYNAMIC_LIGHT.get().defaultBlockState(), 3);
+                level.setBlock(pos, ModBlocks.DYNAMIC_LIGHT.get().defaultBlockState().setValue(DynamicLightBlock.LIGHT, light), 3);
                 DynamicLightBlock.setDelay(level, pos, 0.5D);
                 return;
             }
             if (state.is(Blocks.WATER)) {
                 BlockState dynamicLight = ModBlocks.DYNAMIC_LIGHT.get()
                         .defaultBlockState()
-                        .setValue(BlockStateProperties.WATERLOGGED, true);
+                        .setValue(BlockStateProperties.WATERLOGGED, true)
+                        .setValue(DynamicLightBlock.LIGHT, light);
                 level.setBlock(pos, dynamicLight, 3);
                 DynamicLightBlock.setDelay(level, pos, 0.5D);
                 return;
             }
         }
+    }
+
+    /** As bright as the gun's muzzle flare: a pistol's spit lights less than a shotgun's bloom or a machine gun's. */
+    private int gunfireLightLevel() {
+        return switch (ttv.migami.jeg.gun.GunWeight.of(stats.id())) {
+            case PISTOL -> 12;
+            case SMG -> 13;
+            case RIFLE, BOW -> 14;
+            case MARKSMAN, SHOTGUN, MACHINE_GUN, LAUNCHER, MINIGUN -> 15;
+        };
     }
 
     private boolean shouldSkipGunfireLight(ItemStack stack) {

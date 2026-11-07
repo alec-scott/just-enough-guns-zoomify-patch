@@ -115,6 +115,7 @@ abstract class AbstractVehicleGeoRenderer<T extends VehicleEntity> extends GeoEn
             case "mi28" -> {
                 updateTurret(vehicle, partialTick, snapshots, -40.0F, 10.0F);
                 updateHelicopterRotors(vehicle, partialTick, snapshots);
+                snapshots.ifPresent("barrel2", snapshot -> snapshot.setRotZ(vehicle.rotaryGunAngle(partialTick) * Mth.DEG_TO_RAD));
             }
             case "speedboat" -> updateTurret(vehicle, partialTick, snapshots, -25.0F, 50.0F);
             default -> {
