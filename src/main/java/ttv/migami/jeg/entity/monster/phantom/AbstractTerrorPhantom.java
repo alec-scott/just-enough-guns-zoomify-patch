@@ -269,7 +269,7 @@ public abstract class AbstractTerrorPhantom extends Phantom implements GeoEntity
 
     protected void playGunshotSound(GunStats stats) {
         stats.fireSoundEvent().or(stats::silencedFireSoundEvent).ifPresentOrElse(
-                sound -> this.level().playSound(null, this, sound, SoundSource.HOSTILE, 7.5F, 0.9F + this.random.nextFloat() * 0.2F),
+                sound -> this.level().playSound(null, this, sound, SoundSource.HOSTILE, ttv.migami.jeg.gun.MinigunSpin.gunshotVolume(stats), 0.9F + this.random.nextFloat() * 0.2F),
                 () -> this.level().playSound(null, this, SoundEvents.CROSSBOW_SHOOT, SoundSource.HOSTILE, 7.5F, 0.9F + this.random.nextFloat() * 0.2F)
         );
     }

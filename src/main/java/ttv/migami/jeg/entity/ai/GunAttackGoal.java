@@ -3152,7 +3152,7 @@ public class GunAttackGoal<T extends PathfinderMob> extends Goal {
 
     protected void playGunshotSound(GunStats stats) {
         stats.fireSoundEvent().or(stats::silencedFireSoundEvent).ifPresentOrElse(
-            sound -> this.shooter.level().playSound(null, this.shooter, sound, SoundSource.HOSTILE, 7.5F, 0.9F + this.shooter.level().getRandom().nextFloat() * 0.2F),
+            sound -> this.shooter.level().playSound(null, this.shooter, sound, SoundSource.HOSTILE, ttv.migami.jeg.gun.MinigunSpin.gunshotVolume(stats), 0.9F + this.shooter.level().getRandom().nextFloat() * 0.2F),
             () -> this.shooter.level().playSound(null, this.shooter, net.minecraft.sounds.SoundEvents.CROSSBOW_SHOOT, SoundSource.HOSTILE, 7.5F, 0.9F + this.shooter.level().getRandom().nextFloat() * 0.2F)
         );
     }

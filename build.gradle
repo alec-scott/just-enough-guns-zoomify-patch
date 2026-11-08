@@ -74,6 +74,65 @@ tasks.named("processGametestResources") {
     }
 }
 
+// Run client game tests under Iris with the server pack's shader pack on, like players on yftm:
+// ./gradlew runClientGameTest -PgameTests=GunMuzzleOrigin -PwithIris -Pminecraft_version=26.1.2 -Pfabric_version=0.155.3+26.1.2
+// (Sodium 0.9 needs Fabric API 0.145.1+, which only exists for 26.1.2, the version the server runs.)
+if (project.hasProperty("withIris")) {
+    dependencies {
+        gametestRuntimeOnly "maven.modrinth:sodium:vf7UgZpC"
+        gametestRuntimeOnly "maven.modrinth:iris:sZbVsl2Q"
+    }
+    def shaderPackName = "ComplementaryReimagined_r5.9.3.zip"
+    def shaderPackUrl = "https://cdn.modrinth.com/data/HVnmMxH1/versions/Bqen1mJX/ComplementaryReimagined_r5.9.3.zip"
+    tasks.named("runClientGameTest") {
+        doFirst {
+            def runDir = file("build/run/clientGameTest")
+            def pack = new File(runDir, "shaderpacks/" + shaderPackName)
+            if (!pack.exists()) {
+                pack.parentFile.mkdirs()
+                new URL(shaderPackUrl).withInputStream { input -> pack.withOutputStream { it << input } }
+            }
+            def config = new File(runDir, "config/iris.properties")
+            config.parentFile.mkdirs()
+            config.text = "enableShaders=true\nshaderPack=" + shaderPackName + "\n"
+        }
+    }
+}
+
+// Run client game tests with the yftm pack's Zoomify (zoom on C): ./gradlew runClientGameTest -PgameTests=ZoomifyZoom -PwithZoomify
+if (project.hasProperty("withZoomify")) {
+    dependencies {
+        gametestRuntimeOnly "maven.modrinth:Ha28R6CL:SKW1BTL3" // Fabric Language Kotlin 1.14.2
+        gametestRuntimeOnly "maven.modrinth:1eAoo2KR:IODousKT" // YetAnotherConfigLib 3.9.7
+        gametestRuntimeOnly "maven.modrinth:w7ThoJFB:gwKcDOSy" // Zoomify 2.17.0
+    }
+}
+
+// Run client game tests with the yftm pack's Fresh Animations resource packs and EMF/ETF, which re-animate the player:
+// ./gradlew runClientGameTest -PgameTests=MinigunFreshAnimations -PwithFreshAnimations
+if (project.hasProperty("withFreshAnimations")) {
+    dependencies {
+        gametestRuntimeOnly "maven.modrinth:BVzZfTc1:2bcqPrsv" // Entity Texture Features 7.2.6
+        gametestRuntimeOnly "maven.modrinth:4I1XuqiY:zh2AVI88" // Entity Model Features 3.3.12
+    }
+    def packs = [
+            "FreshAnimations_v1.10.5.zip": "https://cdn.modrinth.com/data/50dA9Sha/versions/RGIzA5em/FreshAnimations_v1.10.5.zip",
+            "FA+All_Extensions-v1.9.2.zip": "https://cdn.modrinth.com/data/YAVTU8mK/versions/R5ZGSF8A/FA%2BAll_Extensions-v1.9.2.zip",
+            "FA+Player-v1.1.zip"          : "https://cdn.modrinth.com/data/TAIMVZCL/versions/Wj7NeGjP/FA%2BPlayer-v1.1.zip"
+    ]
+    tasks.named("runClientGameTest") {
+        doFirst {
+            packs.each { name, url ->
+                def pack = file("build/run/clientGameTest/resourcepacks/" + name)
+                if (!pack.exists()) {
+                    pack.parentFile.mkdirs()
+                    new URL(url).withInputStream { input -> pack.withOutputStream { it << input } }
+                }
+            }
+        }
+    }
+}
+
 java {
     toolchain.languageVersion = JavaLanguageVersion.of(25)
     withSourcesJar()

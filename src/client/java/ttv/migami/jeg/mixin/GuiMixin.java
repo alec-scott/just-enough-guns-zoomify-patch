@@ -25,7 +25,8 @@ public final class GuiMixin {
     @Inject(method = "extractCrosshair", at = @At("HEAD"), cancellable = true)
     private void jeg$hideCrosshairWhenHoldingGun(GuiGraphicsExtractor guiGraphics, DeltaTracker deltaTracker, CallbackInfo ci) {
         Minecraft minecraft = Minecraft.getInstance();
-        if (VehicleHudOverlay.isVehicleHudActive()) {
+        // At the vehicle's controls the vehicle HUD draws its own reticle; a passenger with their own gun keeps theirs.
+        if (jeg$isVehicleHudActive()) {
             ci.cancel();
             return;
         }
@@ -86,9 +87,13 @@ public final class GuiMixin {
         }
     }
 
+    /**
+     * Whether the vehicle HUD stands in for the player's own status bars: for whoever is at the vehicle's controls
+     * (pilot, gunner, weapon seat). A passenger who keeps their own hotbar and hands keeps their health, armor, food and
+     * experience bars too.
+     */
     private static boolean jeg$isVehicleHudActive() {
-        var player = Minecraft.getInstance().player;
-        return player != null && player.getVehicle() instanceof VehicleEntity;
+        return VehicleHudOverlay.shouldReplaceHotbar();
     }
 
     @SuppressWarnings({"rawtypes", "unchecked"})

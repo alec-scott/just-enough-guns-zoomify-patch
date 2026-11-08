@@ -41,8 +41,28 @@ public final class MinigunSpin {
         byte sent = STATE_IDLE;
     }
 
+    /**
+     * Loudness (gain) of a minigun firing. Its fire sound runs on without a break, so it sits at about a rifle shot's
+     * loudest instead of above it; the yftm pack's Sound Physics reverb makes a constant sound seem louder still.
+     */
+    public static final float FIRE_VOLUME = 0.45F;
+    /** How a single gunshot is played to everyone: full gain, heard out to 7.5 x the sound's 16 block range. */
+    private static final float GUNSHOT_VOLUME = 7.5F;
+
     public static boolean isMinigun(ItemStack stack) {
-        return stack.getItem() instanceof GunItem gun && "minigun".equals(gun.getStats().id().getPath());
+        return stack.getItem() instanceof GunItem gun && isMinigun(gun.getStats());
+    }
+
+    public static boolean isMinigun(GunStats stats) {
+        return "minigun".equals(stats.id().getPath());
+    }
+
+    /**
+     * Volume for a mob's per-shot gunshot. A minigun's shots come so fast they overlap into one roar, so they play at
+     * {@link #FIRE_VOLUME}; how far they carry then comes from the sound's own attenuation distance.
+     */
+    public static float gunshotVolume(GunStats stats) {
+        return isMinigun(stats) ? FIRE_VOLUME : GUNSHOT_VOLUME;
     }
 
     public static void setTrigger(ServerPlayer player, boolean holding) {

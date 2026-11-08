@@ -130,7 +130,7 @@ public final class VehicleInputHandler {
         } else {
             VehicleClientState.setMousePosition(mouseX, mouseY);
         }
-        boolean freeLook = KeyBindings.VEHICLE_FREE_LOOK.isDown();
+        boolean freeLook = KeyBindings.vehicleFreeLookDown();
         boolean seek = KeyBindings.VEHICLE_SEEK.isDown();
         boolean aircraftControls = isAircraftDriver(player, vehicle);
         if (aircraftControls && minecraft.screen == null) {

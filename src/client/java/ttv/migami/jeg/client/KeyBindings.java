@@ -3,8 +3,10 @@ package ttv.migami.jeg.client;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
 import net.minecraft.client.KeyMapping;
+import net.minecraft.client.Minecraft;
 import org.lwjgl.glfw.GLFW;
 import ttv.migami.jeg.Reference;
+import ttv.migami.jeg.vehicle.client.overlay.VehicleHudOverlay;
 
 public final class KeyBindings {
     private KeyBindings() {}
@@ -129,5 +131,27 @@ public final class KeyBindings {
         KeyMappingHelper.registerKeyMapping(VEHICLE_CHANGE_SEAT);
         KeyMappingHelper.registerKeyMapping(VEHICLE_DISMOUNT);
         KeyMappingHelper.registerKeyMapping(VEHICLE_PLAYER_INVENTORY);
+    }
+
+    /** Names of Zoomify's zoom keys; Zoomify binds zoom to C by default, the same key as vehicle free look. */
+    public static final String ZOOMIFY_ZOOM_KEY_PREFIX = "zoomify.key.zoom";
+
+    /**
+     * Whether vehicle free look is held. A passenger who keeps their own hands (not flying, not on a vehicle gun) zooms
+     * with Zoomify instead when its zoom shares the free-look key, so the one key does not also swing their view away.
+     */
+    public static boolean vehicleFreeLookDown() {
+        if (!VEHICLE_FREE_LOOK.isDown()) {
+            return false;
+        }
+        if (VehicleHudOverlay.shouldReplaceHotbar()) {
+            return true;
+        }
+        for (KeyMapping mapping : Minecraft.getInstance().options.keyMappings) {
+            if (mapping.getName().startsWith(ZOOMIFY_ZOOM_KEY_PREFIX) && mapping.same(VEHICLE_FREE_LOOK)) {
+                return false;
+            }
+        }
+        return true;
     }
 }

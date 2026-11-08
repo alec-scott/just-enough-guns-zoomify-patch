@@ -8,11 +8,16 @@ import com.geckolib.cache.model.cuboid.GeoCube;
 import com.geckolib.renderer.base.GeoRenderState;
 import com.geckolib.renderer.base.PerBoneRender;
 import com.geckolib.renderer.base.RenderPassInfo;
+import com.mojang.blaze3d.systems.RenderSystem;
+import java.lang.invoke.MethodHandle;
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.MethodType;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.SubmitNodeCollector;
@@ -47,6 +52,10 @@ public final class GunMuzzleTracker {
 
     /** Hooks the barrel bones of this render pass so the muzzle is measured as the gun is drawn. */
     public static void track(RenderPassInfo<GeoRenderState> passInfo, int ownerId, boolean firstPersonView) {
+        if (IrisShadowPass.active()) {
+            // Iris draws entities a second time from the sun for shadows; that pass is not where the gun shows on screen.
+            return;
+        }
         Optional<GeoBone> root = Optional.empty();
         for (String name : MUZZLE_ROOT_BONES) {
             root = passInfo.model().getBone(name);
@@ -108,6 +117,37 @@ public final class GunMuzzleTracker {
     }
 
     private record Sample(int ownerId, Vec3 world, long timeNanos) {}
+
+    /** Whether Iris is drawing its shadow pass, looked up reflectively so Iris stays optional. */
+    private static final class IrisShadowPass {
+        private static final MethodHandle IS_RENDERING_SHADOW_PASS = find();
+
+        private static MethodHandle find() {
+            if (!FabricLoader.getInstance().isModLoaded("iris")) {
+                return null;
+            }
+            try {
+                Class<?> api = Class.forName("net.irisshaders.iris.api.v0.IrisApi");
+                Object instance = api.getMethod("getInstance").invoke(null);
+                return MethodHandles.publicLookup()
+                        .findVirtual(api, "isRenderingShadowPass", MethodType.methodType(boolean.class))
+                        .bindTo(instance);
+            } catch (Throwable ignored) {
+                return null;
+            }
+        }
+
+        static boolean active() {
+            if (IS_RENDERING_SHADOW_PASS == null) {
+                return false;
+            }
+            try {
+                return (boolean) IS_RENDERING_SHADOW_PASS.invokeExact();
+            } catch (Throwable ignored) {
+                return false;
+            }
+        }
+    }
 
     /** Collects the barrel's front-most vertices across one render pass; each bone of the barrel reports into it. */
     private static final class Probe implements PerBoneRender<GeoRenderState> {
@@ -171,9 +211,16 @@ public final class GunMuzzleTracker {
             }
             Minecraft minecraft = Minecraft.getInstance();
             Camera camera = minecraft.gameRenderer.getMainCamera();
-            // Both the world and the first-person hand are drawn camera-relative and world-aligned: the hand pass
-            // starts from the inverse of the view rotation it is then drawn with.
+            // The world is drawn camera-relative and world-aligned. The first-person hand is not always: vanilla starts
+            // it from the inverse of the view rotation it then puts on the model-view stack, but Iris (with a shader
+            // pack) draws it straight in view space with only bobbing on the model-view stack. Taking the point through
+            // the model-view matrix the hand is drawn with lands it in view space either way, and undoing the camera's
+            // view rotation turns that back into a world-aligned offset.
             Vector3f centre = new Vector3f(this.frontSum).div(this.frontCount);
+            if (this.firstPersonView) {
+                Matrix4f viewToWorld = camera.getViewRotationMatrix(new Matrix4f()).invert();
+                viewToWorld.mul(RenderSystem.getModelViewStack()).transformPosition(centre);
+            }
             Vec3 offset = new Vec3(centre.x(), centre.y(), centre.z());
             if (this.firstPersonView) {
                 offset = handToWorldView(camera, offset);

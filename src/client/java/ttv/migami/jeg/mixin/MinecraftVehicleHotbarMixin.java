@@ -92,7 +92,7 @@ public class MinecraftVehicleHotbarMixin {
                 KeyBindings.VEHICLE_BRAKE_DESCEND.isDown(),
                 this.options.keyAttack.isDown(),
                 false,
-                KeyBindings.VEHICLE_FREE_LOOK.isDown(),
+                KeyBindings.vehicleFreeLookDown(),
                 false,
                 false,
                 vehicleWeaponSlot,

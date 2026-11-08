@@ -23,7 +23,7 @@ import ttv.migami.jeg.init.ModSounds;
 public final class MinigunClient {
     private static final float MAX_BARREL_DEGREES_PER_TICK = 54.0F;
     private static final float WHIR_VOLUME = 0.3F;
-    private static final float FIRE_VOLUME = 0.75F;
+    private static final float FIRE_VOLUME = MinigunSpin.FIRE_VOLUME;
     private static final float WHIR_MIN_PITCH = 0.55F;
     // Below this the barrels are as good as stopped, so starting again plays the full charge-up.
     private static final float RESTART_FROM_STOPPED = 0.15F;

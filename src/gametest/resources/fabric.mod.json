@@ -33,7 +33,12 @@
       "ttv.migami.jeg.gametest.HelicopterTailCameraClientGameTest",
       "ttv.migami.jeg.gametest.MissileFlightClientGameTest",
       "ttv.migami.jeg.gametest.VehicleHandsClientGameTest",
-      "ttv.migami.jeg.gametest.HeliSandboxSetupClientGameTest"
+      "ttv.migami.jeg.gametest.MinigunFreshAnimationsClientGameTest",
+      "ttv.migami.jeg.gametest.ZoomifyZoomClientGameTest",
+      "ttv.migami.jeg.gametest.HeliPassengerAndAimClientGameTest",
+      "ttv.migami.jeg.gametest.HeliSandboxSetupClientGameTest",
+      "ttv.migami.jeg.gametest.HeliTakeoffSafetyClientGameTest",
+      "ttv.migami.jeg.gametest.GunLootingClientGameTest"
     ]
   },
   "depends": {

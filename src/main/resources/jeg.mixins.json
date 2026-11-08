@@ -16,7 +16,8 @@
     "EnchantmentCompatibilityMixin",
     "AnvilMenuGunEnchantMixin",
     "EnchantmentHelperGunEnchantMixin",
-    "EnchantCommandGunEnchantMixin"
+    "EnchantCommandGunEnchantMixin",
+    "EnchantmentLootingOnGunsMixin"
   ],
   "client": [
     "AbstractClientPlayerMixin",

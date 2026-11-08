@@ -1608,7 +1608,8 @@
     "subtitle": "subtitle.jeg.fire",
     "sounds": [
       {
-        "name": "jeg:item/minigun/fire"
+        "name": "jeg:item/minigun/fire",
+        "attenuation_distance": 128
       }
     ]
   },

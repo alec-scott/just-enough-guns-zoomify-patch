@@ -49,7 +49,9 @@ public final class VehiclePassengerDamageEvents {
     }
 
     private static boolean shouldBypassVehicle(DamageSource source) {
-        return source.is(DamageTypeTags.IS_DROWNING)
+        // /kill on someone in an enclosed seat used to land on the vehicle instead, blowing it up with everyone near it.
+        return source.is(DamageTypes.GENERIC_KILL)
+                || source.is(DamageTypeTags.IS_DROWNING)
                 || source.is(DamageTypeTags.IS_FREEZING)
                 || source.is(DamageTypes.IN_WALL)
                 || source.is(DamageTypes.CRAMMING)

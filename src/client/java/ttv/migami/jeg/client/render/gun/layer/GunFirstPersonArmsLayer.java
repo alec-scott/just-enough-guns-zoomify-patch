@@ -7,7 +7,6 @@ import net.minecraft.client.model.player.PlayerModel;
 import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.rendertype.RenderTypes;
-import net.minecraft.client.renderer.entity.player.AvatarRenderer;
 import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.entity.player.PlayerModelPart;
@@ -21,6 +20,7 @@ import com.geckolib.renderer.base.GeoRenderState;
 import com.geckolib.renderer.base.PerBoneRender;
 import com.geckolib.renderer.base.RenderPassInfo;
 import com.geckolib.renderer.layer.GeoRenderLayer;
+import ttv.migami.jeg.client.render.VanillaArmModels;
 import ttv.migami.jeg.client.render.gun.AnimatedGunRenderer;
 import ttv.migami.jeg.client.render.gun.GunPoseProfile;
 import ttv.migami.jeg.item.AnimatedGunItem;
@@ -138,10 +138,10 @@ public final class GunFirstPersonArmsLayer extends GeoRenderLayer<AnimatedGunIte
                 return;
             }
 
-            AvatarRenderer<AbstractClientPlayer> renderer = Minecraft.getInstance().getEntityRenderDispatcher().getPlayerRenderer(player);
             Identifier skin = player.getSkin().body().texturePath();
             int light = passInfo.packedLight();
-            PlayerModel model = renderer.getModel();
+            // Not the player renderer's model: resource packs (Fresh Animations via EMF) replace and animate that one.
+            PlayerModel model = VanillaArmModels.forPlayer(player);
             ModelPart armPart = side == ArmSide.LEFT ? model.leftArm : model.rightArm;
             ModelPart sleevePart = side == ArmSide.LEFT ? model.leftSleeve : model.rightSleeve;
             PlayerModelPart sleeve = side == ArmSide.LEFT ? PlayerModelPart.LEFT_SLEEVE : PlayerModelPart.RIGHT_SLEEVE;
@@ -154,6 +154,8 @@ public final class GunFirstPersonArmsLayer extends GeoRenderLayer<AnimatedGunIte
                     (pose, buffer) -> {
                         PoseStack armPose = new PoseStack();
                         armPose.last().set(pose);
+                        // The sleeve is the arm's child; it is drawn on its own below, only when the skin shows it.
+                        sleevePart.visible = false;
                         renderPreparedArmPart(armPart, armPose, buffer, light, side, wristAnchor);
                         if (sleeveVisible) {
                             renderPreparedArmPart(sleevePart, armPose, buffer, light, side, wristAnchor);

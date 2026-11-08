@@ -113,6 +113,8 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     private static final double CLIENT_RESYNC_HORIZONTAL_MOTION_DELTA_SQR = 0.16D;
     private static final float CLIENT_RESYNC_YAW_DELTA = 12.0F;
     private static final float CLIENT_RESYNC_PITCH_DELTA = 12.0F;
+    /** Ticks of travel the predicting client may sit ahead of or behind the server along its flight path. */
+    private static final double CLIENT_RESYNC_ALONG_TRACK_TICKS = 5.0D;
     private static final int MOVING_DRIVER_STATE_SYNC_INTERVAL = 2;
     private static final int UNMANNED_AIRBORNE_STATE_SYNC_INTERVAL = 1;
     private static final double VEHICLE_IDLE_FALL_SPEED_THRESHOLD = 1.0E-4D;
@@ -283,7 +285,12 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     private static final double HELICOPTER_PLAYER_SPEED_MULTIPLIER = 2.0D;
     private static final double HELICOPTER_ACCELERATION_RESPONSE = 0.06D;
     private static final double HELICOPTER_BRAKING_RESPONSE = 0.1D;
-    private static final float HELICOPTER_MAX_AIM_PITCH = 25.0F;
+    /** How far the pilot can pitch the nose up to aim. */
+    private static final float HELICOPTER_MAX_AIM_UP = 25.0F;
+    /** How far the pilot can pitch the nose down to aim: deep enough to fire on targets close beneath the helicopter. */
+    private static final float HELICOPTER_MAX_AIM_DOWN = 45.0F;
+    /** The hull and cockpit camera never pitch further nose down than this (full aim plus forward tilt fits under it). */
+    private static final float HELICOPTER_MAX_NOSE_DOWN = 60.0F;
     private static final float HELICOPTER_MAX_FORWARD_TILT = 15.0F;
     private static final float HELICOPTER_MAX_BANK = 30.0F;
     private static final float HELICOPTER_TURN_BANK = 1.5F;
@@ -369,6 +376,8 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     private static final double VEHICLE_EXPLOSION_KNOCKBACK_MIN_SCALE = 0.04D;
     private static final double VEHICLE_EXPLOSION_KNOCKBACK_MAX_SCALE = 0.22D;
     private static final float VEHICLE_COLLISION_SELF_DAMAGE_MULTIPLIER = 0.65F;
+    /** The vehicle's own bumps and hard landings only reach open-seat passengers once they cost this share of its health. */
+    private static final float SELF_STRIKE_PASSENGER_LEAK_MIN_RATIO = 0.25F;
     // The ceiling sits this far above the top of the world, so nothing that can be built or generated is out of reach.
     private static final double HELICOPTER_CEILING_ABOVE_WORLD = 64.0D;
     private static final double HELICOPTER_ALTITUDE_SOFT_ZONE = 12.0D;
@@ -385,6 +394,11 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     private static final float HELICOPTER_ROTOR_GROUND_DAMAGE = 1.0F;
     private static final float HELICOPTER_ROTOR_DAMAGE_MIN_SPEED = 0.02F;
     private static final double HELICOPTER_ROTOR_CONTACT_SAMPLE_RADIUS = 0.55D;
+    /**
+     * The blades are thin: a sample only reaches this far above and below the rotor plane. The full sample radius used to
+     * count a wall top half a block under the blades as a strike, chipping helicopters lifting off beside buildings.
+     */
+    private static final double HELICOPTER_ROTOR_CONTACT_SAMPLE_HALF_HEIGHT = 0.2D;
     private static final double DEFAULT_SEEK_RANGE = 64.0D;
     private static final double DEFAULT_SEEK_MIN_DOT = 0.985D;
     private static final double GRAVITY = 0.08D;
@@ -1680,6 +1694,13 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         double horizontalImpactSpeed = this.horizontalCollision ? this.lastTickHorizontalSpeed : 0.0D;
         double verticalImpactSpeed = landing ? Math.abs(this.lastTickVerticalSpeed) : 0.0D;
         if (vehicleType == VehicleType.HELICOPTER) {
+            if (landing) {
+                // A hull that only rose a few centimetres (a skid nudged up by a block beside it, a lift-off wobble) cannot
+                // come back down fast, whatever velocity it carried.
+                verticalImpactSpeed = this.verticalCollisionBelow
+                        ? Math.min(Math.max(0.0D, -this.lastTickVerticalSpeed), this.currentAirborneDropDistance())
+                        : Math.max(0.0D, this.lastTickVerticalSpeed);
+            }
             return (float) (this.vehicleImpactDamage(horizontalImpactSpeed, 0.0D, 0.0D)
                     + this.helicopterVerticalImpactDamage(verticalImpactSpeed));
         }
@@ -2202,7 +2223,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         Vec3 syncedPosition = new Vec3(x, y, z);
         Vec3 syncedMotion = new Vec3(motionX, motionY, motionZ);
         Vec3 horizontalMotionDelta = new Vec3(this.getDeltaMovement().x - motionX, 0.0D, this.getDeltaMovement().z - motionZ);
-        if (this.position().distanceToSqr(syncedPosition) >= CLIENT_RESYNC_DISTANCE_SQR) {
+        if (this.isPositionDivergedFromServer(syncedPosition, syncedMotion)) {
             return true;
         }
         if (horizontalMotionDelta.lengthSqr() >= CLIENT_RESYNC_HORIZONTAL_MOTION_DELTA_SQR) {
@@ -2210,6 +2231,25 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         }
         return Math.abs(Mth.wrapDegrees(this.getYRot() - yaw)) >= CLIENT_RESYNC_YAW_DELTA
                 || Math.abs(Mth.wrapDegrees(this.getXRot() - pitch)) >= CLIENT_RESYNC_PITCH_DELTA;
+    }
+
+    /**
+     * The server's state is a tick or a few old when it lands, so at speed the client is that many ticks of travel along
+     * its path from it without anything being wrong. The AH-6 covers 2.3 blocks a tick flat out, past the plain 2-block
+     * limit, and every tick of network jitter snapped the pilot back a full tick. Only being off to the side of the path,
+     * or further along it than a few ticks of travel, counts as diverged.
+     */
+    private boolean isPositionDivergedFromServer(Vec3 syncedPosition, Vec3 syncedMotion) {
+        Vec3 offset = this.position().subtract(syncedPosition);
+        double speed = syncedMotion.length();
+        if (speed < 1.0E-3D) {
+            return offset.lengthSqr() >= CLIENT_RESYNC_DISTANCE_SQR;
+        }
+        Vec3 direction = syncedMotion.scale(1.0D / speed);
+        double along = offset.dot(direction);
+        Vec3 across = offset.subtract(direction.scale(along));
+        double alongTolerance = Math.sqrt(CLIENT_RESYNC_DISTANCE_SQR) + speed * CLIENT_RESYNC_ALONG_TRACK_TICKS;
+        return across.lengthSqr() >= CLIENT_RESYNC_DISTANCE_SQR || Math.abs(along) >= alongTolerance;
     }
 
     private void tickServerWeapon() {
@@ -3188,10 +3228,10 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         Vec3 world = this.position().add(this.rotateLocalOffsetWithPose(localX, localY, localZ, 1.0F));
         AABB sampleBox = new AABB(
                 world.x - HELICOPTER_ROTOR_CONTACT_SAMPLE_RADIUS,
-                world.y - HELICOPTER_ROTOR_CONTACT_SAMPLE_RADIUS,
+                world.y - HELICOPTER_ROTOR_CONTACT_SAMPLE_HALF_HEIGHT,
                 world.z - HELICOPTER_ROTOR_CONTACT_SAMPLE_RADIUS,
                 world.x + HELICOPTER_ROTOR_CONTACT_SAMPLE_RADIUS,
-                world.y + HELICOPTER_ROTOR_CONTACT_SAMPLE_RADIUS,
+                world.y + HELICOPTER_ROTOR_CONTACT_SAMPLE_HALF_HEIGHT,
                 world.z + HELICOPTER_ROTOR_CONTACT_SAMPLE_RADIUS
         );
         return this.intersectsBlockCollision(sampleBox);
@@ -4868,6 +4908,12 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
             this.input = VehicleInput.EMPTY;
         }
         Vec3 velocity = this.getDeltaMovement();
+        if (this.onGround() && velocity.y < 0.0D) {
+            // Resting on the ground the hull is not falling. Gravity used to pile up here to full descent speed while the
+            // rotor spun up, so the first moment of lift-off "landed" again at that speed: over a third of the AH-6's health
+            // gone, and a share of it leaked to the passengers.
+            velocity = new Vec3(velocity.x, 0.0D, velocity.z);
+        }
         Vec3 velocityAtTickStart = velocity;
         double verticalSpeedBeforeDrag = velocity.y;
         int forwardAxis = this.input.forwardAxis();
@@ -4991,7 +5037,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
                     // A/D strafe and the attitude follows movement, so the mouse only turns and aims the nose.
                     this.holdTick = 0;
                     if (!this.isFreeLookInputDown()) {
-                        this.pilotAimPitch = Mth.clamp(this.pilotAimPitch + (float) (1.5D * pitchSpeed * turnResponse * HELICOPTER_HOVER_POWER) * this.input.mouseY(), -HELICOPTER_MAX_AIM_PITCH, HELICOPTER_MAX_AIM_PITCH);
+                        this.pilotAimPitch = Mth.clamp(this.pilotAimPitch + (float) (1.5D * pitchSpeed * turnResponse * HELICOPTER_HOVER_POWER) * this.input.mouseY(), -HELICOPTER_MAX_AIM_UP, HELICOPTER_MAX_AIM_DOWN);
                     }
                 } else if (this.input.right()) {
                     this.holdTick++;
@@ -5212,7 +5258,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         double fullLateralAcceleration = maxStrafe * HELICOPTER_ACCELERATION_RESPONSE * acceleration;
         float leftAccelerationFraction = (float) Mth.clamp((this.swayStrafeSpeed - previousStrafeSpeed) / fullLateralAcceleration, -1.5D, 1.5D);
         // Nose down (positive pitch) into forward flight, bank (positive roll is right) into strafes and turns.
-        float targetPitch = Mth.clamp(forwardFraction * HELICOPTER_MAX_FORWARD_TILT + this.pilotAimPitch, -50.0F, 40.0F);
+        float targetPitch = Mth.clamp(forwardFraction * HELICOPTER_MAX_FORWARD_TILT + this.pilotAimPitch, -50.0F, HELICOPTER_MAX_NOSE_DOWN);
         float targetRoll = Mth.clamp(-leftFraction * HELICOPTER_STRAFE_BANK * HELICOPTER_MAX_FORWARD_TILT
                 + yawDelta * HELICOPTER_TURN_BANK, -HELICOPTER_MAX_BANK, HELICOPTER_MAX_BANK);
         this.setXRot(this.getXRot() + (targetPitch - this.getXRot()) * HELICOPTER_ATTITUDE_RESPONSE);
@@ -5244,7 +5290,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     private void tickHelicopterCameraPitch() {
         this.heliCameraPitchO = this.heliCameraPitch;
         if (this.heliCameraFromTilt) {
-            this.heliCameraPitch = Mth.clamp(this.heliShownAim + this.heliCameraTilt, -50.0F, 40.0F);
+            this.heliCameraPitch = Mth.clamp(this.heliShownAim + this.heliCameraTilt, -50.0F, HELICOPTER_MAX_NOSE_DOWN);
             this.heliCameraFromTilt = false;
         } else {
             this.heliCameraPitch += (this.getXRot() - this.heliCameraPitch) * HELICOPTER_CAMERA_FOLLOW_RESPONSE;
@@ -5423,7 +5469,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         // The hull shows the thrust tilt; the pilot's mouse aim rides on top without pushing the helicopter.
         this.heliShownTilt += (softenedNoseUp(this.heliTiltPitch) - this.heliShownTilt) * WEIGHTY_HULL_TILT_RESPONSE;
         this.heliShownAim += (this.pilotAimPitch - this.heliShownAim) * WEIGHTY_AIM_RESPONSE;
-        this.setXRot(Mth.clamp(this.heliShownTilt + this.heliShownAim, -50.0F, 40.0F));
+        this.setXRot(Mth.clamp(this.heliShownTilt + this.heliShownAim, -50.0F, HELICOPTER_MAX_NOSE_DOWN));
         this.heliCameraTilt += (this.heliShownTilt * WEIGHTY_CAMERA_TILT_SHARE - this.heliCameraTilt) * WEIGHTY_CAMERA_TILT_RESPONSE;
         this.heliCameraFromTilt = true;
 
@@ -6071,6 +6117,10 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         VehiclePartArmorProfile armor = this.vehicleData().defaults().armor().forPart(hitPart);
         float leakMultiplier = armor.passengerLeakMultiplier();
         if (leakMultiplier <= 0.0F || this.getPassengers().isEmpty()) {
+            return;
+        }
+        if (source.is(ModDamageTypes.VEHICLE_STRIKE) && source.getDirectEntity() == this
+                && finalDamage < this.maxVehicleHealth() * SELF_STRIKE_PASSENGER_LEAK_MIN_RATIO) {
             return;
         }
         Entity sourceEntity = source.getEntity();

@@ -106,7 +106,8 @@ public final class VehicleHudOverlay {
             return;
         }
         int width = guiGraphics.guiWidth();
-        int y = guiGraphics.guiHeight() - 80;
+        // A passenger with their own hands keeps their health, armor and food bars; sit the vehicle's info above them.
+        int y = guiGraphics.guiHeight() - (shouldReplaceHotbar(minecraft.player, vehicle) ? 80 : 112);
         float healthRatio = vehicle.maxVehicleHealth() <= 0.0F ? 0.0F : Mth.clamp(vehicle.vehicleHealth() / vehicle.maxVehicleHealth(), 0.0F, 1.0F);
         int barWidth = 60;
         int x = width / 2 - barWidth / 2;

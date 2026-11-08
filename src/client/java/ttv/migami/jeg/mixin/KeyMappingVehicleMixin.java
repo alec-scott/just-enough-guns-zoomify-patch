@@ -8,6 +8,8 @@ import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
+import ttv.migami.jeg.client.KeyBindings;
+import ttv.migami.jeg.vehicle.client.overlay.VehicleHudOverlay;
 import ttv.migami.jeg.vehicle.entity.base.VehicleEntity;
 
 @Mixin(KeyMapping.class)
@@ -15,9 +17,9 @@ public class KeyMappingVehicleMixin {
     @Shadow
     private int clickCount;
 
-    // Zoomify binds zoom to C by default, the same key as vehicle free look, and its scroll zoom
-    // fights the vehicle camera, so its zoom keys are ignored while riding a vehicle.
-    private static final String ZOOMIFY_KEY_PREFIX = "zoomify.key.zoom";
+    // Zoomify binds zoom to C by default, the same key as vehicle free look, and its scroll zoom fights the vehicle
+    // camera, so its zoom keys are ignored for whoever is at the vehicle's controls (pilot, gunner, weapon seat).
+    // Passengers who keep their own hands and gun zoom as they do on foot.
 
     @Inject(method = "isDown()Z", at = @At("HEAD"), cancellable = true)
     private void jeg$suppressZoomifyInVehicle(CallbackInfoReturnable<Boolean> callback) {
@@ -49,9 +51,7 @@ public class KeyMappingVehicleMixin {
     }
 
     private boolean jeg$isZoomifyKeyInVehicle() {
-        Player player = Minecraft.getInstance().player;
-        return player != null
-                && player.getVehicle() instanceof VehicleEntity
-                && ((KeyMapping) (Object) this).getName().startsWith(ZOOMIFY_KEY_PREFIX);
+        return ((KeyMapping) (Object) this).getName().startsWith(KeyBindings.ZOOMIFY_ZOOM_KEY_PREFIX)
+                && VehicleHudOverlay.shouldReplaceHotbar();
     }
 }
