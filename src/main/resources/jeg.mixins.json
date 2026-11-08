@@ -38,7 +38,9 @@
     "MinecraftVehicleHotbarMixin",
     "MouseHandlerVehicleMixin",
     "VehicleCameraMixin",
-    "VehicleGameRendererMixin"
+    "VehicleGameRendererMixin",
+    "FogRendererFarDrawMixin",
+    "HumanoidModelDualMinigunMixin"
   ],
   "injectors": {
     "defaultRequire": 1

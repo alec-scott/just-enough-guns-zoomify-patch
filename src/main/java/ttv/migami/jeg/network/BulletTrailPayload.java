@@ -20,7 +20,9 @@ public record BulletTrailPayload(
         int shooterId,
         boolean trailVisible,
         /** Fired by a vehicle's own gun from its muzzle, rather than by someone's hand-held gun. */
-        boolean vehicleRound
+        boolean vehicleRound,
+        /** Fired by the gun in the shooter's off hand (a second minigun), so its tracer leaves that gun. */
+        boolean offhand
 ) implements CustomPacketPayload {
     public static final Type<BulletTrailPayload> TYPE = new Type<>(Reference.id("bullet_trail"));
 
@@ -47,6 +49,7 @@ public record BulletTrailPayload(
                 buf.writeInt(payload.shooterId);
                 buf.writeBoolean(payload.trailVisible);
                 buf.writeBoolean(payload.vehicleRound);
+                buf.writeBoolean(payload.offhand);
             },
             buf -> {
                 int count = buf.readInt();
@@ -68,6 +71,7 @@ public record BulletTrailPayload(
                         buf.readDouble(),
                         buf.readInt(),
                         buf.readBoolean(),
+                        buf.readBoolean(),
                         buf.readBoolean()
                 );
             }
@@ -83,7 +87,8 @@ public record BulletTrailPayload(
             double gravity,
             int shooterId,
             boolean trailVisible,
-            boolean vehicleRound
+            boolean vehicleRound,
+            boolean offhand
     ) {
         this(
                 new int[]{entityId},
@@ -95,7 +100,8 @@ public record BulletTrailPayload(
                 gravity,
                 shooterId,
                 trailVisible,
-                vehicleRound
+                vehicleRound,
+                offhand
         );
     }
 

@@ -50,6 +50,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.Explosion;
 import net.minecraft.world.level.Level;
+import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.Level.ExplosionInteraction;
 import net.minecraft.world.level.storage.TagValueInput;
 import net.minecraft.world.level.storage.TagValueOutput;
@@ -81,6 +82,9 @@ import ttv.migami.jeg.gun.GunStats;
 import ttv.migami.jeg.init.ModDamageTypes;
 import ttv.migami.jeg.init.ModItems;
 import ttv.migami.jeg.init.ModParticleTypes;
+import ttv.migami.jeg.network.MissileBlastPayload;
+import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
+import net.minecraft.core.particles.ParticleTypes;
 import ttv.migami.jeg.init.ModSounds;
 import ttv.migami.jeg.item.RepairToolItem;
 import ttv.migami.jeg.particle.CannonMuzzleFlareOption;
@@ -156,6 +160,26 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     /** Reload ticks left on every weapon slot, comma separated: each weapon reloads on its own. */
     private static final EntityDataAccessor<String> DATA_WEAPON_RELOAD_TICKS_BY_SLOT = SynchedEntityData.defineId(VehicleEntity.class, EntityDataSerializers.STRING);
     private static final EntityDataAccessor<Integer> DATA_FLARE_AMMO = SynchedEntityData.defineId(VehicleEntity.class, EntityDataSerializers.INT);
+    /** WRECK_NONE, or how far a destroyed aircraft has got: going down, then a burning hulk. */
+    private static final EntityDataAccessor<Integer> DATA_WRECK = SynchedEntityData.defineId(VehicleEntity.class, EntityDataSerializers.INT);
+    public static final int WRECK_NONE = 0;
+    /** Destroyed: falling out of the sky spinning and burning, or cooking off on the ground, until it blows up. */
+    public static final int WRECK_GOING_DOWN = 1;
+    /** Blown up: a charred hulk burning where it came down, until it breaks apart. */
+    public static final int WRECK_BURNING = 2;
+    private static final String TAG_WRECK = "Wreck";
+    private static final String TAG_WRECK_TICKS = "WreckTicks";
+    /** A helicopter killed on the ground smokes and sparks this long before it goes up. */
+    private static final int WRECK_COOK_OFF_TICKS = 30;
+    /** One still falling after this long (over the void, say) blows up in the air. */
+    private static final int WRECK_MAX_FALL_TICKS = 240;
+    /** How long the burning hulk stays before it breaks apart. */
+    private static final int WRECK_BURN_TICKS = 200;
+    private static final double WRECK_GRAVITY = 0.06D;
+    private static final double WRECK_MAX_FALL_SPEED = 1.6D;
+    /** The tail spins faster and faster as it goes down, to this many degrees a tick. */
+    private static final float WRECK_MAX_SPIN = 20.0F;
+    private static final double WRECK_BLAST_VISIBLE_RANGE = 512.0D;
     private static final EntityDataAccessor<Integer> DATA_DECOY_COOLDOWN = SynchedEntityData.defineId(VehicleEntity.class, EntityDataSerializers.INT);
     private static final EntityDataAccessor<Boolean> DATA_MISSILE_LOCKED = SynchedEntityData.defineId(VehicleEntity.class, EntityDataSerializers.BOOLEAN);
     private static final EntityDataAccessor<Integer> DATA_MISSILE_LOCK_TARGET = SynchedEntityData.defineId(VehicleEntity.class, EntityDataSerializers.INT);
@@ -269,11 +293,19 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     private static final double TRACK_PIVOT_TURN_RATE = 6.0D;
     private static final double TRACK_PIVOT_POWER_THRESHOLD = 0.05D;
     // Player pilots fly on demand: holding ascend/descend sets a vertical speed, releasing holds altitude.
-    private static final double HELICOPTER_CLIMB_SPEED = 0.3D;
-    private static final double HELICOPTER_COMMANDED_DESCENT_SPEED = 0.3D;
+    private static final double HELICOPTER_CLIMB_SPEED = 0.4D;
+    private static final double HELICOPTER_COMMANDED_DESCENT_SPEED = 0.45D;
+    /** Fastest the hull may rise: a full climb plus the balloon of a flare at speed (WEIGHTY_FLARE_BALLOON). */
+    private static final double HELICOPTER_MAX_RISE_SPEED = HELICOPTER_CLIMB_SPEED + 0.15D;
+    /**
+     * Sink rate (with little airspeed) past which the pilot is warned. Above any commanded descent, so holding descend is
+     * never flagged; this is for the helicopter dropping faster than the pilot asked (rolled over, rotor unloaded).
+     */
+    private static final double HELICOPTER_DANGEROUS_DESCENT_WARNING_SPEED = HELICOPTER_COMMANDED_DESCENT_SPEED + 0.1D;
     private static final double HELICOPTER_VERTICAL_RESPONSE = 0.2D;
-    // Landing assist: below this height a commanded descent slows down so the skids touch down gently.
-    private static final double HELICOPTER_LANDING_ASSIST_ALTITUDE = 8.0D;
+    // Landing assist: below this height a commanded descent slows down so the skids touch down gently. Tall enough for
+    // the heaviest airframe to bleed a full-speed descent off below HELICOPTER_SAFE_DESCENT_SPEED before it touches.
+    private static final double HELICOPTER_LANDING_ASSIST_ALTITUDE = 12.0D;
     private static final double HELICOPTER_TOUCHDOWN_SPEED = 0.05D;
     private static final double HELICOPTER_HOVER_POWER = 0.085D;
     private static final double HELICOPTER_CLIMB_POWER = 0.105D;
@@ -461,6 +493,10 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     private Vec3 preExplosionKnockbackVelocity;
     private int preExplosionKnockbackTick = -1;
     private float destroyRot;
+    /** Ticks into the current wreck stage (going down, then burning). */
+    private int wreckTicks;
+    /** Destroyed while already on the ground: cooks off in place instead of falling. */
+    private boolean wreckStartedGrounded;
     private float pilotAimPitch;
     private int dismountLerpSuppressionTicks;
     @Nullable
@@ -704,6 +740,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         builder.define(DATA_RELOADING_WEAPON, -1);
         builder.define(DATA_WEAPON_RELOAD_TICKS_BY_SLOT, "");
         builder.define(DATA_FLARE_AMMO, 0);
+        builder.define(DATA_WRECK, WRECK_NONE);
         builder.define(DATA_DECOY_COOLDOWN, 0);
         builder.define(DATA_MISSILE_LOCKED, false);
         builder.define(DATA_MISSILE_LOCK_TARGET, -1);
@@ -978,6 +1015,11 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     /** Rounds loaded in this weapon slot, as last synced. */
     public int vehicleWeaponSlotAmmo(int slot) {
         return slot < 0 ? 0 : this.weaponAmmoFromSyncedData(slot);
+    }
+
+    /** Spare rounds aboard for this weapon slot's magazine, as last synced (0 for belt-fed weapons, counted as loaded). */
+    public int vehicleWeaponSlotReserveAmmo(int slot) {
+        return slot < 0 ? 0 : this.weaponReserveAmmoFromSyncedData(slot);
     }
 
     /** Reload ticks left on this weapon slot, as last synced: 0 when it is not reloading. */
@@ -1528,6 +1570,16 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         }
         this.updateLastTickMovementSpeed();
         super.tick();
+        if (this.level().isClientSide()) {
+            this.tickDamageEffects();
+        }
+        if (this.isWrecked()) {
+            // A wreck only falls, burns and breaks apart: no controls, weapons, repairs or recharging.
+            if (this.level() instanceof ServerLevel serverLevel) {
+                this.tickWreck(serverLevel);
+            }
+            return;
+        }
         if (this.level().isClientSide() && this.dismountLerpSuppressionTicks > 0) {
             this.dismountLerpSuppressionTicks--;
         }
@@ -5214,7 +5266,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
             velocity = new Vec3(horizontalVelocity.x, velocity.y, horizontalVelocity.z);
         }
 
-        this.moveHelicopter(new Vec3(velocity.x, Mth.clamp(velocity.y, -HELICOPTER_MAX_DESCENT_SPEED, 0.45D), velocity.z));
+        this.moveHelicopter(new Vec3(velocity.x, Mth.clamp(velocity.y, -HELICOPTER_MAX_DESCENT_SPEED, HELICOPTER_MAX_RISE_SPEED), velocity.z));
         this.warnHelicopterDangerousDescent(forcedDescent, altitude);
     }
 
@@ -5507,7 +5559,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         }
         if (this.level().isClientSide()
                 || (!forcedDescent && (altitude <= HELICOPTER_DANGEROUS_DESCENT_WARNING_MIN_ALTITUDE
-                || this.getDeltaMovement().y >= -HELICOPTER_SAFE_DESCENT_SPEED
+                || this.getDeltaMovement().y >= -HELICOPTER_DANGEROUS_DESCENT_WARNING_SPEED
                 || this.getDeltaMovement().horizontalDistance() >= HELICOPTER_LOW_AIRSPEED_THRESHOLD))) {
             return;
         }
@@ -5848,6 +5900,8 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     protected void addAdditionalSaveData(ValueOutput output) {
         output.putString(TAG_VEHICLE_ID, this.entityData.get(DATA_VEHICLE_ID));
         output.putFloat(TAG_HEALTH, this.vehicleHealth());
+        output.putInt(TAG_WRECK, this.wreckState());
+        output.putInt(TAG_WRECK_TICKS, this.wreckTicks);
         output.putInt(TAG_ENERGY, this.vehicleEnergy());
         output.putInt(TAG_REPAIR_COOLDOWN, this.repairCooldown);
         output.putInt(TAG_SELECTED_WEAPON, this.entityData.get(DATA_SELECTED_WEAPON));
@@ -5892,6 +5946,10 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         this.entityData.set(DATA_VEHICLE_ID, input.getStringOr(TAG_VEHICLE_ID, this.entityData.get(DATA_VEHICLE_ID)));
         float health = input.getFloatOr(TAG_HEALTH, this.maxVehicleHealth());
         this.entityData.set(DATA_HEALTH, Mth.clamp(health, 0.0F, this.maxVehicleHealth()));
+        this.entityData.set(DATA_WRECK, Mth.clamp(input.getIntOr(TAG_WRECK, WRECK_NONE), WRECK_NONE, WRECK_BURNING));
+        this.wreckTicks = input.getIntOr(TAG_WRECK_TICKS, 0);
+        // A wreck saved mid-fall carries on falling from where it was.
+        this.wreckStartedGrounded = false;
         int energy = input.getIntOr(TAG_ENERGY, this.maxVehicleEnergy());
         this.entityData.set(DATA_ENERGY, Mth.clamp(energy, 0, this.maxVehicleEnergy()));
         this.repairCooldown = input.getIntOr(TAG_REPAIR_COOLDOWN, 0);
@@ -6008,7 +6066,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
 
     @Override
     public boolean hurtServer(ServerLevel serverLevel, DamageSource source, float amount) {
-        if (this.isRemoved() || this.isInvulnerableToBase(source)) {
+        if (this.isRemoved() || this.isWrecked() || this.isInvulnerableToBase(source)) {
             return false;
         }
         if (this.isEnemyAiVehicle() && source.getEntity() instanceof LivingEntity attacker) {
@@ -6042,7 +6100,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     }
 
     private boolean hurtVehicleIgnoringArmor(DamageSource source, float amount) {
-        if (this.level().isClientSide() || this.isRemoved() || this.isInvulnerableToBase(source) || amount <= 0.0F) {
+        if (this.level().isClientSide() || this.isRemoved() || this.isWrecked() || this.isInvulnerableToBase(source) || amount <= 0.0F) {
             return false;
         }
         this.repairCooldown = this.vehicleData().defaults().autoRepairCooldownTicks();
@@ -6067,20 +6125,213 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     }
 
     private void destroyVehicle() {
+        if (this.isWrecked()) {
+            return;
+        }
         for (Entity passenger : java.util.List.copyOf(this.getPassengers())) {
             if (passenger.entityTags().contains(EnemyVehicleController.ENEMY_VEHICLE_CREW_TAG)) {
                 passenger.discard();
             }
         }
         this.ejectPassengers();
+        if (this.level() instanceof ServerLevel serverLevel && this.goesDownAsWreck()) {
+            // Aircraft do not vanish: they go down burning, blow up where they hit, and burn out (tickWreck).
+            this.entityData.set(DATA_WRECK, WRECK_GOING_DOWN);
+            this.wreckTicks = 0;
+            this.wreckStartedGrounded = this.onGround() || this.verticalCollisionBelow || this.isInWater();
+            this.enginePower = 0.0D;
+            this.engineStart = false;
+            this.engineStartOver = false;
+            serverLevel.sendParticles(ModParticleTypes.SMALL_EXPLOSION.get(), this.getX(), this.getY() + 0.6D, this.getZ(), 6, 0.6D, 0.4D, 0.6D, 0.06D);
+            serverLevel.playSound(null, this.getX(), this.getY(), this.getZ(), SoundEvents.GENERIC_EXPLODE.value(), SoundSource.NEUTRAL, 2.0F, 1.4F);
+            return;
+        }
         if (this.level() instanceof ServerLevel serverLevel) {
             serverLevel.sendParticles(ModParticleTypes.SMALL_EXPLOSION.get(), this.getX(), this.getY() + 0.6D, this.getZ(), 12, 0.8D, 0.5D, 0.8D, 0.08D);
             var destroy = this.vehicleData().defaults().destroy();
             if (destroy.explodes() && destroy.explosionPower() > 0.0F) {
                 this.level().explode(this, this.getX(), this.getY() + 0.4D, this.getZ(), destroy.explosionPower(), ExplosionInteraction.MOB);
             }
+            // After the blast, so it does not destroy what was aboard.
+            this.spillCargo(serverLevel);
         }
         this.discard();
+    }
+
+    /**
+     * What a damaged vehicle looks like, by how much hull it has left (client side): a wisp of smoke from the engine
+     * below 60%, thick smoke and sparks below 35%, fire and black smoke below 15% or once it is going down, and a hulk
+     * burning all over under a column of smoke once it has blown up.
+     */
+    private void tickDamageEffects() {
+        float max = this.maxVehicleHealth();
+        float ratio = max <= 0.0F ? 1.0F : Mth.clamp(this.vehicleHealth() / max, 0.0F, 1.0F);
+        int wreck = this.wreckState();
+        if (wreck == WRECK_NONE && ratio >= 0.6F) {
+            return;
+        }
+        Level level = this.level();
+        RandomSource random = this.random;
+        double yaw = Math.toRadians(this.getYRot());
+        // The engine: high on the hull and a little aft.
+        double back = this.getBbWidth() * 0.25D;
+        double ex = this.getX() + Math.sin(yaw) * back;
+        double ey = this.getY() + this.getBbHeight() * 0.75D;
+        double ez = this.getZ() - Math.cos(yaw) * back;
+        if (wreck == WRECK_BURNING) {
+            for (int i = 0; i < 3; i++) {
+                level.addParticle(ParticleTypes.FLAME, this.getX() + (random.nextDouble() - 0.5D) * this.getBbWidth(),
+                        this.getY() + random.nextDouble() * this.getBbHeight() * 0.7D,
+                        this.getZ() + (random.nextDouble() - 0.5D) * this.getBbWidth(), 0.0D, 0.04D, 0.0D);
+            }
+            if (this.tickCount % 2 == 0) {
+                level.addAlwaysVisibleParticle(ParticleTypes.CAMPFIRE_SIGNAL_SMOKE, true, ex + (random.nextDouble() - 0.5D),
+                        ey, ez + (random.nextDouble() - 0.5D), 0.0D, 0.07D, 0.0D);
+            }
+            level.addParticle(ParticleTypes.LARGE_SMOKE, ex, ey, ez, (random.nextDouble() - 0.5D) * 0.05D, 0.06D, (random.nextDouble() - 0.5D) * 0.05D);
+            if (random.nextInt(8) == 0) {
+                level.addParticle(ParticleTypes.LAVA, ex, ey, ez, 0.0D, 0.0D, 0.0D);
+            }
+            return;
+        }
+        if (wreck == WRECK_GOING_DOWN || ratio < 0.15F) {
+            for (int i = 0; i < 2; i++) {
+                level.addParticle(ParticleTypes.FLAME, ex + (random.nextDouble() - 0.5D) * 0.6D, ey, ez + (random.nextDouble() - 0.5D) * 0.6D,
+                        0.0D, 0.03D, 0.0D);
+                level.addParticle(ParticleTypes.LARGE_SMOKE, ex, ey + 0.2D, ez, (random.nextDouble() - 0.5D) * 0.04D, 0.05D, (random.nextDouble() - 0.5D) * 0.04D);
+            }
+            if (this.tickCount % 3 == 0) {
+                level.addAlwaysVisibleParticle(ParticleTypes.CAMPFIRE_COSY_SMOKE, true, ex, ey + 0.3D, ez, 0.0D, 0.05D, 0.0D);
+            }
+            return;
+        }
+        if (ratio < 0.35F) {
+            level.addParticle(ParticleTypes.LARGE_SMOKE, ex, ey, ez, (random.nextDouble() - 0.5D) * 0.03D, 0.06D, (random.nextDouble() - 0.5D) * 0.03D);
+            if (this.tickCount % 4 == 0) {
+                level.addAlwaysVisibleParticle(ParticleTypes.CAMPFIRE_COSY_SMOKE, true, ex, ey + 0.2D, ez, 0.0D, 0.04D, 0.0D);
+            }
+            if (random.nextInt(6) == 0) {
+                for (int i = 0; i < 5; i++) {
+                    level.addParticle(ParticleTypes.ELECTRIC_SPARK, ex, ey, ez, (random.nextDouble() - 0.5D) * 0.5D,
+                            random.nextDouble() * 0.35D, (random.nextDouble() - 0.5D) * 0.5D);
+                }
+            }
+            return;
+        }
+        // A grey plume from a hit engine, plain to see from a distance.
+        if (this.tickCount % 2 == 0) {
+            level.addParticle(ParticleTypes.SMOKE, ex, ey, ez, (random.nextDouble() - 0.5D) * 0.02D, 0.05D, (random.nextDouble() - 0.5D) * 0.02D);
+        }
+        if (this.tickCount % 5 == 0) {
+            level.addParticle(ParticleTypes.LARGE_SMOKE, ex, ey, ez, (random.nextDouble() - 0.5D) * 0.02D, 0.05D, (random.nextDouble() - 0.5D) * 0.02D);
+        }
+    }
+
+    /** Helicopters and aircraft go down as a wreck instead of vanishing on the spot. */
+    private boolean goesDownAsWreck() {
+        VehicleType type = this.vehicleData().defaults().vehicleType();
+        return type == VehicleType.HELICOPTER || type == VehicleType.AIRCRAFT;
+    }
+
+    /** WRECK_NONE while intact, else WRECK_GOING_DOWN or WRECK_BURNING. */
+    public int wreckState() {
+        return this.entityData.get(DATA_WRECK);
+    }
+
+    /** Destroyed, and now only a wreck: it cannot be boarded, repaired or damaged any further. */
+    public boolean isWrecked() {
+        return this.wreckState() != WRECK_NONE;
+    }
+
+    private void tickWreck(ServerLevel level) {
+        this.wreckTicks++;
+        if (this.wreckState() == WRECK_GOING_DOWN) {
+            boolean grounded = this.onGround() || this.verticalCollisionBelow || this.isInWater();
+            boolean hit = this.wreckStartedGrounded
+                    ? this.wreckTicks >= WRECK_COOK_OFF_TICKS
+                    : this.wreckTicks > 2 && (grounded || this.horizontalCollision);
+            if (hit || this.wreckTicks >= WRECK_MAX_FALL_TICKS) {
+                this.explodeWreck(level);
+                return;
+            }
+            // Out of control: the tail spins up, the nose drops and it falls, the rotor winding down.
+            Vec3 velocity = this.getDeltaMovement();
+            velocity = new Vec3(velocity.x * 0.97D, Math.max(velocity.y - WRECK_GRAVITY, -WRECK_MAX_FALL_SPEED), velocity.z * 0.97D);
+            if (grounded) {
+                velocity = new Vec3(velocity.x * 0.5D, Math.max(velocity.y, 0.0D), velocity.z * 0.5D);
+            }
+            if (!this.wreckStartedGrounded) {
+                this.destroyRot = Math.min(WRECK_MAX_SPIN, this.destroyRot + 0.7F);
+                this.yRotO = this.getYRot();
+                this.setYRot(this.getYRot() + this.destroyRot);
+                this.xRotO = this.getXRot();
+                this.setXRot(Mth.lerp(0.05F, this.getXRot(), 28.0F));
+                this.setRoll(Mth.lerp(0.05F, this.roll(), 18.0F));
+            }
+            float rotor = this.propellerSpeed() * 0.97F;
+            this.entityData.set(DATA_PROPELLER_SPEED, rotor);
+            this.entityData.set(DATA_PROPELLER_ROT, this.propellerRot() + 30.0F * rotor);
+            this.setDeltaMovement(velocity);
+            this.move(MoverType.SELF, velocity);
+            return;
+        }
+        // Burning hulk: settles where it came down, then breaks apart.
+        Vec3 velocity = this.onGround() ? Vec3.ZERO : new Vec3(0.0D, Math.max(this.getDeltaMovement().y - WRECK_GRAVITY, -WRECK_MAX_FALL_SPEED), 0.0D);
+        this.setDeltaMovement(velocity);
+        if (velocity.lengthSqr() > 0.0D) {
+            this.move(MoverType.SELF, velocity);
+        }
+        if (this.wreckTicks % 25 == 0) {
+            level.playSound(null, this.getX(), this.getY(), this.getZ(), SoundEvents.FIRE_AMBIENT, SoundSource.NEUTRAL, 1.6F, 0.7F + this.random.nextFloat() * 0.3F);
+        }
+        if (this.wreckTicks >= WRECK_BURN_TICKS) {
+            level.sendParticles(ParticleTypes.LARGE_SMOKE, this.getX(), this.getY() + 0.8D, this.getZ(), 40, 1.0D, 0.6D, 1.0D, 0.04D);
+            level.sendParticles(ParticleTypes.LAVA, this.getX(), this.getY() + 0.6D, this.getZ(), 12, 0.8D, 0.3D, 0.8D, 0.0D);
+            level.playSound(null, this.getX(), this.getY(), this.getZ(), SoundEvents.FIRE_EXTINGUISH, SoundSource.NEUTRAL, 1.5F, 0.6F);
+            this.discard();
+        }
+    }
+
+    /** The fuel and munitions go up: a fireball where the wreck hit, what was aboard thrown clear, then it burns. */
+    private void explodeWreck(ServerLevel level) {
+        Vec3 at = this.position().add(0.0D, this.getBbHeight() * 0.4D, 0.0D);
+        var destroy = this.vehicleData().defaults().destroy();
+        float power = destroy.explodes() ? destroy.explosionPower() : 0.0F;
+        // Drawn by clients like a missile's blast (fireball, smoke column, shockwave, boom as it reaches them).
+        MissileBlastPayload blast = new MissileBlastPayload(at, Math.max(3.0F, power * 1.5F), Math.max(4.0F, power * 2.0F), true, true);
+        for (ServerPlayer player : level.players()) {
+            if (player.position().distanceToSqr(at) < WRECK_BLAST_VISIBLE_RANGE * WRECK_BLAST_VISIBLE_RANGE
+                    && ServerPlayNetworking.canSend(player, MissileBlastPayload.TYPE)) {
+                ServerPlayNetworking.send(player, blast);
+            }
+        }
+        if (power > 0.0F) {
+            level.explode(this, null, null, at.x, at.y, at.z, power, false, ExplosionInteraction.MOB,
+                    ParticleTypes.SMOKE, ParticleTypes.SMOKE, net.minecraft.util.random.WeightedList.of(), net.minecraft.core.Holder.direct(SoundEvents.EMPTY));
+        }
+        this.spillCargo(level);
+        this.entityData.set(DATA_WRECK, WRECK_BURNING);
+        this.entityData.set(DATA_PROPELLER_SPEED, 0.0F);
+        this.wreckTicks = 0;
+        this.setDeltaMovement(Vec3.ZERO);
+    }
+
+    /** Throws everything in the vehicle's inventory out around it, so nothing aboard is lost with it. */
+    private void spillCargo(ServerLevel level) {
+        double y = this.getY() + this.getBbHeight() * 0.5D;
+        for (int slot = 0; slot < this.inventory.getContainerSize(); slot++) {
+            ItemStack stack = this.inventory.removeItemNoUpdate(slot);
+            if (stack.isEmpty()) {
+                continue;
+            }
+            net.minecraft.world.entity.item.ItemEntity item = new net.minecraft.world.entity.item.ItemEntity(level, this.getX(), y, this.getZ(), stack);
+            double angle = this.random.nextDouble() * Math.PI * 2.0D;
+            double speed = 0.15D + this.random.nextDouble() * 0.25D;
+            item.setDeltaMovement(Math.cos(angle) * speed, 0.25D + this.random.nextDouble() * 0.25D, Math.sin(angle) * speed);
+            item.setPickUpDelay(20);
+            level.addFreshEntity(item);
+        }
+        this.inventory.setChanged();
     }
 
     public void destroyFromEnemyCrewLoss() {
@@ -6276,6 +6527,9 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
 
     @Override
     public InteractionResult interact(Player player, InteractionHand hand, Vec3 hitLocation) {
+        if (this.isWrecked()) {
+            return InteractionResult.PASS;
+        }
         ItemStack stack = player.getItemInHand(hand);
         if (stack.getItem() instanceof RepairToolItem repairTool) {
             if (this.level().isClientSide()) {
@@ -6368,6 +6622,9 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
 
     @Override
     protected boolean canAddPassenger(Entity passenger) {
+        if (this.isWrecked()) {
+            return false;
+        }
         if (this.isEnemyAiVehicle() && !passenger.entityTags().contains(EnemyVehicleController.ENEMY_VEHICLE_CREW_TAG)) {
             return false;
         }

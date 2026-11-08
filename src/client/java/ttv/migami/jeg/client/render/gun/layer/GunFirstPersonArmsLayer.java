@@ -23,6 +23,7 @@ import com.geckolib.renderer.layer.GeoRenderLayer;
 import ttv.migami.jeg.client.render.VanillaArmModels;
 import ttv.migami.jeg.client.render.gun.AnimatedGunRenderer;
 import ttv.migami.jeg.client.render.gun.GunPoseProfile;
+import ttv.migami.jeg.gun.MinigunSpin;
 import ttv.migami.jeg.item.AnimatedGunItem;
 
 import java.util.Set;
@@ -65,7 +66,10 @@ public final class GunFirstPersonArmsLayer extends GeoRenderLayer<AnimatedGunIte
         GunPoseProfile profile = item instanceof AnimatedGunItem animatedGun
                 ? GunPoseProfile.forGun(animatedGun.getStats().id())
                 : GunPoseProfile.forGun(Identifier.fromNamespaceAndPath("jeg", "abstract_gun"));
-        boolean oneHanded = profile.armMode() == GunPoseProfile.ArmMode.ONE_HANDED;
+        // With a minigun in each hand, each gun is held by the one hand on its own side.
+        AbstractClientPlayer viewer = Minecraft.getInstance().player;
+        boolean dualMinigun = viewer != null && MinigunSpin.isDualWielding(viewer);
+        boolean oneHanded = profile.armMode() == GunPoseProfile.ArmMode.ONE_HANDED || dualMinigun;
         boolean renderLeftArm = profile.renderLeftArm();
         ArmSide activeSide = ctx == ItemDisplayContext.FIRST_PERSON_LEFT_HAND ? ArmSide.LEFT : ArmSide.RIGHT;
 

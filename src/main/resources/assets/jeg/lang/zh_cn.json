@@ -623,6 +623,7 @@
   "hud.jeg.vehicle.decoy_flare": "按%s 诱饵弹: %s",
   "hud.jeg.vehicle.decoy_smoke": "按%s 烟幕: %s",
   "hud.jeg.vehicle.ready": "就绪",
+  "hud.jeg.vehicle.reloading_short": "装填 %s秒",
   "hud.jeg.vehicle.seek_prompt": "按住%s锁定目标",
   "hud.jeg.vehicle.locking": "导弹搜索",
   "hud.jeg.vehicle.locked": "导弹锁定",

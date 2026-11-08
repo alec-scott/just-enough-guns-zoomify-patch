@@ -110,6 +110,8 @@ public class BulletEntity extends Projectile {
     private static final double PUNCH_KNOCKBACK_PER_LEVEL = 0.6D;
     private static final int FLAME_SECONDS = 5;
     private boolean helicopterGunRound;
+    /** Fired by the gun in the shooter's off hand (a second minigun). */
+    private boolean offhandRound;
     private boolean vehicleRound;
     private int punchLevel;
     private boolean flame;
@@ -181,6 +183,11 @@ public class BulletEntity extends Projectile {
     /** Fired by a vehicle's own gun; clients draw it as a heavier tracer leaving the vehicle's muzzle. */
     public void setVehicleRound() {
         this.vehicleRound = true;
+    }
+
+    /** Fired by the gun in the shooter's off hand; clients start its tracer at that gun's muzzle. */
+    public void setOffhandRound(boolean offhand) {
+        this.offhandRound = offhand;
     }
 
     /** Fired from a helicopter's gun: flies flat and far, and tears up flimsy blocks on the way. */
@@ -1022,15 +1029,19 @@ public class BulletEntity extends Projectile {
                 Entity owner = this.getOwner();
                 boolean directHitVehicle = result instanceof EntityHitResult entityHit && entityHit.getEntity() instanceof VehicleEntity;
                 float explosionPower = directHitVehicle ? power * VEHICLE_DIRECT_HIT_BLOCK_DAMAGE_SCALE : power;
+                // Rockets blow dense blocks (stone, purpur, end stone brick) apart like a missile does; the energy
+                // weapons keep vanilla's blast.
+                boolean rocket = isVehicleRocket(id) || id.equals(ROCKET_LAUNCHER_ID);
+                var blocks = rocket ? WarheadBlockDamage.calculator(this, 1.0F) : null;
                 if (isVehicleRocket(id)) {
                     // Drawn by clients like a missile's blast, scaled to the rocket's smaller warhead.
                     sendVehicleRocketBlast((ServerLevel) this.level(), power);
-                    this.level().explode(this, null, null, this.getX(), this.getY(), this.getZ(), explosionPower, false,
+                    this.level().explode(this, null, blocks, this.getX(), this.getY(), this.getZ(), explosionPower, false,
                             ExplosionInteraction.TNT, ParticleTypes.SMOKE, ParticleTypes.SMOKE,
                             net.minecraft.util.random.WeightedList.of(), net.minecraft.sounds.SoundEvents.GENERIC_EXPLODE);
                 } else {
                     spawnCustomExplosionEffects((ServerLevel) this.level(), this.position(), id);
-                    this.level().explode(this, this.getX(), this.getY(), this.getZ(), explosionPower, ExplosionInteraction.TNT);
+                    this.level().explode(this, null, blocks, this.getX(), this.getY(), this.getZ(), explosionPower, false, ExplosionInteraction.TNT);
                 }
                 if (id.equals(ROCKET_LAUNCHER_ID)) {
                     applyRocketBlastDamage(owner, directHitVehicle);
@@ -1675,7 +1686,8 @@ public class BulletEntity extends Projectile {
                 gravity,
                 shooterId,
                 trailVisible,
-                this.vehicleRound
+                this.vehicleRound,
+                this.offhandRound
         );
 
         // Send to all nearby players

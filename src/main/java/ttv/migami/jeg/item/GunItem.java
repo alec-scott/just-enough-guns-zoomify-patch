@@ -886,6 +886,52 @@ public class GunItem extends Item {
         return super.releaseUsing(stack, level, livingEntity, timeLeft);
     }
 
+    /**
+     * With a minigun in each hand, when each may next fire ([main, off], in game time). Vanilla's item cooldown is shared
+     * by every stack of an item, so one minigun's shot would hold the other back; each keeps its own here instead.
+     */
+    private static final Map<Player, long[]> DUAL_NEXT_SHOT_TICK = java.util.Collections.synchronizedMap(new WeakHashMap<>());
+    /**
+     * How far ahead of its fire rate a dual-wielded minigun may get. The trigger sends one shot a tick per gun, but they
+     * reach the server unevenly, often two in one tick and none in the next; a strict one-a-tick cooldown dropped every
+     * second one. The rate over time stays the gun's own.
+     */
+    private static final long DUAL_SHOT_CATCH_UP_TICKS = 1L;
+
+    private static boolean usesDualCooldown(Player player, @Nullable InteractionHand hand) {
+        return hand != null && MinigunSpin.isDualWielding(player);
+    }
+
+    private static long[] dualNextShot(Player player) {
+        // Game time starts at 0, so 0 means ready (and leaves room to subtract without overflowing).
+        return DUAL_NEXT_SHOT_TICK.computeIfAbsent(player, key -> new long[]{0L, 0L});
+    }
+
+    /** Whether the gun in this hand fired (or jammed) recently enough to still be cycling. */
+    public static boolean isOnShotCooldown(Player player, ItemStack stack, @Nullable InteractionHand hand) {
+        if (usesDualCooldown(player, hand)) {
+            return dualNextShot(player)[hand.ordinal()] > player.level().getGameTime();
+        }
+        return player.getCooldowns().isOnCooldown(stack);
+    }
+
+    /** Whether the gun in this hand may fire now. */
+    private static boolean isShotReady(Player player, ItemStack stack, InteractionHand hand) {
+        if (usesDualCooldown(player, hand)) {
+            return dualNextShot(player)[hand.ordinal()] - player.level().getGameTime() <= DUAL_SHOT_CATCH_UP_TICKS;
+        }
+        return !player.getCooldowns().isOnCooldown(stack);
+    }
+
+    private static void startShotCooldown(Player player, ItemStack stack, InteractionHand hand, int ticks) {
+        if (usesDualCooldown(player, hand)) {
+            long[] next = dualNextShot(player);
+            next[hand.ordinal()] = Math.max(next[hand.ordinal()], player.level().getGameTime()) + ticks;
+        } else {
+            player.getCooldowns().addCooldown(stack, ticks);
+        }
+    }
+
     public boolean tryShoot(Level level, Player player, InteractionHand hand) {
         ItemStack stack = player.getItemInHand(hand);
         if (isDrawOperationLocked(stack)) {
@@ -899,7 +945,7 @@ public class GunItem extends Item {
             return false;
         }
 
-        if (player.getCooldowns().isOnCooldown(stack)) {
+        if (!isShotReady(player, stack, hand)) {
             return false;
         }
         if (isReloading(stack) && !usesSegmentedReloadAnimation()) {
@@ -937,7 +983,7 @@ public class GunItem extends Item {
             // from the gun's muzzle by BulletTrailRenderer. A second, client-only tracer used to be drawn here from the
             // eye straight down the crosshair, which showed every shot leaving the player's face instead of the gun.
         } else {
-            if (shouldJamBeforeShot(level, player, stack)) {
+            if (shouldJamBeforeShot(level, player, stack, hand)) {
                 return false;
             }
             updateSpreadTracker(player, stats.id());
@@ -975,7 +1021,7 @@ public class GunItem extends Item {
                 setTriggerLocked(stack, true);
             }
             player.awardStat(Stats.ITEM_USED.get(this));
-            player.getCooldowns().addCooldown(stack, Math.max(1, stats.fireDelay()));
+            startShotCooldown(player, stack, hand, Math.max(1, stats.fireDelay()));
         }
 
         // A player's minigun is heard through its charge-up and firing loops (MinigunClient), in step with its barrels.
@@ -1072,7 +1118,7 @@ public class GunItem extends Item {
         return GunAttachments.modifiers(stack).explosiveAmmo() ? 5 : 1;
     }
 
-    private boolean shouldJamBeforeShot(Level level, Player player, ItemStack stack) {
+    private boolean shouldJamBeforeShot(Level level, Player player, ItemStack stack, InteractionHand hand) {
         if (!Config.gunDurabilityEnabled() || !stack.isDamageableItem()) {
             return false;
         }
@@ -1080,7 +1126,7 @@ public class GunItem extends Item {
         int damageAmount = durabilityDamagePerShot(stack);
         if (stack.getDamageValue() >= stack.getMaxDamage() - damageAmount) {
             level.playSound(player, player.blockPosition(), SoundEvents.ITEM_BREAK.value(), SoundSource.PLAYERS, 1.0F, 1.0F);
-            player.getCooldowns().addCooldown(stack, Math.max(1, stats.fireDelay()));
+            startShotCooldown(player, stack, hand, Math.max(1, stats.fireDelay()));
             return true;
         }
 
@@ -1100,7 +1146,7 @@ public class GunItem extends Item {
 
         playSound(level, player, Optional.ofNullable(resolveSound(Reference.id("item.pistol.cock"))), 1.0F);
         HudMessageHelper.showActionBar(player, Component.translatable("chat.jeg.jam").withStyle(ChatFormatting.GRAY));
-        player.getCooldowns().addCooldown(stack, Mth.clamp(stats.fireDelay() * 10, 1, 60));
+        startShotCooldown(player, stack, hand, Mth.clamp(stats.fireDelay() * 10, 1, 60));
         return true;
     }
 
@@ -1266,6 +1312,8 @@ public class GunItem extends Item {
                 Vec3 velocity = direction.scale(stats.projectileSpeed());
                 BulletEntity bullet = createBullet(level, shooter, stack, stats, velocity);
                 bullet.initialisePosition(muzzle);
+                // Its tracer leaves the gun that fired it: a second minigun's, in the off hand.
+                bullet.setOffhandRound(stack == shooter.getOffhandItem());
                 level.addFreshEntity(bullet);
                 if (level instanceof ServerLevel serverLevel && isBulletClassWeapon(stats.id())) {
                     bullet.sendTrailToClients(serverLevel);
@@ -2407,7 +2455,7 @@ public class GunItem extends Item {
             } else {
                 boolean coolingBlockedByFiring = heldInHand
                         && entity instanceof Player playerHolder
-                        && playerHolder.getCooldowns().isOnCooldown(stack);
+                        && isOnShotCooldown(playerHolder, stack, heldHand(playerHolder, stack));
                 if (!coolingBlockedByFiring && (!heldInHand || (level.getGameTime() & 1L) == 0L)) {
                     coolOverheat(stack, heldInHand);
                 }
@@ -2415,7 +2463,7 @@ public class GunItem extends Item {
         } else {
             boolean coolingBlockedByFiring = heldInHand
                     && entity instanceof Player playerHolder
-                    && playerHolder.getCooldowns().isOnCooldown(stack);
+                    && isOnShotCooldown(playerHolder, stack, heldHand(playerHolder, stack));
             if (!coolingBlockedByFiring && (!heldInHand || (level.getGameTime() & 1L) == 0L)) {
                 coolOverheat(stack, heldInHand);
             }

@@ -339,6 +339,7 @@ public final class FabricClientBootstrap {
             GunViewModelMotion.tick(client);
             GunCameraSwayHandler.tickShake();
             MinigunClient.tick(client);
+            ttv.migami.jeg.client.compat.NeaCompat.registerOnce();
             ttv.migami.jeg.vehicle.client.audio.HelicopterEngineAudio.tick(client);
             MedalManager.tick();
             if (NetworkHandler.shouldRenderLegacyBulletTrail()) {
@@ -905,13 +906,27 @@ public final class FabricClientBootstrap {
             rocketHoldStartSent = attackDown;
         }
         boolean canFire = !(gun.usesOverheatMechanic() && gun.getOverheatPercent(stack) >= 100) && hasShootableAmmo(player, stack, gun);
-        boolean spunUp = MinigunClient.updateLocal(player, attackDown || aiming, attackDown && canFire);
+        // A second minigun in the off hand spins with the first and fires on the same trigger, as long as it has the
+        // heat to spare; each gun overheats on its own.
+        ItemStack offhand = player.getOffhandItem();
+        boolean offhandCanFire = MinigunSpin.isDualWielding(player)
+                && !GunItem.isDrawOperationLocked(offhand)
+                && offhand.getItem() instanceof GunItem offhandGun
+                && !(offhandGun.usesOverheatMechanic() && offhandGun.getOverheatPercent(offhand) >= 100)
+                && hasShootableAmmo(player, offhand, offhandGun);
+        boolean spunUp = MinigunClient.updateLocal(player, attackDown || aiming, attackDown && (canFire || offhandCanFire));
         if (!attackDown) {
             nextVisualShotTickMain = 0L;
             GunRecoilHandler.releaseTrigger();
             return;
         }
-        if (!spunUp || !canFire) {
+        if (!spunUp) {
+            return;
+        }
+        if (offhandCanFire) {
+            ClientNetworkHandler.sendShoot(InteractionHand.OFF_HAND);
+        }
+        if (!canFire) {
             return;
         }
         ClientNetworkHandler.sendShoot(InteractionHand.MAIN_HAND);
@@ -1017,7 +1032,6 @@ public final class FabricClientBootstrap {
         }
 
         var camera = minecraft.gameRenderer.getMainCamera();
-        var cameraPos = camera.position();
 
         for (var entry : MUZZLE_FLASHES.entrySet()) {
             Entity entity = minecraft.level.getEntity(entry.getKey());
@@ -1032,32 +1046,45 @@ public final class FabricClientBootstrap {
             if (!(held.getItem() instanceof GunItem)) {
                 continue;
             }
-
-            // The flash sits on the gun's muzzle as it was last drawn; the old estimate from the eye only stands in for it.
-            Vec3 muzzlePos = ttv.migami.jeg.client.render.gun.GunMuzzleTracker.muzzle(living.getId(), false);
-            if (muzzlePos == null) {
-                muzzlePos = computeMuzzlePosition(living, held, partialTick);
+            renderMuzzleFlash(poseStack, bufferSource, camera, living, held, living.getMainArm(), entry.getValue().random, partialTick);
+            // A second minigun fires on the same trigger, so it flashes with the first.
+            if (MinigunSpin.isDualWielding(living)) {
+                renderMuzzleFlash(poseStack, bufferSource, camera, living, living.getOffhandItem(),
+                        living.getMainArm().getOpposite(), 1.0F - entry.getValue().random, partialTick);
             }
-            MuzzleFlashProfile flash = muzzleFlashProfile(held);
-            poseStack.pushPose();
-            poseStack.translate(muzzlePos.x - cameraPos.x, muzzlePos.y - cameraPos.y, muzzlePos.z - cameraPos.z);
-            float flareScale = flareScale(held);
-            if (flareScale > 0.0F) {
-                // Fires along the barrel, so it is turned to where the gun points rather than to face the camera.
-                poseStack.mulPose(Axis.YP.rotationDegrees(180.0F - living.getViewYRot(partialTick)));
-                poseStack.mulPose(Axis.XP.rotationDegrees(-living.getViewXRot(partialTick)));
-                GunFlare.render(poseStack, bufferSource.getBuffer(GunFlare.RENDER_TYPE), entry.getValue().random, flareScale);
-                poseStack.popPose();
-                continue;
-            }
-            poseStack.mulPose(camera.rotation());
-            poseStack.mulPose(Axis.ZP.rotationDegrees(entry.getValue().random * 360.0F));
-            poseStack.mulPose(Axis.XP.rotationDegrees(entry.getValue().random >= 0.5F ? 180.0F : 0.0F));
-
-            renderMuzzleFlashQuad(poseStack, held, bufferSource.getBuffer(RenderTypes.entityCutout(MUZZLE_FLASH_TEXTURE)), flash);
-
-            poseStack.popPose();
         }
+    }
+
+    private static void renderMuzzleFlash(PoseStack poseStack, MultiBufferSource bufferSource, net.minecraft.client.Camera camera,
+                                          LivingEntity living, ItemStack held, HumanoidArm arm, float random, float partialTick) {
+        Vec3 cameraPos = camera.position();
+        // The flash sits on the gun's muzzle as it was last drawn; the old estimate from the eye only stands in for it.
+        Vec3 muzzlePos = ttv.migami.jeg.client.render.gun.GunMuzzleTracker.muzzle(living.getId(), false, arm);
+        if (muzzlePos == null) {
+            if (arm != living.getMainArm()) {
+                return;
+            }
+            muzzlePos = computeMuzzlePosition(living, held, partialTick);
+        }
+        MuzzleFlashProfile flash = muzzleFlashProfile(held);
+        poseStack.pushPose();
+        poseStack.translate(muzzlePos.x - cameraPos.x, muzzlePos.y - cameraPos.y, muzzlePos.z - cameraPos.z);
+        float flareScale = flareScale(held);
+        if (flareScale > 0.0F) {
+            // Fires along the barrel, so it is turned to where the gun points rather than to face the camera.
+            poseStack.mulPose(Axis.YP.rotationDegrees(180.0F - living.getViewYRot(partialTick)));
+            poseStack.mulPose(Axis.XP.rotationDegrees(-living.getViewXRot(partialTick)));
+            GunFlare.render(poseStack, bufferSource.getBuffer(GunFlare.RENDER_TYPE), random, flareScale);
+            poseStack.popPose();
+            return;
+        }
+        poseStack.mulPose(camera.rotation());
+        poseStack.mulPose(Axis.ZP.rotationDegrees(random * 360.0F));
+        poseStack.mulPose(Axis.XP.rotationDegrees(random >= 0.5F ? 180.0F : 0.0F));
+
+        renderMuzzleFlashQuad(poseStack, held, bufferSource.getBuffer(RenderTypes.entityCutout(MUZZLE_FLASH_TEXTURE)), flash);
+
+        poseStack.popPose();
     }
 
     public static void submitFirstPersonMuzzleFlashRelativeToBone(

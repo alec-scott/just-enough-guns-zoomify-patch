@@ -1,5 +1,28 @@
 # Changelog
 
+## 1.7.2+mc26.1.2.yftm.11 - 2026-11-08
+
+### Added
+- Dual-wield miniguns: with a minigun in each hand the trigger spins up and fires both. Each gun has its own heat and fires from its own muzzle (tracers and flashes); both share inventory ammo. Two are slower to carry than one. A minigun alone in the off hand does not fire.
+- Helicopters show battle damage: engine smoke below 60% hull, thick smoke, sparks and a shot-out canopy below 35%, fire and a lost tail rotor below 15%, and the hull darkens as it goes.
+- Destroyed helicopters and aircraft no longer vanish: they go down spinning and burning, blow up where they hit (or cook off first if already on the ground), and burn as a charred wreck for 10 seconds before breaking apart. A wreck cannot be boarded, repaired or damaged.
+- Everything inside a destroyed vehicle is thrown out after the blast instead of being lost.
+- The helicopter weapon list shows every weapon's own ammo (loaded/spare, or rounds aboard), with the ammo item beside it; reloading shows a countdown, empty shows red.
+
+### Fixed
+- Long-range missile shots: a missile past the server's simulation distance used to freeze in mid-air and never go off. Missiles now keep their flight path loaded (like an ender pearl) and explode at range.
+- Missiles beyond entity range (192 blocks on yftm) stay visible: players out to 512 blocks see the motor glow and smoke trail, and far missiles and blasts are drawn inside the render-distance fog.
+
+### Changed
+- Helicopters climb faster (0.4 blocks/tick, was 0.3) and descend faster (0.45, was 0.3); the landing assist starts at 12 blocks so touchdowns stay gentle, and holding descend no longer sets off the low-airspeed warning.
+- Missiles and rockets (including the rocket pods and the hand-held rocket launcher) blow dense blocks apart: stone, deepslate, purpur and end stone brick crumble like soft blocks, so End cities and stone walls take real damage. Blast-proof blocks (obsidian and tougher) are unchanged.
+- Vehicle charging stations reach 8 blocks around, 3 below and 6 above (was 2 around), charging the nearest vehicle that needs it.
+
+### Compatibility
+- The dual-minigun pose works with Fresh Animations (EMF) and Not Enough Animations.
+- Clients and the server must update together: the tracer network message changed.
+- Game test option -PwithPack runs tests inside the yftm pack's mods (with -PpackExclude to leave some out).
+
 ## 1.7.2+mc26.1.2.yftm.9 - 2026-11-08
 
 ### Fixed

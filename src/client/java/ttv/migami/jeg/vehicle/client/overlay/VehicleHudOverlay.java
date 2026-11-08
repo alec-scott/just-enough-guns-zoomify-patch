@@ -5,10 +5,14 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import ttv.migami.jeg.Reference;
 import ttv.migami.jeg.client.KeyBindings;
 import ttv.migami.jeg.vehicle.client.VehicleClientState;
@@ -43,7 +47,6 @@ public final class VehicleHudOverlay {
     private static final Identifier WEAPON_ICON_CANNON_20MM = Reference.id("textures/overlay/vehicle/weapon/icons/cannon_20mm.png");
     private static final Identifier WEAPON_ICON_COAX_762 = Reference.id("textures/overlay/vehicle/weapon/icons/gun_7_62mm.png");
     private static final Identifier WEAPON_SELECTED = Reference.id("textures/overlay/vehicle/weapon/frame/selected.png");
-    private static final Identifier WEAPON_NUMBER = Reference.id("textures/overlay/vehicle/weapon/frame/number.png");
     private static final int WEAPON_ICON_WIDTH = 75;
     private static final int WEAPON_ICON_HEIGHT = 16;
     private static final int WEAPON_ICON_TEXTURE_WIDTH = 300;
@@ -234,21 +237,54 @@ public final class VehicleHudOverlay {
                 Component name = Component.translatable("item." + weapons.get(index).weaponId().getNamespace() + "." + weapons.get(index).weaponId().getPath());
                 guiGraphics.text(minecraft.font, name, x + 4, y + 4, 0xFFFFFFFF, false);
             }
-            if (index == selected) {
-                renderWeaponNumber(guiGraphics, vehicle.selectedVehicleWeaponAmmo(minecraft.player), width - 20, y + 4);
-                if (vehicle.selectedVehicleWeaponReloading(minecraft.player)) {
-                    Component reload = Component.literal("R");
-                    guiGraphics.text(minecraft.font, reload, x + 4, y + 5, 0xFFFFAA55, false);
-                }
-            } else {
-                Component slotNumber = Component.literal(String.valueOf(displayIndex + 1));
-                guiGraphics.text(minecraft.font, slotNumber, width - 20 - minecraft.font.width(slotNumber), y + 5, 0xFFFFFFFF, false);
-            }
+            // Every weapon shows its own ammo, so what is left for each ammo type is clear without switching to it.
+            renderSlotAmmo(guiGraphics, minecraft, vehicle, index, index == selected, width - 13, y + 4);
             if (index == selected) {
                 guiGraphics.blit(RenderPipelines.GUI_TEXTURED, WEAPON_SELECTED, width - 95, y + 4, 0, 0, 8, 8, 8, 8);
             }
+            // The ammo it takes, as the item: tells apart weapons that share an icon.
+            ItemStack ammoItem = ammoItem(weapons.get(index).ammoId());
+            if (!ammoItem.isEmpty()) {
+                guiGraphics.item(ammoItem, width - 115, y);
+            }
             frameIndex++;
         }
+    }
+
+    /**
+     * One weapon's ammo, right-aligned at rightX: loaded / spare for a magazine weapon, the rounds aboard for a belt-fed
+     * one, the seconds left while it reloads. Red when it has nothing left, gold when selected.
+     */
+    private static void renderSlotAmmo(GuiGraphicsExtractor guiGraphics, Minecraft minecraft, VehicleEntity vehicle, int slot,
+                                       boolean selected, int rightX, int y) {
+        var weapons = vehicle.vehicleData().defaults().weapons();
+        if (slot < 0 || slot >= weapons.size()) {
+            return;
+        }
+        var stats = VehicleWeaponStats.get(weapons.get(slot).weaponId());
+        boolean magazine = stats != null && stats.usesMagazine() && !stats.isInventoryFed();
+        int loaded = vehicle.vehicleWeaponSlotAmmo(slot);
+        int reserve = magazine ? vehicle.vehicleWeaponSlotReserveAmmo(slot) : 0;
+        int reloadTicks = vehicle.vehicleWeaponSlotReloadTicks(slot);
+        String label;
+        int color;
+        if (reloadTicks > 0) {
+            label = Component.translatable("hud.jeg.vehicle.reloading_short", Math.max(1, Math.ceilDiv(reloadTicks, 20))).getString()
+                    + (magazine ? " " + reserve : "");
+            color = 0xFFFFAA55;
+        } else {
+            label = magazine ? loaded + "/" + reserve : String.valueOf(loaded);
+            color = loaded + reserve <= 0 ? 0xFFFF5555 : selected ? 0xFFFFDD88 : 0xFFFFFFFF;
+        }
+        guiGraphics.text(minecraft.font, label, rightX - minecraft.font.width(label), y, color, true);
+    }
+
+    private static ItemStack ammoItem(Identifier ammoId) {
+        if (ammoId == null) {
+            return ItemStack.EMPTY;
+        }
+        Item item = BuiltInRegistries.ITEM.getValue(ammoId);
+        return item == null || item == Items.AIR ? ItemStack.EMPTY : new ItemStack(item);
     }
 
     private static Identifier weaponIcon(Identifier weaponId) {
@@ -347,25 +383,6 @@ public final class VehicleHudOverlay {
 
     private static void blitWeaponIcon(GuiGraphicsExtractor guiGraphics, Identifier icon, int x, int y) {
         guiGraphics.blit(RenderPipelines.GUI_TEXTURED, icon, x, y, 0, 0, WEAPON_ICON_WIDTH, WEAPON_ICON_HEIGHT, WEAPON_ICON_TEXTURE_WIDTH, WEAPON_ICON_TEXTURE_HEIGHT, WEAPON_ICON_TEXTURE_WIDTH, WEAPON_ICON_TEXTURE_HEIGHT);
-    }
-
-    private static void renderWeaponNumber(GuiGraphicsExtractor guiGraphics, int number, int rightX, int y) {
-        int clamped = Math.max(0, number);
-        if (clamped == 0) {
-            blitWeaponDigit(guiGraphics, 0, rightX - 5, y);
-            return;
-        }
-        int offset = 0;
-        while (clamped > 0) {
-            int digit = clamped % 10;
-            blitWeaponDigit(guiGraphics, digit, rightX - 5 - offset * 5, y);
-            clamped /= 10;
-            offset++;
-        }
-    }
-
-    private static void blitWeaponDigit(GuiGraphicsExtractor guiGraphics, int digit, int x, int y) {
-        guiGraphics.blit(RenderPipelines.GUI_TEXTURED, WEAPON_NUMBER, x, y, digit * 20, 0, 5, 8, 20, 30, 300, 30);
     }
 
     private static void renderReticle(GuiGraphicsExtractor guiGraphics, VehicleEntity vehicle) {

@@ -53,6 +53,15 @@ public final class AnimatedGunRenderer extends GeoItemRenderer<AnimatedGunItem> 
     /** Who holds the gun, and whether this is the hand they shoot with, so its muzzle can be tracked. */
     private static final DataTicket<Integer> HOLDER_ID = DataTicket.create("jeg:holder_id", Integer.class);
     private static final DataTicket<Boolean> SHOOTING_HAND = DataTicket.create("jeg:shooting_hand", Boolean.class);
+    /** One of a pair of miniguns, held one in each hand. */
+    private static final DataTicket<Boolean> DUAL_MINIGUN = DataTicket.create("jeg:dual_minigun", Boolean.class);
+    /**
+     * Each arm of a dual-minigun hold is toed in like vanilla's crossbow hold (DualMinigunPose, which animation packs need
+     * to recognise the hold); each gun is turned back out by as much so the two point ahead instead of crossing.
+     */
+    private static final float DUAL_MINIGUN_TOE_OUT = 0.3F;
+    /** How far (blocks) each of a pair of miniguns sits out to its own side of the hand. */
+    private static final double DUAL_MINIGUN_SPREAD = 0.15D;
     private static final Set<String> FIRST_PERSON_ARM_BONES =
             Set.of("left_arm", "right_arm", "fake_left_arm", "fake_right_arm");
 
@@ -140,7 +149,11 @@ public final class AnimatedGunRenderer extends GeoItemRenderer<AnimatedGunItem> 
                 ? ItemDisplayContext.THIRD_PERSON_LEFT_HAND : ItemDisplayContext.THIRD_PERSON_RIGHT_HAND)
                 || perspective == (holderEntity.getMainArm() == HumanoidArm.LEFT
                 ? ItemDisplayContext.FIRST_PERSON_LEFT_HAND : ItemDisplayContext.FIRST_PERSON_RIGHT_HAND));
+        // With a minigun in each hand both are shooting hands.
+        boolean dualMinigun = holderEntity != null && MinigunSpin.isMinigun(stack) && MinigunSpin.isDualWielding(holderEntity);
+        shootingHand |= dualMinigun;
         renderState.addGeckolibData(SHOOTING_HAND, shootingHand);
+        renderState.addGeckolibData(DUAL_MINIGUN, dualMinigun);
         if (MinigunSpin.isMinigun(stack)) {
             renderState.addGeckolibData(BARREL_ANGLE, MinigunClient.barrelAngle(holder, partialTick));
         }
@@ -278,6 +291,13 @@ public final class AnimatedGunRenderer extends GeoItemRenderer<AnimatedGunItem> 
         }
 
         if (isThirdPerson(ctx)) {
+            if (renderState.getOrDefaultGeckolibData(DUAL_MINIGUN, false)) {
+                // About the hand, turning the gun level (world up is the hand frame's -Z here).
+                boolean left = ctx == ItemDisplayContext.THIRD_PERSON_LEFT_HAND;
+                passInfo.poseStack().mulPose(Axis.ZP.rotation(left ? -DUAL_MINIGUN_TOE_OUT : DUAL_MINIGUN_TOE_OUT));
+                // The toed-in hands meet in front of the chest; each gun sits a little out to its own side.
+                passInfo.poseStack().translate(left ? -DUAL_MINIGUN_SPREAD : DUAL_MINIGUN_SPREAD, 0.0D, 0.0D);
+            }
             applyThirdPersonAnimatedTransform(gunPath, passInfo.poseStack());
         }
     }
@@ -307,7 +327,9 @@ public final class AnimatedGunRenderer extends GeoItemRenderer<AnimatedGunItem> 
             );
         }
         if ((isFirstPerson(ctx) || isThirdPerson(ctx)) && renderState.getOrDefaultGeckolibData(SHOOTING_HAND, false)) {
-            GunMuzzleTracker.track(passInfo, renderState.getOrDefaultGeckolibData(HOLDER_ID, -1), isFirstPerson(ctx));
+            HumanoidArm muzzleArm = ctx == ItemDisplayContext.FIRST_PERSON_LEFT_HAND || ctx == ItemDisplayContext.THIRD_PERSON_LEFT_HAND
+                    ? HumanoidArm.LEFT : HumanoidArm.RIGHT;
+            GunMuzzleTracker.track(passInfo, renderState.getOrDefaultGeckolibData(HOLDER_ID, -1), isFirstPerson(ctx), muzzleArm);
         }
         if (isFirstPerson(ctx)) {
             passInfo.addBoneUpdater((info, snapshots) ->

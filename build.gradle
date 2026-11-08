@@ -40,6 +40,11 @@ loom {
     }
 }
 
+dependencies {
+    // Not Enough Animations (in the yftm pack): compiled against for its animation API, used only when it is installed.
+    clientCompileOnly "maven.modrinth:MPCX6s5C:K6FD58uq"
+}
+
 // Client game tests boot a real client: ./gradlew runClientGameTest (screenshots land in build/run/clientGameTest/screenshots).
 fabricApi {
     configureTests {
@@ -74,10 +79,55 @@ tasks.named("processGametestResources") {
     }
 }
 
+// Run client game tests inside the yftm pack's mods that touch what JEG does (rendering, player animation, chunk loading,
+// explosions, inventory and input), at the pack's own versions, with the shader pack and Fresh Animations on:
+// ./gradlew runClientGameTest -PgameTests=MinigunDualWield -PwithPack -Pminecraft_version=26.1.2 -Pfabric_version=0.155.3+26.1.2 -Ploader_version=0.20.1
+// (the pack's loader; several of its mods need 0.19+).
+// Leave some out to find which one causes a problem: -PpackExclude=immediatelyfast,lambdynamiclights
+def withPack = project.hasProperty("withPack")
+def packExclude = (project.findProperty("packExclude") ?: "").toString().split(",").collect { it.trim() }.findAll { !it.isEmpty() }
+if (withPack) {
+    def packMods = [
+            // Rendering and LOD terrain.
+            "voxy"                 : "maven.modrinth:fxxUqruK:Zt3LPI0b", // 0.2.18-beta
+            "entityculling"        : "maven.modrinth:NNAgCjsB:VhQ51u7a", // 1.11.3
+            "immediatelyfast"      : "maven.modrinth:5ZwdcRci:xOA9hbpf", // 1.15.3
+            "visuality"            : "maven.modrinth:rI0hvYcd:rjaBaaYV", // 0.7.13
+            "cloth-config"         : "maven.modrinth:9s6osm5g:GFM8zh9J", // 26.1.154
+            "lambdynamiclights"    : "maven.modrinth:yBW8D80W:USlEyPPR", // 4.11.2
+            // Player animation on top of EMF / Fresh Animations.
+            "notenoughanimations"  : "maven.modrinth:MPCX6s5C:K6FD58uq", // 1.12.5
+            "playeranimationlib"   : "maven.modrinth:ha1mEyJS:QmAdOGjK", // 1.2.8
+            "emf-compat-core"      : "maven.modrinth:hbGct5uU:rpZfoieQ", // 2.3.2
+            "emf-compat-nea"       : "maven.modrinth:IGCrWfL7:pgIoXdH0", // 1.2.1
+            // Server: chunk system, ticking, explosions.
+            "lithium"              : "maven.modrinth:gvQqBUqZ:Oqq8TOAV", // 0.24.7
+            "c2me"                 : "maven.modrinth:VSNURh3q:to1sDRnG", // 0.4.0-alpha.0.65
+            "ferritecore"          : "maven.modrinth:uXXizFIs:d5ddUdiB", // 9.0.0
+            "modernfix"            : "maven.modrinth:TjSm1wrD:cTKaCklf", // 5.27.19
+            "scalablelux"          : "maven.modrinth:Ps1zyz6x:ToW8oIIq", // 0.3.0-alpha.0.2
+            "voxy-server-side"     : "maven.modrinth:84zcagOb:agN2JvPt",
+            // Sound, inventory and input.
+            "soundphysics"         : "maven.modrinth:qyVF9oeo:y3vsp51g", // 1.5.1
+            "inventoryprofilesnext": "maven.modrinth:O7RBXm3n:lOBWkkzv", // 2.3.8
+            "libipn"               : "maven.modrinth:onSQdWhM:94nbGWNs", // 6.9.0
+            "tweakeroo"            : "maven.modrinth:t5wuYk45:2xHr441V", // 0.28.10
+            "malilib"              : "maven.modrinth:GcWjdA9I:FItuNokS", // 0.28.12
+            "carryon"              : "maven.modrinth:joEfVgkn:ISFd6ie5", // 2.10.0
+    ]
+    dependencies {
+        packMods.each { name, coordinate ->
+            if (!packExclude.contains(name)) {
+                gametestRuntimeOnly coordinate
+            }
+        }
+    }
+}
+
 // Run client game tests under Iris with the server pack's shader pack on, like players on yftm:
 // ./gradlew runClientGameTest -PgameTests=GunMuzzleOrigin -PwithIris -Pminecraft_version=26.1.2 -Pfabric_version=0.155.3+26.1.2
 // (Sodium 0.9 needs Fabric API 0.145.1+, which only exists for 26.1.2, the version the server runs.)
-if (project.hasProperty("withIris")) {
+if (project.hasProperty("withIris") || (withPack && !packExclude.contains("iris"))) {
     dependencies {
         gametestRuntimeOnly "maven.modrinth:sodium:vf7UgZpC"
         gametestRuntimeOnly "maven.modrinth:iris:sZbVsl2Q"
@@ -100,7 +150,7 @@ if (project.hasProperty("withIris")) {
 }
 
 // Run client game tests with the yftm pack's Zoomify (zoom on C): ./gradlew runClientGameTest -PgameTests=ZoomifyZoom -PwithZoomify
-if (project.hasProperty("withZoomify")) {
+if (project.hasProperty("withZoomify") || withPack) {
     dependencies {
         gametestRuntimeOnly "maven.modrinth:Ha28R6CL:SKW1BTL3" // Fabric Language Kotlin 1.14.2
         gametestRuntimeOnly "maven.modrinth:1eAoo2KR:IODousKT" // YetAnotherConfigLib 3.9.7
@@ -110,7 +160,7 @@ if (project.hasProperty("withZoomify")) {
 
 // Run client game tests with the yftm pack's Fresh Animations resource packs and EMF/ETF, which re-animate the player:
 // ./gradlew runClientGameTest -PgameTests=MinigunFreshAnimations -PwithFreshAnimations
-if (project.hasProperty("withFreshAnimations")) {
+if (project.hasProperty("withFreshAnimations") || withPack) {
     dependencies {
         gametestRuntimeOnly "maven.modrinth:BVzZfTc1:2bcqPrsv" // Entity Texture Features 7.2.6
         gametestRuntimeOnly "maven.modrinth:4I1XuqiY:zh2AVI88" // Entity Model Features 3.3.12
@@ -128,6 +178,15 @@ if (project.hasProperty("withFreshAnimations")) {
                     pack.parentFile.mkdirs()
                     new URL(url).withInputStream { input -> pack.withOutputStream { it << input } }
                 }
+            }
+            if (withPack || project.hasProperty("withFreshAnimations")) {
+                // With the whole pack the client starts with the packs switched on, as players have them, so every test
+                // sees Fresh Animations' player model (the MinigunFreshAnimations test switches them on itself).
+                def options = file("build/run/clientGameTest/options.txt")
+                def enabled = "resourcePacks:[\"vanilla\",\"fabric\"," + packs.keySet().collect { "\"file/" + it + "\"" }.join(",") + "]"
+                def lines = options.exists() ? options.readLines().findAll { !it.startsWith("resourcePacks:") } : []
+                options.parentFile.mkdirs()
+                options.text = (lines + enabled).join("\n") + "\n"
             }
         }
     }

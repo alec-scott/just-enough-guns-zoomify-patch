@@ -78,6 +78,7 @@ public final class NetworkHandler {
         PayloadTypeRegistry.serverboundPlay().register(VehicleAimPayload.TYPE, VehicleAimPayload.STREAM_CODEC);
         PayloadTypeRegistry.clientboundPlay().register(CameraShakePayload.TYPE, CameraShakePayload.STREAM_CODEC);
         PayloadTypeRegistry.clientboundPlay().register(MissileBlastPayload.TYPE, MissileBlastPayload.STREAM_CODEC);
+        PayloadTypeRegistry.clientboundPlay().register(MissileTrackPayload.TYPE, MissileTrackPayload.STREAM_CODEC);
         PayloadTypeRegistry.serverboundPlay().register(VehicleChangeSeatPayload.TYPE, VehicleChangeSeatPayload.STREAM_CODEC);
         PayloadTypeRegistry.serverboundPlay().register(VehicleDismountPayload.TYPE, VehicleDismountPayload.STREAM_CODEC);
         PayloadTypeRegistry.serverboundPlay().register(VehicleOpenMenuPayload.TYPE, VehicleOpenMenuPayload.STREAM_CODEC);
@@ -204,6 +205,10 @@ public final class NetworkHandler {
     private static void handleShootRequest(ShootRequestPayload payload, ServerPlayer player) {
         ItemStack stack = player.getItemInHand(payload.hand());
         if (!(stack.getItem() instanceof GunItem gun)) {
+            return;
+        }
+        // The only gun fired from the off hand is a second minigun.
+        if (payload.hand() == InteractionHand.OFF_HAND && !MinigunSpin.isDualWielding(player)) {
             return;
         }
         if (GunItem.isDrawOperationLocked(stack)) {

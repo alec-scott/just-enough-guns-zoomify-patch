@@ -116,6 +116,9 @@ public final class AttachmentRuntimeEvents {
             if (MinigunSpin.isMinigun(stack) && MinigunSpin.isSpinning(player)) {
                 amount += GunWeight.SPINNING_MINIGUN_SPEED;
             }
+            if (stack == player.getMainHandItem() && MinigunSpin.isDualWielding(player)) {
+                amount += GunWeight.SECOND_MINIGUN_SPEED;
+            }
         }
         AttributeModifier current = speed.getModifier(GunWeight.MODIFIER_ID);
         if (current != null && current.amount() == amount) {

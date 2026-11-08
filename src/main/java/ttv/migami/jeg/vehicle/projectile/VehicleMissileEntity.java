@@ -1,9 +1,11 @@
 package ttv.migami.jeg.vehicle.projectile;
 
 import ttv.migami.jeg.network.MissileBlastPayload;
+import ttv.migami.jeg.network.MissileTrackPayload;
+import net.minecraft.server.level.TicketType;
+import net.minecraft.world.level.ChunkPos;
 import net.minecraft.util.random.WeightedList;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
-import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.core.Holder;
 import net.minecraft.sounds.SoundEvents;
@@ -31,17 +33,13 @@ import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import net.minecraft.core.Direction;
 import net.minecraft.util.Mth;
-import net.minecraft.world.level.BlockGetter;
-import net.minecraft.world.level.EntityBasedExplosionDamageCalculator;
-import net.minecraft.world.level.Explosion;
 import net.minecraft.world.level.ExplosionDamageCalculator;
 import net.minecraft.world.level.block.BaseFireBlock;
-import net.minecraft.world.level.material.FluidState;
 import ttv.migami.jeg.Reference;
+import ttv.migami.jeg.entity.WarheadBlockDamage;
 import ttv.migami.jeg.init.ModEntities;
 import ttv.migami.jeg.init.ModParticleTypes;
 import ttv.migami.jeg.vehicle.entity.base.VehicleEntity;
@@ -57,9 +55,16 @@ public final class VehicleMissileEntity extends Entity {
     public static final double LAUNCH_SPEED_SHARE = 0.25D;
     private static final int MOTOR_BUILD_TICKS = 14;
     private static final double BLAST_VISIBLE_RANGE = 512.0D;
+    /** Within this (horizontally) every player is sent the entity itself, whatever their render distance. */
+    private static final double FAR_TRACK_MIN_RANGE = 32.0D;
+    /** Ender pearl tickets last 40 ticks; refreshed well before that, and at once on entering a new chunk. */
+    private static final int TICKET_REFRESH_TICKS = 20;
+    /** Radius 2 makes the centre chunk entity-ticking and loads the ring around it the next chunk needs to tick. */
+    private static final int TICKET_RADIUS = 2;
+    private static final int TICKET_LOOKAHEAD_TICKS = 8;
     /**
-     * How much of a block's blast resistance a warhead has to overcome. Medium missiles punch through stone and brick
-     * walls; a large one flattens a building. Blocks meant to stop explosions (obsidian and tougher) keep their resistance.
+     * How much of a block's (capped) blast resistance a warhead has to overcome (see WarheadBlockDamage). Medium missiles
+     * blow stone and purpur walls open; a large one flattens a building.
      */
     private static final Map<Identifier, Float> BLOCK_RESISTANCE_SCALE = Map.of(
             Reference.id("vehicle_bmp2_missile"), 0.45F,
@@ -68,7 +73,6 @@ public final class VehicleMissileEntity extends Entity {
             Reference.id("vehicle_9m336_missile"), 0.45F,
             Reference.id("vehicle_kh39_missile"), 0.2F
     );
-    private static final float BLAST_PROOF_RESISTANCE = 1200.0F;
     /** Incendiary warheads: the MI-28 pilot's 9M-120 sets the ground around the blast alight. */
     private static final Set<Identifier> INCENDIARY = Set.of(Reference.id("vehicle_9m120_driver_missile"));
     private static final double INCENDIARY_RADIUS = 6.5D;
@@ -80,6 +84,8 @@ public final class VehicleMissileEntity extends Entity {
     private int targetId = -1;
     private int directHitVehicleId = -1;
     private Identifier weaponId = Reference.id("vehicle_bmp2_missile");
+    private long ticketChunk = ChunkPos.INVALID_CHUNK_POS;
+    private int ticketRefresh;
 
     public VehicleMissileEntity(EntityType<? extends VehicleMissileEntity> type, Level level) {
         super(type, level);
@@ -134,6 +140,58 @@ public final class VehicleMissileEntity extends Entity {
         }
         this.setPos(this.position().add(this.getDeltaMovement()));
         // The motor's glow and smoke trail are drawn client-side by MissileTrailRenderer.
+        if (this.level() instanceof ServerLevel serverLevel) {
+            this.keepFlightPathTicking(serverLevel);
+            this.sendFarTrack(serverLevel);
+        }
+    }
+
+    /**
+     * Entities only move in chunks within a player's simulation distance (160 blocks on yftm), so a long shot used to
+     * stop dead in mid-air and never go off. Like a thrown ender pearl, the missile keeps the chunk it is in, and the one
+     * it is about to reach, loaded and ticking with short-lived tickets for as long as it flies.
+     */
+    private void keepFlightPathTicking(ServerLevel level) {
+        ChunkPos here = this.chunkPosition();
+        long key = here.pack();
+        if (key == this.ticketChunk && --this.ticketRefresh > 0) {
+            return;
+        }
+        this.ticketChunk = key;
+        this.ticketRefresh = TICKET_REFRESH_TICKS;
+        level.getChunkSource().addTicketWithRadius(TicketType.ENDER_PEARL, here, TICKET_RADIUS);
+        ChunkPos ahead = ChunkPos.containing(BlockPos.containing(this.position().add(this.getDeltaMovement().scale(TICKET_LOOKAHEAD_TICKS))));
+        if (!ahead.equals(here)) {
+            level.getChunkSource().addTicketWithRadius(TicketType.ENDER_PEARL, ahead, TICKET_RADIUS);
+        }
+    }
+
+    /**
+     * The entity itself only reaches players within the server's view distance (192 blocks on yftm). Players further
+     * off, out to where the blast is still shown, get its position each tick instead and draw its motor and trail.
+     */
+    private void sendFarTrack(ServerLevel level) {
+        MissileTrackPayload track = null;
+        for (ServerPlayer player : level.players()) {
+            double dx = player.getX() - this.getX();
+            double dz = player.getZ() - this.getZ();
+            double horizontal = dx * dx + dz * dz;
+            if (horizontal < FAR_TRACK_MIN_RANGE * FAR_TRACK_MIN_RANGE
+                    || player.position().distanceToSqr(this.position()) > BLAST_VISIBLE_RANGE * BLAST_VISIBLE_RANGE
+                    || !ServerPlayNetworking.canSend(player, MissileTrackPayload.TYPE)) {
+                continue;
+            }
+            if (track == null) {
+                track = new MissileTrackPayload(this.getId(), this.position(), this.getDeltaMovement(),
+                        isHeavy(this.weaponId), this.tickCount);
+            }
+            ServerPlayNetworking.send(player, track);
+        }
+    }
+
+    /** The KH-39 is the big one: a larger body, motor and trail. */
+    public static boolean isHeavy(Identifier weaponId) {
+        return weaponId.getPath().contains("kh39");
     }
 
     /** The motor builds speed through the first moments of flight. */
@@ -294,19 +352,9 @@ public final class VehicleMissileEntity extends Entity {
         this.discard();
     }
 
-    /** Vanilla's explosion, with block resistance scaled down by the warhead's class (see BLOCK_RESISTANCE_SCALE). */
+    /** Vanilla's explosion, but dense blocks crumble, the more so the bigger the warhead (see WarheadBlockDamage). */
     private ExplosionDamageCalculator blockBreakingCalculator() {
-        float scale = BLOCK_RESISTANCE_SCALE.getOrDefault(this.weaponId, 1.0F);
-        return new EntityBasedExplosionDamageCalculator(this) {
-            @Override
-            public Optional<Float> getBlockExplosionResistance(Explosion explosion, BlockGetter level, BlockPos pos, BlockState state, FluidState fluid) {
-                Optional<Float> resistance = super.getBlockExplosionResistance(explosion, level, pos, state, fluid);
-                if (scale >= 1.0F || !fluid.isEmpty()) {
-                    return resistance;
-                }
-                return resistance.map(value -> value >= BLAST_PROOF_RESISTANCE ? value : value * scale);
-            }
-        };
+        return WarheadBlockDamage.calculator(this, BLOCK_RESISTANCE_SCALE.getOrDefault(this.weaponId, 1.0F));
     }
 
     /** Spreads fire over the ground around the blast and sets everything caught in it burning. */

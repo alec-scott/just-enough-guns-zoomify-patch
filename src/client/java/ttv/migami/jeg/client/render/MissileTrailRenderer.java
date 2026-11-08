@@ -20,6 +20,7 @@ import net.minecraft.world.phys.Vec3;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
 import ttv.migami.jeg.entity.BulletEntity;
+import ttv.migami.jeg.network.MissileTrackPayload;
 import ttv.migami.jeg.vehicle.projectile.VehicleMissileEntity;
 
 /**
@@ -32,17 +33,33 @@ public final class MissileTrailRenderer {
     /** Smoke laid per block flown; keeps the trail continuous however fast the missile goes. */
     private static final double PUFFS_PER_BLOCK = 2.6D;
     private static final int MAX_PUFFS = 4000;
+    private static final float HEAVY_MOTOR = 1.6F;
+    /** A far missile no longer heard of for this long has gone off or left range. */
+    private static final int GHOST_TIMEOUT_TICKS = 3;
     private static final Map<Integer, Motor> MOTORS = new HashMap<>();
     private static final List<Puff> PUFFS = new ArrayList<>();
+    private static final Map<Integer, Ghost> GHOSTS = new HashMap<>();
 
     private MissileTrailRenderer() {}
+
+    /** A far missile's latest position from the server (see MissileTrackPayload). */
+    public static void track(MissileTrackPayload payload) {
+        Ghost ghost = GHOSTS.get(payload.entityId());
+        if (ghost == null) {
+            ghost = new Ghost(payload.position(), payload.heavy() ? HEAVY_MOTOR : 1.0F, payload.age());
+            GHOSTS.put(payload.entityId(), ghost);
+        }
+        ghost.latest = payload.position();
+        ghost.motion = payload.motion();
+        ghost.age = payload.age();
+        ghost.silentTicks = 0;
+    }
 
     /** Every client tick: follow each missile and rocket in the world and lay smoke along the path it just flew. */
     public static void tick() {
         Minecraft mc = Minecraft.getInstance();
         if (mc.level == null) {
-            MOTORS.clear();
-            PUFFS.clear();
+            clear();
             return;
         }
         RandomSource random = mc.level.getRandom();
@@ -54,28 +71,23 @@ public final class MissileTrailRenderer {
             if (size <= 0.0F || !entity.isAlive()) {
                 continue;
             }
-            Motor motor = MOTORS.get(entity.getId());
-            Vec3 now = entity.position();
-            if (motor == null) {
-                motor = new Motor(now, size);
-                MOTORS.put(entity.getId(), motor);
-                // Backblast: a burst of grey smoke at the rail as the motor lights.
-                for (int i = 0; i < 10; i++) {
-                    Vec3 drift = new Vec3(random.nextGaussian(), random.nextGaussian() * 0.5D, random.nextGaussian()).scale(0.05D * size);
-                    PUFFS.add(new Puff(now, drift, 0.6F * size, 2.2F * size, 70 + random.nextInt(40), random, 0.62F));
-                }
+            follow(entity.getId(), entity.position(), entity.getDeltaMovement(), size, true, random);
+        }
+        // Missiles beyond entity range, followed from the server's track updates. Once one is in range its entity
+        // takes over the same motor, so the trail carries on unbroken either way.
+        Iterator<Map.Entry<Integer, Ghost>> ghosts = GHOSTS.entrySet().iterator();
+        while (ghosts.hasNext()) {
+            Map.Entry<Integer, Ghost> entry = ghosts.next();
+            Ghost ghost = entry.getValue();
+            if (++ghost.silentTicks > GHOST_TIMEOUT_TICKS) {
+                ghosts.remove();
+                continue;
             }
-            motor.seen = true;
-            motor.motion = entity.getDeltaMovement();
-            double distance = motor.last.distanceTo(now);
-            int count = Math.min(60, (int) Math.ceil(distance * PUFFS_PER_BLOCK / Math.max(0.6F, size)));
-            for (int i = 0; i < count; i++) {
-                Vec3 at = motor.last.lerp(now, (i + random.nextDouble()) / count);
-                Vec3 drift = new Vec3(random.nextGaussian(), random.nextGaussian(), random.nextGaussian()).scale(0.012D * size);
-                int life = (int) ((90 + random.nextInt(70)) * Math.sqrt(size));
-                PUFFS.add(new Puff(at, drift, 0.5F * size, 1.9F * size, life, random, 0.9F));
+            ghost.previous = ghost.current;
+            ghost.current = ghost.latest;
+            if (mc.level.getEntity(entry.getKey()) == null) {
+                follow(entry.getKey(), ghost.current, ghost.motion, ghost.size, ghost.firstAge <= 2, random);
             }
-            motor.last = now;
         }
         MOTORS.values().removeIf(motor -> !motor.seen);
         Iterator<Puff> iterator = PUFFS.iterator();
@@ -91,10 +103,52 @@ public final class MissileTrailRenderer {
         }
     }
 
+    /** Lays smoke along the path a motor flew since last tick; {@code launch} puffs a backblast where it is first seen. */
+    private static void follow(int id, Vec3 now, Vec3 motion, float size, boolean launch, RandomSource random) {
+        Motor motor = MOTORS.get(id);
+        if (motor == null) {
+            motor = new Motor(now, size);
+            MOTORS.put(id, motor);
+            if (launch) {
+                // Backblast: a burst of grey smoke at the rail as the motor lights.
+                for (int i = 0; i < 10; i++) {
+                    Vec3 drift = new Vec3(random.nextGaussian(), random.nextGaussian() * 0.5D, random.nextGaussian()).scale(0.05D * size);
+                    PUFFS.add(new Puff(now, drift, 0.6F * size, 2.2F * size, 70 + random.nextInt(40), random, 0.62F));
+                }
+            }
+        }
+        motor.seen = true;
+        motor.motion = motion;
+        double distance = motor.last.distanceTo(now);
+        int count = Math.min(60, (int) Math.ceil(distance * PUFFS_PER_BLOCK / Math.max(0.6F, size)));
+        for (int i = 0; i < count; i++) {
+            Vec3 at = motor.last.lerp(now, (i + random.nextDouble()) / count);
+            Vec3 drift = new Vec3(random.nextGaussian(), random.nextGaussian(), random.nextGaussian()).scale(0.012D * size);
+            int life = (int) ((90 + random.nextInt(70)) * Math.sqrt(size));
+            PUFFS.add(new Puff(at, drift, 0.5F * size, 1.9F * size, life, random, 0.9F));
+        }
+        motor.last = now;
+    }
+
+    /** How many missiles are being followed from track updates alone, beyond entity range, for checks. */
+    public static int farMissiles() {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.level == null) {
+            return 0;
+        }
+        int count = 0;
+        for (Map.Entry<Integer, Ghost> entry : GHOSTS.entrySet()) {
+            if (mc.level.getEntity(entry.getKey()) == null && MOTORS.containsKey(entry.getKey())) {
+                count++;
+            }
+        }
+        return count;
+    }
+
     /** How big a motor this entity has, or 0 if it is not a missile or rocket. */
     private static float motorSize(Entity entity) {
         if (entity instanceof VehicleMissileEntity missile) {
-            return missile.missileWeaponId().getPath().contains("kh39") ? 1.6F : 1.0F;
+            return VehicleMissileEntity.isHeavy(missile.missileWeaponId()) ? HEAVY_MOTOR : 1.0F;
         }
         if (entity instanceof BulletEntity bullet) {
             String gun = bullet.getGunId();
@@ -127,7 +181,9 @@ public final class MissileTrailRenderer {
                 float warm = Math.max(0.0F, 1.0F - (puff.age + partialTick) / 6.0F);
                 float grey = puff.shade * daylight;
                 float alpha = 0.7F * Math.min(1.0F, (puff.age + partialTick) / 2.0F) * (1.0F - t) * (1.0F - t * 0.4F);
-                MissileBlastRenderer.billboard(smoke, matrix, puff.position(partialTick).subtract(view), right, up, size,
+                Vec3 at = puff.position(partialTick).subtract(view);
+                float far = FarDraw.scale(at);
+                MissileBlastRenderer.billboard(smoke, matrix, at.scale(far), right, up, size * far,
                         puff.rotation + puff.spin * (puff.age + partialTick),
                         Math.min(1.0F, grey + warm * 0.4F), grey + warm * 0.12F, grey * 0.97F, alpha, FULL_BRIGHT, puff.variant);
             }
@@ -137,7 +193,8 @@ public final class MissileTrailRenderer {
             VertexConsumer glow = bufferSource.getBuffer(RenderTypes.lightning());
             for (Map.Entry<Integer, Motor> entry : MOTORS.entrySet()) {
                 Entity entity = mc.level.getEntity(entry.getKey());
-                if (entity == null) {
+                Ghost ghost = entity == null ? GHOSTS.get(entry.getKey()) : null;
+                if (entity == null && ghost == null) {
                     continue;
                 }
                 Motor motor = entry.getValue();
@@ -146,13 +203,19 @@ public final class MissileTrailRenderer {
                     continue;
                 }
                 Vec3 forward = motion.normalize();
-                Vec3 nozzle = entity.getPosition(partialTick).subtract(forward.scale(0.85D * motor.size));
-                float flicker = 0.85F + 0.15F * Mth.sin((entity.tickCount + partialTick) * 2.7F + entity.getId());
+                Vec3 position = entity != null ? entity.getPosition(partialTick) : ghost.previous.lerp(ghost.current, partialTick);
+                Vec3 nozzle = position.subtract(forward.scale(0.85D * motor.size));
+                int age = entity != null ? entity.tickCount : ghost.age;
+                float flicker = 0.85F + 0.15F * Mth.sin((age + partialTick) * 2.7F + entry.getKey());
                 Vec3 at = nozzle.subtract(view);
-                // Halo, hot core, and a flame cone streaming back from the nozzle.
-                MissileBlastRenderer.disc(glow, matrix, at, right, up, 2.2F * motor.size * flicker, 1.0F, 0.55F, 0.2F, 0.6F);
-                MissileBlastRenderer.disc(glow, matrix, at, right, up, 0.45F * motor.size * flicker, 1.0F, 0.95F, 0.8F, 1.0F);
-                flame(glow, matrix, at, forward.scale(-1.0D), view, nozzle, 2.2F * motor.size * flicker, 0.22F * motor.size);
+                float far = FarDraw.scale(at);
+                at = at.scale(far);
+                // Halo, hot core, and a flame cone streaming back from the nozzle. Seen from far beyond entity range
+                // there is no body to draw, so the halo is a little larger to stay a visible point of light.
+                float halo = ghost != null ? 3.0F : 2.2F;
+                MissileBlastRenderer.disc(glow, matrix, at, right, up, halo * motor.size * flicker * far, 1.0F, 0.55F, 0.2F, 0.6F);
+                MissileBlastRenderer.disc(glow, matrix, at, right, up, 0.45F * motor.size * flicker * far, 1.0F, 0.95F, 0.8F, 1.0F);
+                flame(glow, matrix, at, forward.scale(-1.0D), view, nozzle, 2.2F * motor.size * flicker * far, 0.22F * motor.size * far);
             }
         }
     }
@@ -179,6 +242,28 @@ public final class MissileTrailRenderer {
     public static void clear() {
         MOTORS.clear();
         PUFFS.clear();
+        GHOSTS.clear();
+    }
+
+    /** A missile known only from track updates; positions step once a client tick so it can be drawn in between. */
+    private static final class Ghost {
+        final float size;
+        final int firstAge;
+        Vec3 latest;
+        Vec3 current;
+        Vec3 previous;
+        Vec3 motion = Vec3.ZERO;
+        int age;
+        int silentTicks;
+
+        Ghost(Vec3 position, float size, int firstAge) {
+            this.latest = position;
+            this.current = position;
+            this.previous = position;
+            this.size = size;
+            this.firstAge = firstAge;
+            this.age = firstAge;
+        }
     }
 
     private static final class Motor {

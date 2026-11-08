@@ -23,6 +23,11 @@ import ttv.migami.jeg.vehicle.menu.VehicleChargingStationMenu;
 public final class VehicleChargingStationBlockEntity extends BlockEntity implements MenuProvider, ExtendedMenuProvider<BlockPos> {
     private static final int CHARGE_INTERVAL = 20;
     private static final int CHARGE_PER_INTERVAL = 960;
+    /** Blocks out from the station, each way, that a vehicle is charged at (it used to be 2). */
+    private static final double CHARGE_RADIUS = 8.0D;
+    /** Blocks above and below the station's block a vehicle is still charged at. */
+    private static final double CHARGE_REACH_UP = 6.0D;
+    private static final double CHARGE_REACH_DOWN = 3.0D;
     private int chargeTick;
     private int lastVehicleEnergy;
     private int lastVehicleMaxEnergy;
@@ -90,24 +95,55 @@ public final class VehicleChargingStationBlockEntity extends BlockEntity impleme
         station.charging = false;
         station.lastVehicleEnergy = 0;
         station.lastVehicleMaxEnergy = 0;
-        AABB range = new AABB(pos).inflate(2.0D, 1.0D, 2.0D).expandTowards(0.0D, 2.0D, 0.0D);
-        for (VehicleEntity vehicle : level.getEntitiesOfClass(VehicleEntity.class, range)) {
+        VehicleEntity vehicle = chargeTarget(level, pos);
+        if (vehicle == null) {
+            return;
+        }
+        station.lastVehicleEnergy = vehicle.vehicleEnergy();
+        station.lastVehicleMaxEnergy = vehicle.maxVehicleEnergy();
+        if (shouldCharge) {
+            int previousEnergy = vehicle.vehicleEnergy();
+            new VehicleEnergyStorage(vehicle).receiveEnergy(CHARGE_PER_INTERVAL, false);
+            if (vehicle.vehicleEnergy() > previousEnergy) {
+                station.charging = true;
+                station.setChanged();
+            }
+            station.lastVehicleEnergy = vehicle.vehicleEnergy();
+        }
+    }
+
+    /** Where vehicles are charged from: anywhere on a pad around the station, including a helicopter set down on a roof. */
+    public static AABB chargeRange(BlockPos pos) {
+        return new AABB(pos).inflate(CHARGE_RADIUS, 0.0D, CHARGE_RADIUS).expandTowards(0.0D, CHARGE_REACH_UP, 0.0D)
+                .expandTowards(0.0D, -CHARGE_REACH_DOWN, 0.0D);
+    }
+
+    /**
+     * The vehicle this station works on: the nearest one in range that still needs charge, otherwise the nearest one (so
+     * the screen still shows a full vehicle sitting on the pad). With several parked around one station, each is topped up
+     * in turn, nearest first.
+     */
+    @Nullable
+    private static VehicleEntity chargeTarget(Level level, BlockPos pos) {
+        VehicleEntity nearest = null;
+        VehicleEntity nearestNeedingCharge = null;
+        double nearestDistance = Double.MAX_VALUE;
+        double nearestNeedingDistance = Double.MAX_VALUE;
+        for (VehicleEntity vehicle : level.getEntitiesOfClass(VehicleEntity.class, chargeRange(pos))) {
             if (vehicle.maxVehicleEnergy() <= 0) {
                 continue;
             }
-            station.lastVehicleEnergy = vehicle.vehicleEnergy();
-            station.lastVehicleMaxEnergy = vehicle.maxVehicleEnergy();
-            if (shouldCharge) {
-                int previousEnergy = vehicle.vehicleEnergy();
-                new VehicleEnergyStorage(vehicle).receiveEnergy(CHARGE_PER_INTERVAL, false);
-                if (vehicle.vehicleEnergy() > previousEnergy) {
-                    station.charging = true;
-                    station.setChanged();
-                }
-                station.lastVehicleEnergy = vehicle.vehicleEnergy();
+            double distance = vehicle.distanceToSqr(pos.getCenter());
+            if (distance < nearestDistance) {
+                nearest = vehicle;
+                nearestDistance = distance;
             }
-            return;
+            if (vehicle.vehicleEnergy() < vehicle.maxVehicleEnergy() && distance < nearestNeedingDistance) {
+                nearestNeedingCharge = vehicle;
+                nearestNeedingDistance = distance;
+            }
         }
+        return nearestNeedingCharge != null ? nearestNeedingCharge : nearest;
     }
 
     @Override

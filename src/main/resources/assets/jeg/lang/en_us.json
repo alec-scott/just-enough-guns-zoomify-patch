@@ -623,6 +623,7 @@
   "hud.jeg.vehicle.decoy_flare": "%s Flares: %s",
   "hud.jeg.vehicle.decoy_smoke": "%s Smoke: %s",
   "hud.jeg.vehicle.ready": "Ready",
+  "hud.jeg.vehicle.reloading_short": "R %ss",
   "hud.jeg.vehicle.seek_prompt": "Hold %s to seek",
   "hud.jeg.vehicle.locking": "MISSILE SEEK",
   "hud.jeg.vehicle.locked": "MISSILE LOCK",

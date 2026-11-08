@@ -21,6 +21,8 @@ public enum GunWeight {
     public static final Identifier MODIFIER_ID = Identifier.fromNamespaceAndPath("jeg", "gun_weight");
     /** Extra drag on top of {@link #MINIGUN} while the barrels are turning. */
     public static final double SPINNING_MINIGUN_SPEED = -0.15D;
+    /** Extra drag of a second minigun in the off hand. */
+    public static final double SECOND_MINIGUN_SPEED = -0.12D;
 
     private final double speed;
     private final float handling;

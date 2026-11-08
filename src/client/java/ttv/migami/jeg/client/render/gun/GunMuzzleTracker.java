@@ -21,6 +21,8 @@ import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.SubmitNodeCollector;
+import net.minecraft.world.entity.HumanoidArm;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
@@ -45,13 +47,19 @@ public final class GunMuzzleTracker {
     /** A muzzle position older than this has not been drawn recently enough to trust. */
     private static final long MAX_AGE_NANOS = 250_000_000L;
 
-    private static final Map<Integer, Sample> THIRD_PERSON = new ConcurrentHashMap<>();
-    private static volatile Sample firstPerson;
+    /** Keyed by shooter and arm: with a minigun in each hand, each gun has its own muzzle. */
+    private static final Map<Long, Sample> THIRD_PERSON = new ConcurrentHashMap<>();
+    private static volatile Sample firstPersonRight;
+    private static volatile Sample firstPersonLeft;
 
     private GunMuzzleTracker() {}
 
-    /** Hooks the barrel bones of this render pass so the muzzle is measured as the gun is drawn. */
-    public static void track(RenderPassInfo<GeoRenderState> passInfo, int ownerId, boolean firstPersonView) {
+    private static long key(int entityId, HumanoidArm arm) {
+        return ((long) entityId << 1) | (arm == HumanoidArm.LEFT ? 1L : 0L);
+    }
+
+    /** Hooks the barrel bones of this render pass so the muzzle of the gun in {@code arm} is measured as it is drawn. */
+    public static void track(RenderPassInfo<GeoRenderState> passInfo, int ownerId, boolean firstPersonView, HumanoidArm arm) {
         if (IrisShadowPass.active()) {
             // Iris draws entities a second time from the sun for shadows; that pass is not where the gun shows on screen.
             return;
@@ -66,7 +74,7 @@ public final class GunMuzzleTracker {
         if (root.isEmpty()) {
             return;
         }
-        Probe probe = new Probe(ownerId, firstPersonView);
+        Probe probe = new Probe(ownerId, firstPersonView, arm);
         register(passInfo, root.get(), probe);
     }
 
@@ -82,9 +90,19 @@ public final class GunMuzzleTracker {
         }
     }
 
-    /** The muzzle in world space, or null when it was not drawn in the last few frames. */
+    /** The muzzle of the entity's main-hand gun in world space, or null when it was not drawn in the last few frames. */
     public static Vec3 muzzle(int entityId, boolean firstPersonView) {
-        Sample sample = firstPersonView ? firstPerson : THIRD_PERSON.get(entityId);
+        Minecraft minecraft = Minecraft.getInstance();
+        HumanoidArm arm = minecraft.level != null && minecraft.level.getEntity(entityId) instanceof LivingEntity living
+                ? living.getMainArm() : HumanoidArm.RIGHT;
+        return muzzle(entityId, firstPersonView, arm);
+    }
+
+    /** The muzzle of the gun in {@code arm} in world space, or null when it was not drawn in the last few frames. */
+    public static Vec3 muzzle(int entityId, boolean firstPersonView, HumanoidArm arm) {
+        Sample sample = firstPersonView
+                ? (arm == HumanoidArm.LEFT ? firstPersonLeft : firstPersonRight)
+                : THIRD_PERSON.get(key(entityId, arm));
         if (sample == null || sample.ownerId != entityId || System.nanoTime() - sample.timeNanos > MAX_AGE_NANOS) {
             return null;
         }
@@ -93,7 +111,8 @@ public final class GunMuzzleTracker {
 
     public static void clear() {
         THIRD_PERSON.clear();
-        firstPerson = null;
+        firstPersonRight = null;
+        firstPersonLeft = null;
     }
 
     /**
@@ -153,14 +172,16 @@ public final class GunMuzzleTracker {
     private static final class Probe implements PerBoneRender<GeoRenderState> {
         private final int ownerId;
         private final boolean firstPersonView;
+        private final HumanoidArm arm;
         private Matrix4f modelToLocal;
         private float frontZ = Float.POSITIVE_INFINITY;
         private final Vector3f frontSum = new Vector3f();
         private int frontCount;
 
-        private Probe(int ownerId, boolean firstPersonView) {
+        private Probe(int ownerId, boolean firstPersonView, HumanoidArm arm) {
             this.ownerId = ownerId;
             this.firstPersonView = firstPersonView;
+            this.arm = arm;
         }
 
         @Override
@@ -227,10 +248,12 @@ public final class GunMuzzleTracker {
             }
             Vec3 world = camera.position().add(offset);
             Sample sample = new Sample(this.ownerId, world, System.nanoTime());
-            if (this.firstPersonView) {
-                firstPerson = sample;
+            if (this.firstPersonView && this.arm == HumanoidArm.LEFT) {
+                firstPersonLeft = sample;
+            } else if (this.firstPersonView) {
+                firstPersonRight = sample;
             } else {
-                THIRD_PERSON.put(this.ownerId, sample);
+                THIRD_PERSON.put(key(this.ownerId, this.arm), sample);
             }
         }
     }

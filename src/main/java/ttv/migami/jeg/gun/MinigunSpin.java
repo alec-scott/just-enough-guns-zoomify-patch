@@ -6,6 +6,7 @@ import java.util.UUID;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import ttv.migami.jeg.item.GunItem;
 import ttv.migami.jeg.network.MinigunStatePayload;
@@ -55,6 +56,15 @@ public final class MinigunSpin {
 
     public static boolean isMinigun(GunStats stats) {
         return "minigun".equals(stats.id().getPath());
+    }
+
+    /**
+     * A minigun in each hand. The trigger then spins up and fires both, each from its own muzzle and with its own heat;
+     * they share the one spin, since the same trigger and aim drive them. The main hand has to hold one: a lone minigun
+     * in the off hand stays a minigun being carried.
+     */
+    public static boolean isDualWielding(LivingEntity entity) {
+        return isMinigun(entity.getMainHandItem()) && isMinigun(entity.getOffhandItem());
     }
 
     /**

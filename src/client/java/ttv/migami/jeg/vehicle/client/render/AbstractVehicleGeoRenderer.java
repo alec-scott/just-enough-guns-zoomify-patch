@@ -33,6 +33,30 @@ abstract class AbstractVehicleGeoRenderer<T extends VehicleEntity> extends GeoEn
         return RenderTypes.entityTranslucent(texture);
     }
 
+    /**
+     * Battle damage on the hull: from 60% health down it darkens with scorching, to about half its colour at nothing
+     * left, and a wreck is charred almost black.
+     */
+    @Override
+    public int getRenderColor(T vehicle, Void relatedObject, float partialTick) {
+        int colour = super.getRenderColor(vehicle, relatedObject, partialTick);
+        float shade;
+        if (vehicle.isWrecked()) {
+            shade = vehicle.wreckState() == VehicleEntity.WRECK_BURNING ? 0.22F : 0.38F;
+        } else {
+            float max = vehicle.maxVehicleHealth();
+            float ratio = max <= 0.0F ? 1.0F : Mth.clamp(vehicle.vehicleHealth() / max, 0.0F, 1.0F);
+            shade = ratio >= 0.6F ? 1.0F : Mth.lerp(ratio / 0.6F, 0.5F, 1.0F);
+        }
+        if (shade >= 1.0F) {
+            return colour;
+        }
+        int r = Math.round(((colour >> 16) & 0xFF) * shade);
+        int g = Math.round(((colour >> 8) & 0xFF) * shade);
+        int b = Math.round((colour & 0xFF) * shade);
+        return (colour & 0xFF000000) | (r << 16) | (g << 8) | b;
+    }
+
     @Override
     public VehicleRenderState createRenderState(T entity, Void context) {
         return new VehicleRenderState();
@@ -106,8 +130,38 @@ abstract class AbstractVehicleGeoRenderer<T extends VehicleEntity> extends GeoEn
         poseStack.rotateAround(Axis.ZP.rotationDegrees(-renderState.roll), 0.0F, rootY, 0.0F);
     }
 
+    /**
+     * Parts shot off a helicopter as its hull goes: the canopy glass below 35% health, the tail rotor below 15%, and two
+     * main rotor blades on the wreck. Purely for show; the flight model is unchanged.
+     */
+    private static void hideBattleDamagedParts(VehicleEntity vehicle, com.geckolib.renderer.base.BoneSnapshots snapshots) {
+        float max = vehicle.maxVehicleHealth();
+        float ratio = max <= 0.0F ? 1.0F : vehicle.vehicleHealth() / max;
+        boolean wrecked = vehicle.isWrecked();
+        if (wrecked || ratio < 0.35F) {
+            snapshots.ifPresent("glass", snapshot -> snapshot.skipRender(true));
+        }
+        if (wrecked || ratio < 0.15F) {
+            snapshots.ifPresent("tailPropeller", snapshot -> {
+                snapshot.skipRender(true);
+                snapshot.skipChildrenRender(true);
+            });
+        }
+        if (wrecked) {
+            for (String blade : new String[]{"wing2", "wing4"}) {
+                snapshots.ifPresent(blade, snapshot -> {
+                    snapshot.skipRender(true);
+                    snapshot.skipChildrenRender(true);
+                });
+            }
+        }
+    }
+
     private static void updateVehicleBones(VehicleEntity vehicle, float ageInTicks, com.geckolib.renderer.base.BoneSnapshots snapshots) {
         float partialTick = ageInTicks - vehicle.tickCount;
+        if (vehicle.vehicleData().defaults().vehicleType() == ttv.migami.jeg.vehicle.data.subdata.VehicleType.HELICOPTER) {
+            hideBattleDamagedParts(vehicle, snapshots);
+        }
         switch (vehicle.vehicleDataId().getPath()) {
             case "ah6" -> updateHelicopterRotors(vehicle, partialTick, snapshots);
             case "bmp2" -> updateTurret(vehicle, partialTick, snapshots, -74.0F, 7.5F);

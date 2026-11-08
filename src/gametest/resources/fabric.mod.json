@@ -38,7 +38,14 @@
       "ttv.migami.jeg.gametest.HeliPassengerAndAimClientGameTest",
       "ttv.migami.jeg.gametest.HeliSandboxSetupClientGameTest",
       "ttv.migami.jeg.gametest.HeliTakeoffSafetyClientGameTest",
-      "ttv.migami.jeg.gametest.GunLootingClientGameTest"
+      "ttv.migami.jeg.gametest.GunLootingClientGameTest",
+      "ttv.migami.jeg.gametest.HeliClimbDescentClientGameTest",
+      "ttv.migami.jeg.gametest.MissileLongRangeClientGameTest",
+      "ttv.migami.jeg.gametest.MinigunDualWieldClientGameTest",
+      "ttv.migami.jeg.gametest.WarheadBlockDamageClientGameTest",
+      "ttv.migami.jeg.gametest.ChargingStationRangeClientGameTest",
+      "ttv.migami.jeg.gametest.HeliAmmoHudClientGameTest",
+      "ttv.migami.jeg.gametest.HeliWreckClientGameTest"
     ]
   },
   "depends": {

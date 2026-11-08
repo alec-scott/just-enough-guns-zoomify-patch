@@ -150,25 +150,39 @@ public final class MissileBlastRenderer {
             up = new Vector3f(right).cross(forward).normalize();
         }
         Matrix4f matrix = poseStack.last().pose();
+        // A blast beyond the render distance is drawn as a smaller copy nearer the camera, the same on screen but inside
+        // the fog (see FarDraw); the whole blast shrinks by one factor so it keeps its shape.
+        float[] far = new float[BLASTS.size()];
+        Matrix4f[] matrices = new Matrix4f[BLASTS.size()];
+        for (int i = 0; i < BLASTS.size(); i++) {
+            far[i] = FarDraw.scale(BLASTS.get(i).centre.subtract(view));
+            matrices[i] = far[i] < 1.0F ? new Matrix4f(matrix).scale(far[i]) : matrix;
+        }
 
         // Marks and dust lying on the ground first, then smoke and fire together, and light added on top last (no depth
         // writes): flash, glare, shock rims, sparks.
         VertexConsumer ground = bufferSource.getBuffer(RenderTypes.entityTranslucent(SOFT_TEXTURE));
-        for (Blast blast : BLASTS) {
-            blast.renderDustRing(mc, ground, matrix, view, partialTick);
+        for (int i = 0; i < BLASTS.size(); i++) {
+            BLASTS.get(i).renderDustRing(mc, ground, matrices[i], view, partialTick);
         }
         // Smoke and fire are one cloud, sorted back to front as a whole: drawn as two layers, each puff's depth cut hard
         // edges out of the other wherever they overlapped.
         List<Quad> quads = new ArrayList<>();
-        for (Blast blast : BLASTS) {
-            blast.collectSmoke(mc, quads, view, forward, partialTick);
-            blast.collectFire(quads, view, partialTick);
+        for (int i = 0; i < BLASTS.size(); i++) {
+            int first = quads.size();
+            BLASTS.get(i).collectSmoke(mc, quads, view, forward, partialTick);
+            BLASTS.get(i).collectFire(quads, view, partialTick);
+            if (far[i] < 1.0F) {
+                for (int q = first; q < quads.size(); q++) {
+                    quads.set(q, quads.get(q).scaled(far[i]));
+                }
+            }
         }
         VertexConsumer puffs = bufferSource.getBuffer(RenderTypes.entityTranslucent(PUFF_TEXTURE));
         drawSorted(puffs, matrix, right, up, forward, quads);
         VertexConsumer glow = bufferSource.getBuffer(RenderTypes.lightning());
-        for (Blast blast : BLASTS) {
-            blast.renderGlow(glow, matrix, view, right, up, partialTick);
+        for (int i = 0; i < BLASTS.size(); i++) {
+            BLASTS.get(i).renderGlow(glow, matrices[i], view, right, up, partialTick);
         }
     }
 
@@ -1066,6 +1080,11 @@ public final class MissileBlastRenderer {
      * self-shadowed underside), negative from below (fire under smoke).
      */
     private record Quad(Vec3 at, float size, float rotation, float[] colour, float alpha, int light, int variant, float gradient, double floor) {
+        /** The same puff shrunk towards the camera by {@code factor}: positions, size and the ground below it alike. */
+        Quad scaled(float factor) {
+            return new Quad(this.at.scale(factor), this.size * factor, this.rotation, this.colour, this.alpha, this.light,
+                    this.variant, this.gradient, this.floor * factor);
+        }
     }
 
     /** The direction light falls on the smoke from: high and to one side, like the sun. */

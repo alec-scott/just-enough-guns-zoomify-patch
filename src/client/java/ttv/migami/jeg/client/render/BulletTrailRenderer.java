@@ -17,7 +17,9 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.particles.BlockParticleOption;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.util.RandomSource;
+import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.HumanoidArm;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.level.ClipContext;
@@ -71,6 +73,8 @@ public final class BulletTrailRenderer {
     private static final AtomicInteger SYNTHETIC_IDS = new AtomicInteger(-1);
     private static long lastRenderFrame = -1L;
     private static volatile Vec3 lastTracerStart;
+    private static final int RECENT_TRACER_START_COUNT = 16;
+    private static final java.util.ArrayDeque<Vec3> RECENT_TRACER_STARTS = new java.util.ArrayDeque<>();
     private static volatile Vec3 lastDrawnStart;
     private static int newestTrailId;
     private static volatile int impactsShown;
@@ -95,8 +99,12 @@ public final class BulletTrailRenderer {
                 state.vehicleRound = payload.vehicleRound();
                 // A vehicle's own gun already fires from its muzzle; a hand-held gun fires from the eye and is moved onto
                 // the gun, also for passengers shooting out of a helicopter.
-                state.muzzleOffset = state.vehicleRound ? Vec3.ZERO : muzzleOffset(mc, payload.shooterId(), state.origin);
+                state.muzzleOffset = state.vehicleRound ? Vec3.ZERO : muzzleOffset(mc, payload.shooterId(), state.origin, payload.offhand());
                 lastTracerStart = state.origin.add(state.muzzleOffset);
+                RECENT_TRACER_STARTS.addLast(lastTracerStart);
+                while (RECENT_TRACER_STARTS.size() > RECENT_TRACER_START_COUNT) {
+                    RECENT_TRACER_STARTS.removeFirst();
+                }
                 if (state.muzzleOffset != Vec3.ZERO) {
                     state.convergeDistance = impactDistance(mc, payload.shooterId(), state.origin, payload.motions()[i]);
                     // Fired from a moving vehicle the round carries its speed: the tracer moves on with it from the gun.
@@ -363,11 +371,13 @@ public final class BulletTrailRenderer {
      * How far the shooter's gun muzzle sits from where their bullet actually started: the muzzle as last drawn, or an
      * estimate when the gun has not been drawn. Zero for shots that already leave a muzzle, like a vehicle's guns.
      */
-    private static Vec3 muzzleOffset(Minecraft mc, int shooterId, Vec3 origin) {
+    private static Vec3 muzzleOffset(Minecraft mc, int shooterId, Vec3 origin, boolean offhand) {
         if (mc.level == null || !(mc.level.getEntity(shooterId) instanceof LivingEntity shooter)
-                || !(shooter.getMainHandItem().getItem() instanceof GunItem)) {
+                || !(shooter.getItemInHand(offhand ? InteractionHand.OFF_HAND : InteractionHand.MAIN_HAND).getItem() instanceof GunItem)) {
             return Vec3.ZERO;
         }
+        // The off hand's gun (a second minigun) is on the other side from the main one.
+        HumanoidArm arm = offhand ? shooter.getMainArm().getOpposite() : shooter.getMainArm();
         // Only shots fired from the eye line; anything else was already given its own muzzle. A passenger in a moving
         // vehicle is drawn a few ticks behind where the server fired from, so their round starts that much further away.
         double allowed = MAX_EYE_ORIGIN_DISTANCE + RIDER_LAG_TICKS * riderSpeed(shooter);
@@ -375,11 +385,11 @@ public final class BulletTrailRenderer {
             return Vec3.ZERO;
         }
         boolean firstPersonView = shooter == mc.player && mc.options.getCameraType().isFirstPerson();
-        Vec3 muzzle = GunMuzzleTracker.muzzle(shooterId, firstPersonView);
+        Vec3 muzzle = GunMuzzleTracker.muzzle(shooterId, firstPersonView, arm);
         if (muzzle != null) {
             return muzzle.subtract(origin);
         }
-        return firstPersonView ? firstPersonMuzzleOffset(mc, origin) : thirdPersonMuzzleEstimate(shooter).subtract(origin);
+        return firstPersonView ? firstPersonMuzzleOffset(mc, origin, arm) : thirdPersonMuzzleEstimate(shooter, arm).subtract(origin);
     }
 
     /** How fast (blocks a tick) whatever the shooter rides is moving here; 0 on foot. */
@@ -393,11 +403,11 @@ public final class BulletTrailRenderer {
     }
 
     /** Roughly where a gun held at the shoulder ends, for a shooter whose gun has not been drawn this frame. */
-    private static Vec3 thirdPersonMuzzleEstimate(LivingEntity shooter) {
+    private static Vec3 thirdPersonMuzzleEstimate(LivingEntity shooter, HumanoidArm arm) {
         Vec3 look = shooter.getLookAngle();
         Vec3 right = look.cross(new Vec3(0.0D, 1.0D, 0.0D));
         right = right.lengthSqr() < 1.0E-6D ? new Vec3(1.0D, 0.0D, 0.0D) : right.normalize();
-        if (shooter.getMainArm() == net.minecraft.world.entity.HumanoidArm.LEFT) {
+        if (arm == HumanoidArm.LEFT) {
             right = right.scale(-1.0D);
         }
         return shooter.getEyePosition().add(look.scale(0.9D)).add(right.scale(0.32D)).add(0.0D, -0.3D, 0.0D);
@@ -427,11 +437,14 @@ public final class BulletTrailRenderer {
     }
 
     /** Where a held gun's muzzle roughly sits in view, relative to where the bullet actually started. */
-    private static Vec3 firstPersonMuzzleOffset(Minecraft mc, Vec3 origin) {
+    private static Vec3 firstPersonMuzzleOffset(Minecraft mc, Vec3 origin, HumanoidArm arm) {
         Camera camera = mc.gameRenderer.getMainCamera();
         Vec3 look = Vec3.directionFromRotation(camera.xRot(), camera.yRot());
         Vec3 right = look.cross(new Vec3(0.0D, 1.0D, 0.0D));
         right = right.lengthSqr() < 1.0E-6D ? new Vec3(1.0D, 0.0D, 0.0D) : right.normalize();
+        if (arm == HumanoidArm.LEFT) {
+            right = right.scale(-1.0D);
+        }
         Vec3 up = right.cross(look);
         Vec3 muzzle = camera.position()
                 .add(look.scale(TRACER_MUZZLE_FORWARD))
@@ -485,6 +498,11 @@ public final class BulletTrailRenderer {
 
     public static Vec3 lastTracerStart() {
         return lastTracerStart;
+    }
+
+    /** Where the last few network tracers started (their shooters' muzzles), oldest first, for checks. */
+    public static java.util.List<Vec3> recentTracerStarts() {
+        return java.util.List.copyOf(RECENT_TRACER_STARTS);
     }
 
     private static final class TrailState {
