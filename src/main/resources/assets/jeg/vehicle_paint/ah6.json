@@ -1,0 +1,4 @@
+{
+  "_comment": "Model bones (with everything attached) that keep their own finish when the AH-6 is dyed: rotors, glass, rocket pods, miniguns and skids.",
+  "unpainted_parts": ["propeller", "tailPropeller", "glass", "huojiandan", "huojiandan2", "cannon", "cannon2", "qiluojia"]
+}

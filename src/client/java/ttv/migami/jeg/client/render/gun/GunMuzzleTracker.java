@@ -19,6 +19,8 @@ import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
+import org.joml.Vector3fc;
+import ttv.migami.jeg.mixin.CameraAccessor;
 
 /**
  * Where each shooter's gun muzzle was last drawn, read from the rendered model itself. Every frame the barrel bones'
@@ -83,6 +85,26 @@ public final class GunMuzzleTracker {
     public static void clear() {
         THIRD_PERSON.clear();
         firstPerson = null;
+    }
+
+    /**
+     * The first-person hand is drawn with its own fixed field of view (70 degrees), the world with the player's, widened
+     * by sprinting or a high FOV setting and narrowed by aiming down sights or zooming. A point on the drawn gun is moved
+     * to the place in the world that shows on the same pixel at the same depth, so a tracer drawn into the world leaves
+     * the barrel where the barrel appears on screen.
+     */
+    static Vec3 handToWorldView(Camera camera, Vec3 offset) {
+        float hudFov = ((CameraAccessor) camera).jeg$getHudFov();
+        float worldFov = camera.getFov();
+        if (hudFov <= 1.0F || worldFov <= 1.0F || Math.abs(hudFov - worldFov) < 0.01F) {
+            return offset;
+        }
+        double scale = Math.tan(Math.toRadians(worldFov) * 0.5D) / Math.tan(Math.toRadians(hudFov) * 0.5D);
+        Vector3fc forward = camera.forwardVector();
+        Vec3 look = new Vec3(forward.x(), forward.y(), forward.z());
+        double depth = offset.dot(look);
+        Vec3 lateral = offset.subtract(look.scale(depth));
+        return look.scale(depth).add(lateral.scale(scale));
     }
 
     private record Sample(int ownerId, Vec3 world, long timeNanos) {}
@@ -152,7 +174,11 @@ public final class GunMuzzleTracker {
             // Both the world and the first-person hand are drawn camera-relative and world-aligned: the hand pass
             // starts from the inverse of the view rotation it is then drawn with.
             Vector3f centre = new Vector3f(this.frontSum).div(this.frontCount);
-            Vec3 world = camera.position().add(centre.x(), centre.y(), centre.z());
+            Vec3 offset = new Vec3(centre.x(), centre.y(), centre.z());
+            if (this.firstPersonView) {
+                offset = handToWorldView(camera, offset);
+            }
+            Vec3 world = camera.position().add(offset);
             Sample sample = new Sample(this.ownerId, world, System.nanoTime());
             if (this.firstPersonView) {
                 firstPerson = sample;

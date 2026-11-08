@@ -1,11 +1,11 @@
 package ttv.migami.jeg.vehicle.projectile;
 
-import ttv.migami.jeg.network.CameraShakePayload;
 import ttv.migami.jeg.network.MissileBlastPayload;
 import net.minecraft.util.random.WeightedList;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.sounds.SoundSource;
+import net.minecraft.core.Holder;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.core.particles.BlockParticleOption;
 import net.minecraft.core.BlockPos;
@@ -56,8 +56,6 @@ public final class VehicleMissileEntity extends Entity {
     /** Share of top speed a missile comes off the rail at, before the motor builds it up. */
     public static final double LAUNCH_SPEED_SHARE = 0.25D;
     private static final int MOTOR_BUILD_TICKS = 14;
-    private static final float BIGGEST_BLAST = 9.0F;
-    private static final double SHAKE_RANGE = 140.0D;
     private static final double BLAST_VISIBLE_RANGE = 512.0D;
     /**
      * How much of a block's blast resistance a warhead has to overcome. Medium missiles punch through stone and brick
@@ -252,10 +250,11 @@ public final class VehicleMissileEntity extends Entity {
             boolean directHitVehicle = this.directHitVehicleId >= 0;
             float explosionPower = directHitVehicle ? profile.explosionPower() * VEHICLE_DIRECT_HIT_BLOCK_DAMAGE_SCALE : profile.explosionPower();
             boolean incendiary = INCENDIARY.contains(this.weaponId);
-            // The blast is drawn by clients from a MissileBlastPayload; vanilla's own puffs would sit on top of it.
+            // The blast is drawn and heard by clients from a MissileBlastPayload (the boom arrives with the shockwave);
+            // vanilla's own puffs and instant bang would sit on top of it.
             this.level().explode(this, null, this.blockBreakingCalculator(), this.getX(), this.getY(), this.getZ(),
                     explosionPower, incendiary, ExplosionInteraction.MOB, ParticleTypes.SMOKE, ParticleTypes.SMOKE,
-                    WeightedList.of(), SoundEvents.GENERIC_EXPLODE);
+                    WeightedList.of(), Holder.direct(SoundEvents.EMPTY));
             if (incendiary) {
                 this.igniteSurroundings(serverLevel);
             }
@@ -334,30 +333,19 @@ public final class VehicleMissileEntity extends Entity {
         level.playSound(null, this.getX(), this.getY(), this.getZ(), SoundEvents.FIRECHARGE_USE, SoundSource.BLOCKS, 6.0F, 0.6F);
     }
 
-    /** Scales with the warhead: a fireball, flying fire and earth, a column of smoke, a deep boom and a shake felt at a distance. */
+    /**
+     * Scales with the warhead: a fireball, flying fire and earth, a column of smoke, a shockwave, a deep boom and a shake.
+     * Each client draws the blast and, as the shockwave reaches it, plays the boom and shakes its own view, so a blast far
+     * away is seen before it is heard.
+     */
     private void spawnMissileExplosionEffects(ServerLevel serverLevel) {
         float power = this.profile().explosionPower();
-        float size = power / BIGGEST_BLAST;
-        double spread = 0.5D + size * 2.5D;
-        double x = this.getX();
-        double y = this.getY();
-        double z = this.getZ();
         MissileBlastPayload blast = new MissileBlastPayload(this.position(), power, (float) this.profile().blastRadius(),
-                INCENDIARY.contains(this.weaponId));
+                INCENDIARY.contains(this.weaponId), true);
         for (ServerPlayer player : serverLevel.players()) {
             if (player.position().distanceToSqr(this.position()) < BLAST_VISIBLE_RANGE * BLAST_VISIBLE_RANGE
                     && ServerPlayNetworking.canSend(player, MissileBlastPayload.TYPE)) {
                 ServerPlayNetworking.send(player, blast);
-            }
-        }
-        serverLevel.playSound(null, x, y, z, SoundEvents.GENERIC_EXPLODE.value(), SoundSource.BLOCKS, 8.0F + size * 18.0F, 0.75F - size * 0.2F);
-        serverLevel.playSound(null, x, y, z, SoundEvents.GENERIC_EXPLODE.value(), SoundSource.BLOCKS, 8.0F + size * 18.0F, 0.5F);
-
-        double range = SHAKE_RANGE * Math.sqrt(size);
-        for (ServerPlayer player : serverLevel.players()) {
-            double distance = player.position().distanceTo(this.position());
-            if (distance < range && ServerPlayNetworking.canSend(player, CameraShakePayload.TYPE)) {
-                ServerPlayNetworking.send(player, new CameraShakePayload((float) (size * (1.0D - distance / range))));
             }
         }
     }

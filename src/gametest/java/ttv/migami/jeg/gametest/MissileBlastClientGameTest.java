@@ -19,7 +19,8 @@ import ttv.migami.jeg.vehicle.projectile.VehicleMissileEntity;
 /**
  * Drops each class of missile on an identical cobblestone-and-plank hut. A large missile must flatten far more of it
  * than a medium one, which in turn must punch through stone; the incendiary 9M-120 must leave the ground burning. Each
- * blast is drawn (fireball, shockwave, smoke) and screenshotted as it develops.
+ * blast is drawn (flash, fireball, mushroom cap, shockwave, dust wall, debris, scorch) and screenshotted as it develops,
+ * and its shockwave must reach the watcher.
  */
 public class MissileBlastClientGameTest implements FabricClientGameTest {
     private static final Logger LOGGER = LoggerFactory.getLogger("jeg-gametest");
@@ -67,14 +68,17 @@ public class MissileBlastClientGameTest implements FabricClientGameTest {
                     Reference.id(weapon));
             level.addFreshEntity(missile);
         });
+        int shocks = MissileBlastRenderer.shocksFelt();
         context.waitFor(mc -> MissileBlastRenderer.blastsStarted() > blasts, 100);
-        int[] shots = {1, 3, 6, 12, 30, 80};
+        int[] shots = {1, 3, 6, 9, 12, 18, 30, 50, 80, 160};
         int waited = 0;
         for (int shot : shots) {
             context.waitTicks(shot - waited);
             waited = shot;
             context.takeScreenshot("missile_" + label + "_t" + shot);
         }
+        // The watcher stands 34 blocks off: the shockwave (and the boom) must have reached them.
+        check(MissileBlastRenderer.shocksFelt() > shocks, label + ": the shockwave should reach the watcher");
         int after = server.computeOnServer(s -> countHut(s.overworld(), x, z));
         return before - after;
     }

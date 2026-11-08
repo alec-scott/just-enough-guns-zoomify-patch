@@ -1,0 +1,28 @@
+{
+  "_comment": "Model bones (with everything attached) that keep their own finish when the MI-28 is dyed: rotors, glass, landing gear, chin gun, rocket pods, missile racks and pylon shoes. The stub wings (bone19/bone14) also carry the rocket pods' tubes and the rack rails below the wing plank: those cubes keep their finish too.",
+  "unpainted_parts": [
+    "propellerBase",
+    "tailPropeller",
+    "glass",
+    "gear",
+    "gear2",
+    "gear3",
+    "weapon",
+    "bone21",
+    "bone18",
+    "missile1",
+    "missile2",
+    "base2",
+    "base3"
+  ],
+  "unpainted_cubes": [
+    {
+      "bone": "bone19",
+      "max_top": 40.9
+    },
+    {
+      "bone": "bone14",
+      "max_top": 40.9
+    }
+  ]
+}

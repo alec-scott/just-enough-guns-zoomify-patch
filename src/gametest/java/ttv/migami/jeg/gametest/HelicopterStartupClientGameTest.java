@@ -15,7 +15,10 @@ import ttv.migami.jeg.vehicle.entity.base.VehicleEntity;
 import java.lang.reflect.Field;
 import java.util.Map;
 
-/** Cold entry, a latched ignition, gradual rotor speed, no early lift, and the transition into flight audio. */
+/**
+ * Cold entry, a latched ignition, gradual rotor speed, no early lift, and the transition into flight audio; then a hot
+ * restart when boarding an airborne helicopter.
+ */
 public class HelicopterStartupClientGameTest implements FabricClientGameTest {
     private static final Logger LOGGER = LoggerFactory.getLogger("jeg-gametest");
 
@@ -32,7 +35,45 @@ public class HelicopterStartupClientGameTest implements FabricClientGameTest {
             this.start(context, server, "ah6", 0);
             this.start(context, server, "mi28", 300);
             this.emptyBattery(context, server);
+            this.midAirReentry(context, server, "ah6", 900);
+            this.midAirReentry(context, server, "mi28", 1200);
         }
+    }
+
+    /** Jumping out mid-air and climbing back in picks the engine straight back up: no cold start while it falls. */
+    private void midAirReentry(ClientGameTestContext context, TestServerContext server, String id, int x) {
+        server.runCommand("ride @p dismount");
+        server.runCommand("tp @p " + x + " -30 0 0 0");
+        server.runCommand("effect give @p slow_falling 3 0 true");
+        context.waitTicks(40);
+        // Summoned and boarded in the same tick, so it has not started to fall.
+        server.runCommand("execute as @p at @s run summon jeg:" + id + " ~ ~ ~5");
+        server.runCommand("ride @p mount @e[type=jeg:" + id + ",sort=nearest,limit=1]");
+        context.waitFor(mc -> mc.player.getVehicle() instanceof VehicleEntity);
+        context.runOnClient(mc -> mc.options.setCameraType(CameraType.THIRD_PERSON_BACK));
+        context.waitTicks(30);
+        State caught = this.state(context);
+        this.check(caught.progress() == 1.0F && caught.rotor() > 0.06F && caught.y() > -45.0D,
+                "Boarding an airborne helicopter must hot-start it and hold it up", caught);
+
+        server.runCommand("ride @p dismount");
+        context.waitTicks(12);
+        server.runCommand("ride @p mount @e[type=jeg:" + id + ",sort=nearest,limit=1]");
+        context.waitFor(mc -> mc.player.getVehicle() instanceof VehicleEntity);
+        State reentered = this.state(context);
+        context.waitTicks(30);
+        State recovered = this.state(context);
+        String serverState = server.computeOnServer(minecraftServer -> {
+            VehicleEntity vehicle = (VehicleEntity) minecraftServer.getPlayerList().getPlayers().get(0).getVehicle();
+            return "progress=" + vehicle.helicopterStartupProgress() + " vy=" + vehicle.getDeltaMovement().y;
+        });
+        LOGGER.info("[heli-startup] {} mid-air caught={} reentered={} recovered={} server={}", id, caught, reentered, recovered, serverState);
+        context.takeScreenshot("startup_" + id + "_midair_reentry");
+        // A heavy airframe cannot stop a fall dead: it must be running again and have its sink arrested within a few blocks.
+        this.check(recovered.progress() == 1.0F && recovered.rotor() > 0.06F && recovered.sound().equals("FLIGHT")
+                        && recovered.y() > reentered.y() - 8.0D && serverState.startsWith("progress=1.0")
+                        && Double.parseDouble(serverState.substring(serverState.indexOf("vy=") + 3)) > -0.2D,
+                "Re-entering mid-air must resume flight at once, not cold-start", recovered);
     }
 
     private void start(ClientGameTestContext context, TestServerContext server, String id, int x) {

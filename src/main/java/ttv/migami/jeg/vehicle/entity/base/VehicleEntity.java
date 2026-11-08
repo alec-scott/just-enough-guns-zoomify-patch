@@ -119,8 +119,10 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     private static final double VEHICLE_IDLE_SYNC_MOTION_THRESHOLD_SQR = 1.0E-4D;
     private static final double VEHICLE_IDLE_SYNC_Y_DELTA = 1.0E-3D;
     private static final float OTHER_VEHICLE_COLLISION_LENGTH_SCALE = 1.2F;
-    /** Vehicle weapons reload 20% faster than the same gun carried by hand. */
+    /** Vehicle weapons reload in 0.64x the time of the same gun carried by hand. */
     private static final float VEHICLE_RELOAD_TIME_SCALE = 0.64F;
+    /** Helicopter weapons reload another 30% faster on top of that (0.448x the hand-held time). */
+    private static final float HELICOPTER_RELOAD_TIME_SCALE = 0.70F;
     private static final float SPEEDBOAT_COLLISION_LENGTH_SCALE = 1.2F;
     private static final double SPEEDBOAT_COLLISION_FORWARD_SHIFT = 0.15D;
     private static final double BOAT_WATER_PROBE_BELOW = 0.2D;
@@ -149,6 +151,8 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     private static final EntityDataAccessor<Boolean> DATA_SELECTED_WEAPON_RELOADING = SynchedEntityData.defineId(VehicleEntity.class, EntityDataSerializers.BOOLEAN);
     private static final EntityDataAccessor<Integer> DATA_SELECTED_WEAPON_RELOAD_TICKS = SynchedEntityData.defineId(VehicleEntity.class, EntityDataSerializers.INT);
     private static final EntityDataAccessor<Integer> DATA_RELOADING_WEAPON = SynchedEntityData.defineId(VehicleEntity.class, EntityDataSerializers.INT);
+    /** Reload ticks left on every weapon slot, comma separated: each weapon reloads on its own. */
+    private static final EntityDataAccessor<String> DATA_WEAPON_RELOAD_TICKS_BY_SLOT = SynchedEntityData.defineId(VehicleEntity.class, EntityDataSerializers.STRING);
     private static final EntityDataAccessor<Integer> DATA_FLARE_AMMO = SynchedEntityData.defineId(VehicleEntity.class, EntityDataSerializers.INT);
     private static final EntityDataAccessor<Integer> DATA_DECOY_COOLDOWN = SynchedEntityData.defineId(VehicleEntity.class, EntityDataSerializers.INT);
     private static final EntityDataAccessor<Boolean> DATA_MISSILE_LOCKED = SynchedEntityData.defineId(VehicleEntity.class, EntityDataSerializers.BOOLEAN);
@@ -250,6 +254,10 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     private static final double HELICOPTER_FORCED_DESCENT_ACCELERATION = 0.035D * 0.70D;
     private static final double HELICOPTER_VERTICAL_IMPACT_MAX_DAMAGE_RATIO = 0.70D;
     private static final float HELICOPTER_DESCENT_ROTOR_SPEED = 0.035F;
+    /** Rotor speed (hover is 0.085) above which a landed helicopter is still hot and restarts without a cold start. */
+    private static final float HELICOPTER_HOT_RESTART_ROTOR_SPEED = 0.02F;
+    /** Height above ground (blocks) past which a helicopter counts as airborne for a hot restart, not merely bouncing on its skids. */
+    private static final double HELICOPTER_HOT_RESTART_ALTITUDE = 1.0D;
     private static final double HELICOPTER_DANGEROUS_DESCENT_WARNING_MIN_ALTITUDE = 8.0D;
     // Below this horizontal speed a fast descent is dangerous; with forward airspeed it is a normal descent.
     private static final double HELICOPTER_LOW_AIRSPEED_THRESHOLD = 0.2D;
@@ -393,9 +401,10 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     private final Map<Integer, Integer> aiFireCooldownByWeaponSlot = new HashMap<>();
     private VehicleInput input = VehicleInput.EMPTY;
     private int repairCooldown;
-    private int fireCooldown;
-    private int activeReloadWeaponSlot = -1;
-    private int activeReloadTicks;
+    /** Fire delay left on each weapon slot for the crew: switching weapons never waits out the last one's delay. */
+    private final Map<Integer, Integer> fireCooldownByWeaponSlot = new HashMap<>();
+    /** Reload ticks left on each weapon slot. A weapon keeps reloading while another one is selected and fired. */
+    private final Map<Integer, Integer> reloadTicksByWeaponSlot = new HashMap<>();
     private int decoyCooldown;
     private int energyRechargeTick;
     private int ramDamageCooldown;
@@ -413,6 +422,9 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     private int seekControllerId = -1;
     private boolean seekInput;
     private int pendingFlareBurstTicks = -1;
+    /** Shots fired by twin (mirrored) guns, to alternate barrels; and whether the shot being fired uses the mirror one. */
+    private int twinGunShots;
+    private boolean mirroredShot;
     private double wheelSteering;
     private double enginePower;
     private double lastTickSpeed;
@@ -676,6 +688,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         builder.define(DATA_SELECTED_WEAPON_RELOADING, false);
         builder.define(DATA_SELECTED_WEAPON_RELOAD_TICKS, 0);
         builder.define(DATA_RELOADING_WEAPON, -1);
+        builder.define(DATA_WEAPON_RELOAD_TICKS_BY_SLOT, "");
         builder.define(DATA_FLARE_AMMO, 0);
         builder.define(DATA_DECOY_COOLDOWN, 0);
         builder.define(DATA_MISSILE_LOCKED, false);
@@ -937,8 +950,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     }
 
     public boolean selectedVehicleWeaponReloading(Entity passenger) {
-        int slot = this.selectedVehicleWeaponIndex(passenger);
-        return slot >= 0 && this.entityData.get(DATA_RELOADING_WEAPON) == slot;
+        return this.selectedVehicleWeaponReloadTicks(passenger) > 0;
     }
 
     public int selectedVehicleWeaponReloadTicks() {
@@ -946,7 +958,17 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     }
 
     public int selectedVehicleWeaponReloadTicks(Entity passenger) {
-        return this.selectedVehicleWeaponReloading(passenger) ? this.entityData.get(DATA_SELECTED_WEAPON_RELOAD_TICKS) : 0;
+        return this.vehicleWeaponSlotReloadTicks(this.selectedVehicleWeaponIndex(passenger));
+    }
+
+    /** Rounds loaded in this weapon slot, as last synced. */
+    public int vehicleWeaponSlotAmmo(int slot) {
+        return slot < 0 ? 0 : this.weaponAmmoFromSyncedData(slot);
+    }
+
+    /** Reload ticks left on this weapon slot, as last synced: 0 when it is not reloading. */
+    public int vehicleWeaponSlotReloadTicks(int slot) {
+        return slot < 0 ? 0 : this.valueFromSyncedIntList(this.entityData.get(DATA_WEAPON_RELOAD_TICKS_BY_SLOT), slot, 0);
     }
 
     public int vehicleFlareAmmo() {
@@ -2198,9 +2220,8 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
             this.entityData.set(DATA_ACTIVE_FIRE_WEAPON, -1);
             return;
         }
-        if (this.fireCooldown > 0) {
-            this.fireCooldown--;
-        }
+        this.fireCooldownByWeaponSlot.replaceAll((slot, cooldown) -> Math.max(0, cooldown - 1));
+        this.fireCooldownByWeaponSlot.values().removeIf(cooldown -> cooldown <= 0);
         this.aiFireCooldownByWeaponSlot.replaceAll((slot, cooldown) -> Math.max(0, cooldown - 1));
         this.aiFireCooldownByWeaponSlot.entrySet().removeIf(entry -> entry.getValue() <= 0);
 
@@ -2238,7 +2259,8 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
 
     private boolean tryFireVehicleWeapon(@Nullable LivingEntity shooter, @Nullable VehicleWeaponInfo selectedWeapon, boolean fireInput, boolean seekInput, int aiSeatIndex) {
         int selectedSlot = shooter == null ? -1 : this.selectedVehicleWeaponIndex(shooter);
-        if (!fireInput || shooter == null || selectedWeapon == null || this.isWeaponReloading()) {
+        // Only this weapon's own reload holds it back: another one reloading in the background does not.
+        if (!fireInput || shooter == null || selectedWeapon == null || this.isWeaponSlotReloading(selectedSlot)) {
             return false;
         }
         if (this.weaponFireCooldown(selectedSlot, aiSeatIndex) > 0 || this.isTurretDamaged()) {
@@ -2264,6 +2286,9 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         if (!this.vehicleGunReady(weapon)) {
             return false;
         }
+        // A pair of guns fires left, right, left: this shot comes from the mirrored barrel every other time, and aims
+        // from it, so both streams still meet on the crosshair.
+        this.mirroredShot = weapon.mirrored() && (this.twinGunShots++ & 1) == 1;
         Vec3 direction = this.weaponAimDirection(shooter);
         if (direction.lengthSqr() < 1.0E-4D || !this.consumeEnergy(weapon.energyCost())) {
             return false;
@@ -2286,6 +2311,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
             return true;
         }
         Vec3 muzzle = this.weaponMuzzlePosition(weapon, direction, 1.15D, 0.9D);
+        this.mirroredShot = false;
         this.spawnVehicleMuzzleFlare(weapon, muzzle, direction);
         float damage = helicopterGun ? stats.damage() * HELICOPTER_GUN_DAMAGE_MULTIPLIER : stats.damage();
         Vec3 shot = helicopterGun ? this.withGunDispersion(direction) : direction;
@@ -2314,7 +2340,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
 
     private int weaponFireCooldown(int selectedSlot, int aiSeatIndex) {
         if (aiSeatIndex < 0) {
-            return this.fireCooldown;
+            return this.fireCooldownByWeaponSlot.getOrDefault(selectedSlot, 0);
         }
         return this.aiFireCooldownByWeaponSlot.getOrDefault(selectedSlot, 0);
     }
@@ -2322,7 +2348,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     private void setWeaponFireCooldown(int selectedSlot, int aiSeatIndex, int cooldown) {
         int value = Math.max(1, cooldown);
         if (aiSeatIndex < 0) {
-            this.fireCooldown = value;
+            this.fireCooldownByWeaponSlot.put(selectedSlot, value);
         } else {
             this.aiFireCooldownByWeaponSlot.put(selectedSlot, value);
         }
@@ -2354,17 +2380,16 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
 
     private void spawnVehicleGunMuzzleFlash(ServerLevel level, Vec3 muzzle, Vec3 direction) {
         Vec3 forward = direction.normalize();
-        var flash = "mi28".equals(this.vehicleDataId().getPath())
-                ? ModParticleTypes.SMALL_GUN_MUZZLE_FLASH.get() : ModParticleTypes.GUN_MUZZLE_FLASH.get();
-        level.sendParticles(flash, muzzle.x, muzzle.y, muzzle.z, 0, forward.x, forward.y, forward.z, 0.12D);
-        // A rotary gun on a helicopter barks: a hot flare and a breath of smoke on top of the flash. Not on the MI-28's
-        // chin gun, whose zoomed sight sits right on the muzzle: the smoke would fill the gunner's whole view.
-        if (this.vehicleData().defaults().vehicleType() == VehicleType.HELICOPTER && !"mi28".equals(this.vehicleDataId().getPath())) {
-            this.spawnVehicleMuzzleFlareParticle(level, new CannonMuzzleFlareOption(1.0F, 0.88F, 0.6F, 3, 0.75F, 1, 0.12F), muzzle, direction, 2, 0.04D, 0.22D);
-            if (this.random.nextInt(3) == 0) {
-                this.spawnVehicleMuzzleFlareParticle(level, new CannonMuzzleFlareOption(0.5F, 0.47F, 0.44F, 16, 0.6F, 2, 0.02F), muzzle, direction, 1, 0.0D, 0.08D);
-            }
+        // Helicopter guns fire fast and sit close to the pilot's view: a full-size flash (let alone cannon flares and
+        // smoke, which are blocks wide) on every round washes out the screen. The MI-28's chin gun sits right on its
+        // zoomed sight, so it gets the smallest flash; the AH-6's pylon miniguns a modest one.
+        var flash = ModParticleTypes.GUN_MUZZLE_FLASH.get();
+        if ("mi28".equals(this.vehicleDataId().getPath())) {
+            flash = ModParticleTypes.SMALL_GUN_MUZZLE_FLASH.get();
+        } else if (this.vehicleData().defaults().vehicleType() == VehicleType.HELICOPTER) {
+            flash = ModParticleTypes.MEDIUM_GUN_MUZZLE_FLASH.get();
         }
+        level.sendParticles(flash, muzzle.x, muzzle.y, muzzle.z, 0, forward.x, forward.y, forward.z, 0.12D);
     }
 
     private void spawnVehicleMuzzleFlareParticle(ServerLevel level, CannonMuzzleFlareOption option, Vec3 center, Vec3 direction, int count, double radius, double speed) {
@@ -2432,7 +2457,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
                 || (this.vehicleData().defaults().vehicleType() == VehicleType.HELICOPTER && !helicopterGun)
                 || (!helicopterGun && this.usesGunMuzzleFlash(weapon.weaponId().getPath()))
                 || !fireInput
-                || this.isWeaponReloading()
+                || this.isWeaponSlotReloading(this.selectedVehicleWeaponIndex(shooter))
                 || this.isTurretDamaged()
                 || !this.canUseSelectedWeapon(shooter, weapon)
                 || weapon.guided()) {
@@ -2456,7 +2481,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         if (weapon.hasMuzzle() && this.usesVehiclePoseTransform()) {
             // Aircraft pylons are bolted to the hull: place the muzzle with the hull's attitude, not the aim direction,
             // so a gunner looking sideways does not swing the rocket pods round the nose.
-            return this.position().add(this.rotateLocalOffsetWithPose(weapon.muzzleX(), weapon.muzzleY(), weapon.muzzleZ(), 1.0F));
+            return this.position().add(this.rotateLocalOffsetWithPose(this.muzzleX(weapon), weapon.muzzleY(), weapon.muzzleZ(), 1.0F));
         }
         if (weapon.hasMuzzle()) {
             Vec3 aim = direction.normalize();
@@ -2468,10 +2493,15 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
             }
             return this.position()
                     .add(0.0D, weapon.muzzleY(), 0.0D)
-                    .add(side.scale(weapon.muzzleX()))
+                    .add(side.scale(this.muzzleX(weapon)))
                     .add(aim.scale(weapon.muzzleZ()));
         }
         return this.position().add(0.0D, fallbackHeight, 0.0D).add(direction.scale(fallbackForwardOffset));
+    }
+
+    /** The muzzle's sideways offset, on the far side for the mirrored barrel of a pair of guns. */
+    private double muzzleX(VehicleWeaponInfo weapon) {
+        return weapon.mirrored() && this.mirroredShot ? -weapon.muzzleX() : weapon.muzzleX();
     }
 
     @Nullable
@@ -3448,114 +3478,124 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         return stats == null ? 0 : Math.max(0, stats.magazineSize());
     }
 
-    private int selectedWeaponReloadDuration() {
-        Identifier weaponId = this.selectedVehicleWeaponId();
-        GunStats stats = weaponId == null ? null : VehicleWeaponStats.get(weaponId);
-        return stats == null ? 0 : Math.max(0, Math.round(stats.totalReloadTime() * VEHICLE_RELOAD_TIME_SCALE));
+    /** How long this weapon takes to reload on this vehicle: quicker than by hand, and quicker again on a helicopter. */
+    private int vehicleReloadDuration(@Nullable GunStats stats) {
+        if (stats == null) {
+            return 0;
+        }
+        float scale = VEHICLE_RELOAD_TIME_SCALE;
+        if (this.vehicleData().defaults().vehicleType() == VehicleType.HELICOPTER) {
+            scale *= HELICOPTER_RELOAD_TIME_SCALE;
+        }
+        return Math.max(0, Math.round(stats.totalReloadTime() * scale));
     }
 
-    private int selectedWeaponReloadDuration(Entity passenger) {
-        Identifier weaponId = this.selectedVehicleWeaponId(passenger);
-        GunStats stats = weaponId == null ? null : VehicleWeaponStats.get(weaponId);
-        return stats == null ? 0 : Math.max(0, Math.round(stats.totalReloadTime() * VEHICLE_RELOAD_TIME_SCALE));
+    private boolean isWeaponSlotReloading(int slot) {
+        return this.weaponReloadTicks(slot) > 0;
     }
 
-    private boolean isWeaponReloading() {
-        return this.activeReloadWeaponSlot >= 0 && this.activeReloadTicks > 0;
+    private int weaponReloadTicks(int slot) {
+        return slot < 0 ? 0 : this.reloadTicksByWeaponSlot.getOrDefault(slot, 0);
+    }
+
+    /** The lowest weapon slot that is reloading, or -1. */
+    private int firstReloadingWeaponSlot() {
+        int first = -1;
+        for (var entry : this.reloadTicksByWeaponSlot.entrySet()) {
+            if (entry.getValue() > 0 && (first < 0 || entry.getKey() < first)) {
+                first = entry.getKey();
+            }
+        }
+        return first;
+    }
+
+    /** Whether this weapon slot could start a reload now: it takes magazines, is not full or already reloading, and there is ammo aboard. */
+    private boolean canReloadWeaponSlot(int slot) {
+        var weapons = this.vehicleData().defaults().weapons();
+        if (slot < 0 || slot >= weapons.size() || !this.usesSharedVehicleReloadSystem(slot) || this.isWeaponSlotReloading(slot)) {
+            return false;
+        }
+        GunStats stats = VehicleWeaponStats.get(weapons.get(slot).weaponId());
+        int magazineSize = stats == null ? 0 : Math.max(0, stats.magazineSize());
+        return magazineSize > 0
+                && this.weaponLoadedAmmo(slot) < magazineSize
+                && this.countAmmo(weapons.get(slot).ammoId()) > 0;
     }
 
     private boolean canReloadSelectedWeapon() {
-        int slot = this.selectedVehicleWeaponIndex();
-        if (!this.usesSharedVehicleReloadSystem() || slot < 0 || slot >= this.vehicleData().defaults().weapons().size()) {
-            return false;
-        }
-        int magazineSize = this.selectedWeaponMagazineSize();
-        if (magazineSize <= 0 || this.isWeaponReloading()) {
-            return false;
-        }
-        return this.selectedWeaponLoadedAmmo() < magazineSize && this.selectedWeaponReserveAmmo() > 0;
+        return this.canReloadWeaponSlot(this.selectedVehicleWeaponIndex());
     }
 
     private boolean canReloadSelectedWeapon(Entity passenger) {
-        int slot = this.selectedVehicleWeaponIndex(passenger);
-        if (!this.usesSharedVehicleReloadSystem(passenger) || slot < 0 || slot >= this.vehicleData().defaults().weapons().size()) {
-            return false;
-        }
-        int magazineSize = this.selectedWeaponMagazineSize(passenger);
-        if (magazineSize <= 0 || this.isWeaponReloading()) {
-            return false;
-        }
-        return this.selectedWeaponLoadedAmmo(passenger) < magazineSize && this.selectedWeaponReserveAmmo(passenger) > 0;
-    }
-
-    private void startWeaponReload() {
-        if (!this.canReloadSelectedWeapon()) {
-            return;
-        }
-        int reloadDuration = this.selectedWeaponReloadDuration();
-        if (reloadDuration <= 0) {
-            this.finishWeaponReload(this.selectedVehicleWeaponIndex());
-            return;
-        }
-        this.activeReloadWeaponSlot = this.selectedVehicleWeaponIndex();
-        this.activeReloadTicks = reloadDuration;
-        this.syncSelectedWeaponAmmoState();
-        VehicleWeaponInfo weapon = this.selectedWeapon();
-        Identifier weaponId = this.selectedVehicleWeaponId();
-        this.playWeaponReloadSound(weapon, weaponId == null ? null : VehicleWeaponStats.get(weaponId), true);
+        return this.canReloadWeaponSlot(this.selectedVehicleWeaponIndex(passenger));
     }
 
     private void startWeaponReload(Entity passenger) {
-        if (!this.canReloadSelectedWeapon(passenger)) {
+        this.startWeaponSlotReload(this.selectedVehicleWeaponIndex(passenger));
+    }
+
+    private void startWeaponSlotReload(int slot) {
+        if (!this.canReloadWeaponSlot(slot)) {
             return;
         }
-        int slot = this.selectedVehicleWeaponIndex(passenger);
-        int reloadDuration = this.selectedWeaponReloadDuration(passenger);
+        VehicleWeaponInfo weapon = this.vehicleData().defaults().weapons().get(slot);
+        GunStats stats = VehicleWeaponStats.get(weapon.weaponId());
+        int reloadDuration = this.vehicleReloadDuration(stats);
         if (reloadDuration <= 0) {
             this.finishWeaponReload(slot);
             return;
         }
-        this.activeReloadWeaponSlot = slot;
-        this.activeReloadTicks = reloadDuration;
+        this.reloadTicksByWeaponSlot.put(slot, reloadDuration);
         this.syncSelectedWeaponAmmoState();
-        VehicleWeaponInfo weapon = this.selectedWeapon(passenger);
-        Identifier weaponId = this.selectedVehicleWeaponId(passenger);
-        this.playWeaponReloadSound(weapon, weaponId == null ? null : VehicleWeaponStats.get(weaponId), true);
+        this.playWeaponReloadSound(weapon, stats, true);
     }
 
     private void cancelWeaponReload() {
-        if (!this.isWeaponReloading()) {
+        if (this.reloadTicksByWeaponSlot.isEmpty()) {
             return;
         }
-        this.activeReloadWeaponSlot = -1;
-        this.activeReloadTicks = 0;
+        this.reloadTicksByWeaponSlot.clear();
         this.syncSelectedWeaponAmmoState();
     }
 
+    /**
+     * Counts every weapon's reload down on its own, so a launcher emptied and switched away from is loaded by the time
+     * it is selected again, and starts the reload of any empty weapon that someone aboard can fire.
+     */
     private void tickWeaponReload() {
-        if (this.isWeaponReloading()) {
-            if (this.activeReloadTicks > 0) {
-                this.activeReloadTicks--;
+        if (!this.reloadTicksByWeaponSlot.isEmpty()) {
+            java.util.List<Integer> finished = new java.util.ArrayList<>();
+            for (var entry : this.reloadTicksByWeaponSlot.entrySet()) {
+                int ticks = entry.getValue() - 1;
+                entry.setValue(ticks);
+                if (ticks <= 0) {
+                    finished.add(entry.getKey());
+                }
             }
-            if (this.activeReloadTicks <= 0) {
-                int slot = this.activeReloadWeaponSlot;
-                this.activeReloadWeaponSlot = -1;
-                this.activeReloadTicks = 0;
+            for (int slot : finished) {
+                this.reloadTicksByWeaponSlot.remove(slot);
                 this.finishWeaponReload(slot);
-                return;
             }
             this.syncSelectedWeaponAmmoState();
-            return;
         }
-        if (this.shouldAutoReloadSelectedWeapon()) {
-            LivingEntity shooter = this.weaponController();
-            if (shooter == null) {
-                shooter = this.getControllingPassenger() instanceof LivingEntity living ? living : null;
-            }
-            if (shooter != null) {
-                this.startWeaponReload(shooter);
+        var weapons = this.vehicleData().defaults().weapons();
+        for (int slot = 0; slot < weapons.size(); slot++) {
+            if (this.weaponLoadedAmmo(slot) <= 0 && this.canReloadWeaponSlot(slot) && this.hasCrewForWeapon(weapons.get(slot))) {
+                this.startWeaponSlotReload(slot);
             }
         }
+    }
+
+    /** Whether anyone aboard sits in a seat that can fire this weapon. */
+    private boolean hasCrewForWeapon(VehicleWeaponInfo weapon) {
+        var passengers = this.getPassengers();
+        for (int index = 0; index < passengers.size(); index++) {
+            Entity passenger = passengers.get(index);
+            if (passenger instanceof LivingEntity && weapon.usableBySeat(this.seatIndexForPassenger(passenger, index))) {
+                return true;
+            }
+        }
+        return false;
     }
 
     public boolean canReloadSelectedVehicleWeapon() {
@@ -3572,21 +3612,6 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
 
     public int selectedVehicleWeaponMagazineSize(Entity passenger) {
         return this.selectedWeaponMagazineSize(passenger);
-    }
-
-    private boolean shouldAutoReloadSelectedWeapon() {
-        LivingEntity shooter = this.weaponController();
-        if (shooter == null) {
-            shooter = this.getControllingPassenger() instanceof LivingEntity living ? living : null;
-        }
-        if (shooter == null || !this.usesSharedVehicleReloadSystem(shooter)) {
-            return false;
-        }
-        VehicleWeaponInfo weapon = this.selectedWeapon(shooter);
-        if (shooter == null || weapon == null || !this.canUseSelectedWeapon(shooter, weapon)) {
-            return false;
-        }
-        return this.selectedWeaponLoadedAmmo(shooter) <= 0 && this.canReloadSelectedWeapon(shooter);
     }
 
     private void finishWeaponReload(int slot) {
@@ -3615,6 +3640,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
             this.entityData.set(DATA_SELECTED_WEAPON_RELOADING, false);
             this.entityData.set(DATA_SELECTED_WEAPON_RELOAD_TICKS, 0);
             this.entityData.set(DATA_RELOADING_WEAPON, -1);
+            this.entityData.set(DATA_WEAPON_RELOAD_TICKS_BY_SLOT, "");
             this.entityData.set(DATA_SELECTED_WEAPONS_BY_SEAT, "");
             this.entityData.set(DATA_WEAPON_AMMO_BY_SLOT, "");
             this.entityData.set(DATA_WEAPON_RESERVE_AMMO_BY_SLOT, "");
@@ -3634,9 +3660,9 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         }
         this.entityData.set(DATA_SELECTED_WEAPON_AMMO, this.weaponLoadedAmmo(selectedSlot));
         this.entityData.set(DATA_SELECTED_WEAPON_RESERVE_AMMO, this.selectedWeaponReserveAmmo());
-        this.entityData.set(DATA_SELECTED_WEAPON_RELOADING, this.isWeaponReloading() && this.activeReloadWeaponSlot == selectedSlot);
-        this.entityData.set(DATA_SELECTED_WEAPON_RELOAD_TICKS, this.isWeaponReloading() && this.activeReloadWeaponSlot == selectedSlot ? this.activeReloadTicks : 0);
-        this.entityData.set(DATA_RELOADING_WEAPON, this.isWeaponReloading() ? this.activeReloadWeaponSlot : -1);
+        this.entityData.set(DATA_SELECTED_WEAPON_RELOADING, this.isWeaponSlotReloading(selectedSlot));
+        this.entityData.set(DATA_SELECTED_WEAPON_RELOAD_TICKS, this.weaponReloadTicks(selectedSlot));
+        this.entityData.set(DATA_RELOADING_WEAPON, this.firstReloadingWeaponSlot());
         this.syncPerSeatSelectedWeaponState();
         this.syncWeaponAmmoMaps();
     }
@@ -3657,17 +3683,21 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         var weapons = this.vehicleData().defaults().weapons();
         StringBuilder loaded = new StringBuilder();
         StringBuilder reserve = new StringBuilder();
+        StringBuilder reloading = new StringBuilder();
         for (int slot = 0; slot < weapons.size(); slot++) {
             if (slot > 0) {
                 loaded.append(',');
                 reserve.append(',');
+                reloading.append(',');
             }
             VehicleWeaponInfo weapon = weapons.get(slot);
             loaded.append(this.usesSharedVehicleReloadSystem(slot) ? this.weaponLoadedAmmo(slot) : this.countAmmo(weapon.ammoId()));
             reserve.append(this.usesSharedVehicleReloadSystem(slot) ? this.countAmmo(weapon.ammoId()) : 0);
+            reloading.append(this.weaponReloadTicks(slot));
         }
         this.entityData.set(DATA_WEAPON_AMMO_BY_SLOT, loaded.toString());
         this.entityData.set(DATA_WEAPON_RESERVE_AMMO_BY_SLOT, reserve.toString());
+        this.entityData.set(DATA_WEAPON_RELOAD_TICKS_BY_SLOT, reloading.toString());
     }
 
     private int weaponAmmoFromSyncedData(int slot) {
@@ -4892,6 +4922,19 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         if (altitudeLimited) {
             up = false;
         }
+        // Hot restart: a pilot taking the controls of a helicopter that is airborne (jumped out and climbed back in, or a
+        // world loaded mid-flight), or still has its rotor turning on the ground, picks the engine straight back up rather
+        // than sitting through a cold start while it falls. A stopped rotor on the ground still needs the full start, and a
+        // cold start under way (its rotor winding up) is not cut short.
+        if (pilot != null && !this.engineStartOver && hasEnergy && !lowHealthDescent
+                && this.vehicleHealth() > 0.1F * this.maxVehicleHealth()
+                && ((!this.onGround() && altitude > HELICOPTER_HOT_RESTART_ALTITUDE)
+                        || (up && !this.engineStart && currentRotorSpeed >= HELICOPTER_HOT_RESTART_ROTOR_SPEED))) {
+            this.engineStart = true;
+            this.engineStartOver = true;
+            this.entityData.set(DATA_HELICOPTER_STARTUP, this.helicopterStartupTicks());
+            this.enginePower = Math.max(this.enginePower, HELICOPTER_HOVER_POWER);
+        }
         boolean playerVerticalControl = (playerPilot || autopilot)
                 && hasEnergy
                 && !lowHealthDescent
@@ -5809,8 +5852,8 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         this.entityData.set(DATA_SELECTED_WEAPON, this.readSelectedWeapon(input));
         this.readSelectedWeaponsBySeat(input);
         this.readLoadedWeaponAmmo(input);
-        this.activeReloadWeaponSlot = -1;
-        this.activeReloadTicks = 0;
+        this.reloadTicksByWeaponSlot.clear();
+        this.fireCooldownByWeaponSlot.clear();
         this.decoyCooldown = input.getIntOr(TAG_DECOY_COOLDOWN, 0);
         this.leftWheelHealth = input.getFloatOr(TAG_LEFT_WHEEL_HEALTH, PART_MAX_HEALTH);
         this.rightWheelHealth = input.getFloatOr(TAG_RIGHT_WHEEL_HEALTH, PART_MAX_HEALTH);

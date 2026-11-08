@@ -39,7 +39,7 @@ public final class DefaultVehicleResource {
     public static Identifier texture(VehicleEntity vehicle) {
         Identifier base = baseTexture(vehicle);
         var paint = vehicle != null ? vehicle.paint() : null;
-        return paint == null || base == FALLBACK_TEXTURE ? base : VehiclePaintTextures.painted(base, paint);
+        return paint == null || base == FALLBACK_TEXTURE ? base : VehiclePaintTextures.painted(base, paint, vehiclePath(vehicle));
     }
 
     private static Identifier baseTexture(VehicleEntity vehicle) {

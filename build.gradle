@@ -51,6 +51,29 @@ fabricApi {
     }
 }
 
+// Run only some client game tests: ./gradlew runClientGameTest -PgameTests=HelicopterStartup,VehiclePaint
+// (class names, with or without the ClientGameTest suffix). Without it every test runs, except setup tasks that only run
+// when named (HeliSandboxSetup builds the HeliTest play-test world).
+tasks.named("processGametestResources") {
+    def only = (project.findProperty("gameTests") ?: "").toString().trim()
+    inputs.property("gameTests", only)
+    doLast {
+        def file = new File(destinationDir, "fabric.mod.json")
+        def json = new groovy.json.JsonSlurper().parse(file)
+        def all = json.entrypoints["fabric-client-gametest"]
+        def wanted = only.split(",").collect { it.trim() }.findAll { !it.isEmpty() }
+        def kept = only.isEmpty()
+                ? all.findAll { !it.contains("Sandbox") }
+                : all.findAll { entry -> wanted.any { entry.endsWith("." + it) || entry.endsWith("." + it + "ClientGameTest") } }
+        if (kept.isEmpty()) {
+            throw new GradleException("No client game test matches -PgameTests=" + only)
+        }
+        json.entrypoints["fabric-client-gametest"] = kept
+        file.text = groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(json))
+        logger.lifecycle("Client game tests: " + kept.collect { it.substring(it.lastIndexOf('.') + 1) }.join(", "))
+    }
+}
+
 java {
     toolchain.languageVersion = JavaLanguageVersion.of(25)
     withSourcesJar()

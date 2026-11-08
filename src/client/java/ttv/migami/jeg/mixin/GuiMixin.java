@@ -46,6 +46,7 @@ public final class GuiMixin {
     @Inject(method = "extractRenderState", at = @At("TAIL"))
     private void jeg$renderOverheatBar(GuiGraphicsExtractor guiGraphics, DeltaTracker deltaTracker, CallbackInfo ci) {
         if (Minecraft.getInstance().player != null) {
+            ttv.migami.jeg.client.render.MissileBlastRenderer.renderScreenFlash(guiGraphics);
             if (VehicleHudOverlay.isVehicleHudActive()) {
                 VehicleHudOverlay.renderVehicleHud(guiGraphics);
             }

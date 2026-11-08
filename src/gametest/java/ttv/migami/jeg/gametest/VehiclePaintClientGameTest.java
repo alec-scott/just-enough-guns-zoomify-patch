@@ -12,6 +12,12 @@ import net.minecraft.world.item.DyeColor;
 import net.minecraft.world.item.Items;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import com.mojang.blaze3d.platform.NativeImage;
+import java.io.InputStream;
+import net.minecraft.resources.Identifier;
+import ttv.migami.jeg.Reference;
+import ttv.migami.jeg.vehicle.client.resource.VehiclePaintMask;
+import ttv.migami.jeg.vehicle.client.resource.VehiclePaintTextures;
 import ttv.migami.jeg.vehicle.entity.base.VehicleEntity;
 
 /**
@@ -23,6 +29,8 @@ public class VehiclePaintClientGameTest implements FabricClientGameTest {
 
     @Override
     public void runTest(ClientGameTestContext context) {
+        this.checkMask(context, "ah6");
+        this.checkMask(context, "mi28");
         try (TestSingleplayerContext world = context.worldBuilder().create()) {
             world.getClientLevel().waitForChunksRender();
             TestServerContext server = world.getServer();
@@ -78,6 +86,44 @@ public class VehiclePaintClientGameTest implements FabricClientGameTest {
         check(context.computeOnClient(mc -> mc.player.getMainHandItem().is(Items.WATER_BUCKET)), id + ": washing should keep the bucket");
         context.waitTicks(5);
         context.takeScreenshot("paint_" + id + "_washed");
+    }
+
+    /** Rotors, glass, guns and gear keep their own finish; only the airframe takes the dye. */
+    private void checkMask(ClientGameTestContext context, String id) {
+        String result = context.computeOnClient(mc -> {
+            Identifier texture = Reference.id("textures/entity/vehicle/" + id + ".png");
+            try (InputStream in = mc.getResourceManager().getResource(texture).orElseThrow().open();
+                 NativeImage image = NativeImage.read(in);
+                 NativeImage painted = new NativeImage(image.getWidth(), image.getHeight(), false)) {
+                painted.copyFrom(image);
+                boolean[] unpainted = VehiclePaintMask.unpainted(mc.getResourceManager(), texture, id, image.getWidth(), image.getHeight());
+                if (unpainted == null) {
+                    return "no mask";
+                }
+                VehiclePaintTextures.repaint(painted, DyeColor.RED.getTextureDiffuseColor(), unpainted);
+                int masked = 0;
+                int maskedChanged = 0;
+                int bodyChanged = 0;
+                for (int y = 0; y < image.getHeight(); y++) {
+                    for (int x = 0; x < image.getWidth(); x++) {
+                        boolean changed = image.getPixel(x, y) != painted.getPixel(x, y);
+                        if (unpainted[y * image.getWidth() + x]) {
+                            masked++;
+                            maskedChanged += changed ? 1 : 0;
+                        } else {
+                            bodyChanged += changed ? 1 : 0;
+                        }
+                    }
+                }
+                return "masked=" + masked + " maskedChanged=" + maskedChanged + " bodyChanged=" + bodyChanged;
+            } catch (Exception e) {
+                throw new AssertionError(id + ": could not check the paint mask", e);
+            }
+        });
+        LOGGER.info("{} paint mask: {}", id, result);
+        check(!result.equals("no mask"), id + " should list parts that keep their finish");
+        check(result.contains(" maskedChanged=0 "), id + ": masked parts must not take paint: " + result);
+        check(!result.contains("masked=0 ") && !result.endsWith("bodyChanged=0"), id + ": the mask and body must both be non-empty: " + result);
     }
 
     private static String describe(net.minecraft.server.MinecraftServer server, String id) {

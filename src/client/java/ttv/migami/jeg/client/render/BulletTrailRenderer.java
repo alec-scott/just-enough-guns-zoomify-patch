@@ -49,7 +49,16 @@ public final class BulletTrailRenderer {
     private static final double TRACER_CONVERGE_DISTANCE = 40.0D;
     /** Bullets fired by hand start this close to the shooter's eye (GunItem#fireAt starts them 0.35 blocks out). */
     private static final double MAX_EYE_ORIGIN_DISTANCE = 1.0D;
+    /** How many ticks of a vehicle's travel a rider's round may start away from their eye (interpolation and network lag). */
+    private static final double RIDER_LAG_TICKS = 8.0D;
     private static final double TRACER_MIN_HALF_WIDTH = 0.016D;
+    /** A hand-held gun's tracer is this thin where it leaves a barrel right in front of the eye. */
+    private static final double TRACER_MUZZLE_MIN_HALF_WIDTH = 0.003D;
+    /**
+     * Where along the sprite's fade (0 clear, 1 solid) a hand-held tracer's tail is drawn while it is still joined to the
+     * barrel: solid enough to be seen leaving the gun.
+     */
+    private static final float TRACER_ATTACHED_TAIL_U = 0.75F;
     private static final double VEHICLE_TRACER_WIDTH_SCALE = 2.4D;
     private static final double VEHICLE_TRACER_LENGTH_SCALE = 1.6D;
     private static final double TRACER_HEAD_SIZE_PER_BLOCK = 0.006D;
@@ -62,6 +71,8 @@ public final class BulletTrailRenderer {
     private static final AtomicInteger SYNTHETIC_IDS = new AtomicInteger(-1);
     private static long lastRenderFrame = -1L;
     private static volatile Vec3 lastTracerStart;
+    private static volatile Vec3 lastDrawnStart;
+    private static int newestTrailId;
     private static volatile int impactsShown;
 
     private BulletTrailRenderer() {}
@@ -82,13 +93,21 @@ public final class BulletTrailRenderer {
                 TRAILS.put(entityId, state);
                 state.origin = payload.positions()[i];
                 state.vehicleRound = payload.vehicleRound();
-                // A vehicle's own gun already fires from its muzzle; a hand-held gun fires from the eye and is moved
-                // onto the gun, also for passengers shooting out of a helicopter.
+                // A vehicle's own gun already fires from its muzzle; a hand-held gun fires from the eye and is moved onto
+                // the gun, also for passengers shooting out of a helicopter.
                 state.muzzleOffset = state.vehicleRound ? Vec3.ZERO : muzzleOffset(mc, payload.shooterId(), state.origin);
                 lastTracerStart = state.origin.add(state.muzzleOffset);
                 if (state.muzzleOffset != Vec3.ZERO) {
                     state.convergeDistance = impactDistance(mc, payload.shooterId(), state.origin, payload.motions()[i]);
+                    // Fired from a moving vehicle the round carries its speed: the tracer moves on with it from the gun.
+                    Entity shooter = mc.level.getEntity(payload.shooterId());
+                    Entity carrier = shooter != null ? shooter.getRootVehicle() : null;
+                    if (carrier != null && carrier != shooter) {
+                        state.carrier = carrier;
+                        state.carrierStart = carrier.getPosition(mc.getDeltaTracker().getGameTimeDeltaPartialTick(false));
+                    }
                 }
+                newestTrailId = entityId;
             }
 
             state.position = payload.positions()[i];
@@ -228,13 +247,28 @@ public final class BulletTrailRenderer {
         Vec3 back = trail.motion.scale(-1.0D / speed);
         // A mounted gun's rounds are heavier: a longer, thicker, hotter streak than a rifle's.
         double maxLength = trail.vehicleRound ? TRACER_MAX_LENGTH * VEHICLE_TRACER_LENGTH_SCALE : TRACER_MAX_LENGTH;
-        double length = Math.min(travelled, Math.min(maxLength, speed * TRACER_LENGTH_TICKS));
+        double fullLength = Math.min(maxLength, speed * TRACER_LENGTH_TICKS);
+        double length = Math.min(travelled, fullLength);
         Vec3 tail = travelled <= length ? origin : head.add(back.scale(length));
+        // The sprite fades from clear at its tail to solid at its head. A hand-held gun's tracer is drawn solid back to the
+        // barrel while it is still joined to the gun, and takes on its tapering tail only as it pulls away, so it is seen
+        // leaving the gun rather than appearing as a dash ahead of it. A vehicle gun's rounds keep their full taper.
+        float tailU = trail.vehicleRound ? 0.0F
+                : (float) (TRACER_ATTACHED_TAIL_U * Mth.clamp(1.0D - (travelled - length) / Math.max(1.0E-3D, fullLength), 0.0D, 1.0D));
         // A bullet leaves from the eye along the line of sight, which from the shooter's seat would be a single dot on the
         // crosshair and to everyone else would come out of their head. Tracers start at the gun's muzzle instead and close
         // in on the true path by the point the bullet hits, so they still end where it lands.
-        head = head.add(trail.muzzleOffset.scale(tracerConvergence(travelled, trail.convergeDistance)));
-        tail = tail.add(trail.muzzleOffset.scale(tracerConvergence(travelled - length, trail.convergeDistance)));
+        // A passenger's round also keeps the vehicle's own movement since it was fired, as a real one would, so the stream
+        // stays on the gun of a flying helicopter instead of being left behind it.
+        Vec3 offset = trail.muzzleOffset;
+        if (trail.carrier != null && !trail.carrier.isRemoved()) {
+            offset = offset.add(trail.carrier.getPosition(partialTick).subtract(trail.carrierStart));
+        }
+        head = head.add(offset.scale(tracerConvergence(travelled, trail.convergeDistance)));
+        tail = tail.add(offset.scale(tracerConvergence(travelled - length, trail.convergeDistance)));
+        if (trail.entityId == newestTrailId) {
+            lastDrawnStart = travelled <= fullLength ? tail.add(view) : null;
+        }
 
         double headDistance = head.length();
         // The shooter's own end of the line fades out so it does not streak across the sights.
@@ -251,7 +285,8 @@ public final class BulletTrailRenderer {
         side = side.normalize();
         double widthScale = trail.vehicleRound ? VEHICLE_TRACER_WIDTH_SCALE : 1.0D;
         Vec3 headSide = side.scale(tracerHalfWidth(headDistance) * widthScale);
-        Vec3 tailSide = side.scale(tracerHalfWidth(tail.length()) * widthScale);
+        // Right at a hand-held barrel the usual minimum width would be a thick bar across the view; it narrows into the gun.
+        Vec3 tailSide = side.scale((trail.vehicleRound ? tracerHalfWidth(tail.length()) : muzzleEndHalfWidth(tail.length())) * widthScale);
 
         // Mostly a hot yellow-orange so it reads against a blue sky and in the dark, with a hint of the bullet's own colour.
         int red = trail.vehicleRound ? 255 : warmTint((trail.color >> 16) & 0xFF, 255);
@@ -260,10 +295,10 @@ public final class BulletTrailRenderer {
         int alpha = (int) (TRACER_ALPHA * nearFade);
 
         Matrix4f matrix = poseStack.last().pose();
-        vertex(consumer, matrix, red, green, blue, alpha, tail.subtract(tailSide), 0.0F, 1.0F);
+        vertex(consumer, matrix, red, green, blue, alpha, tail.subtract(tailSide), tailU, 1.0F);
         vertex(consumer, matrix, red, green, blue, alpha, head.subtract(headSide), 1.0F, 1.0F);
         vertex(consumer, matrix, red, green, blue, alpha, head.add(headSide), 1.0F, 0.0F);
-        vertex(consumer, matrix, red, green, blue, alpha, tail.add(tailSide), 0.0F, 0.0F);
+        vertex(consumer, matrix, red, green, blue, alpha, tail.add(tailSide), tailU, 0.0F);
 
         if (trail.vehicleRound) {
             // Seen down the barrel a round flies straight away from the eye and its streak shrinks to nothing; a bright
@@ -333,8 +368,10 @@ public final class BulletTrailRenderer {
                 || !(shooter.getMainHandItem().getItem() instanceof GunItem)) {
             return Vec3.ZERO;
         }
-        // Only shots fired from the eye line; anything else was already given its own muzzle.
-        if (shooter.getEyePosition().distanceToSqr(origin) > MAX_EYE_ORIGIN_DISTANCE * MAX_EYE_ORIGIN_DISTANCE) {
+        // Only shots fired from the eye line; anything else was already given its own muzzle. A passenger in a moving
+        // vehicle is drawn a few ticks behind where the server fired from, so their round starts that much further away.
+        double allowed = MAX_EYE_ORIGIN_DISTANCE + RIDER_LAG_TICKS * riderSpeed(shooter);
+        if (shooter.getEyePosition().distanceToSqr(origin) > allowed * allowed) {
             return Vec3.ZERO;
         }
         boolean firstPersonView = shooter == mc.player && mc.options.getCameraType().isFirstPerson();
@@ -343,6 +380,16 @@ public final class BulletTrailRenderer {
             return muzzle.subtract(origin);
         }
         return firstPersonView ? firstPersonMuzzleOffset(mc, origin) : thirdPersonMuzzleEstimate(shooter).subtract(origin);
+    }
+
+    /** How fast (blocks a tick) whatever the shooter rides is moving here; 0 on foot. */
+    private static double riderSpeed(LivingEntity shooter) {
+        Entity vehicle = shooter.getRootVehicle();
+        if (vehicle == shooter) {
+            return 0.0D;
+        }
+        double moved = vehicle.position().distanceTo(new Vec3(vehicle.xo, vehicle.yo, vehicle.zo));
+        return Math.max(moved, vehicle.getDeltaMovement().length());
     }
 
     /** Roughly where a gun held at the shoulder ends, for a shooter whose gun has not been drawn this frame. */
@@ -367,7 +414,10 @@ public final class BulletTrailRenderer {
         double distance = block.getType() == HitResult.Type.MISS ? TRACER_CONVERGE_DISTANCE : origin.distanceTo(block.getLocation());
         Vec3 limit = origin.add(motion.scale(distance / speed));
         AABB sweep = new AABB(origin, limit).inflate(1.0D);
-        for (Entity entity : mc.level.getEntities((Entity) null, sweep, e -> e.getId() != shooterId && e.isPickable() && !(e instanceof BulletEntity))) {
+        Entity shooter = mc.level.getEntity(shooterId);
+        Entity shooterVehicle = shooter != null ? shooter.getVehicle() : null;
+        for (Entity entity : mc.level.getEntities((Entity) null, sweep,
+                e -> e.getId() != shooterId && e != shooterVehicle && e.isPickable() && !(e instanceof BulletEntity))) {
             var hit = entity.getBoundingBox().inflate(0.3D).clip(origin, limit);
             if (hit.isPresent()) {
                 distance = Math.min(distance, origin.distanceTo(hit.get()));
@@ -398,6 +448,12 @@ public final class BulletTrailRenderer {
         return Mth.clamp(distance * TRACER_WIDTH_PER_BLOCK, TRACER_MIN_HALF_WIDTH, TRACER_MAX_HALF_WIDTH);
     }
 
+    /** Like {@link #tracerHalfWidth}, but narrowing into a barrel right in front of the eye instead of holding its minimum. */
+    private static double muzzleEndHalfWidth(double distance) {
+        double minimum = Mth.clamp(distance * TRACER_MIN_HALF_WIDTH / 4.0D, TRACER_MUZZLE_MIN_HALF_WIDTH, TRACER_MIN_HALF_WIDTH);
+        return Mth.clamp(distance * TRACER_WIDTH_PER_BLOCK, minimum, TRACER_MAX_HALF_WIDTH);
+    }
+
     private static int warmTint(int colorChannel, int warmChannel) {
         return (colorChannel + warmChannel * 3) / 4;
     }
@@ -422,6 +478,11 @@ public final class BulletTrailRenderer {
     }
 
     /** Where the newest network tracer starts drawing (the shooter's muzzle), for checks. */
+    /** Where the newest tracer was last drawn starting, while it is still joined to the gun, for checks. */
+    public static Vec3 lastDrawnStart() {
+        return lastDrawnStart;
+    }
+
     public static Vec3 lastTracerStart() {
         return lastTracerStart;
     }
@@ -430,6 +491,9 @@ public final class BulletTrailRenderer {
         final int entityId;
         Vec3 origin = Vec3.ZERO;
         Vec3 muzzleOffset = Vec3.ZERO;
+        /** The vehicle a passenger fired from, and where it was then: the tracer moves on with it. */
+        Entity carrier;
+        Vec3 carrierStart = Vec3.ZERO;
         double convergeDistance = TRACER_CONVERGE_DISTANCE;
         Vec3 position = Vec3.ZERO;
         Vec3 motion = Vec3.ZERO;

@@ -264,6 +264,13 @@ public class GunItem extends Item {
     private static final float SIDEARM_FIRE_SPREAD_CAP = 1.725F;
     private static final float DEFAULT_FIRE_SPREAD_CAP = 1.0F;
     private static final float BOLT_ACTION_PLAYER_HIP_SPREAD = 8.0F;
+    /**
+     * A player's guns throw a much tighter cone than the stock tuning, in every state (first shot, sustained fire, moving,
+     * hip or aimed): 40% of it. Mob gunners keep their own difficulty-scaled spread.
+     */
+    private static final float PLAYER_SPREAD_SCALE = 0.40F;
+    /** Shotguns keep more of their pattern so the pellets still spread: 65% of the stock cone. */
+    private static final float PLAYER_SHOTGUN_SPREAD_SCALE = 0.65F;
     private static final float BOLT_ACTION_GUNNER_SPREAD_MULTIPLIER = 1.20F;
     private static final int OVERHEAT_MAX = 200;
     private static final int OVERHEAT_TRACKED_MAX = 280;
@@ -926,23 +933,9 @@ public class GunItem extends Item {
             if (!automatic) {
                 setTriggerLocked(stack, true);
             }
-
-            // Client-side instant trail calculation for fast bullets
-            Identifier gunId = stats.id();
-            if (Config.legacyBulletTrailEnabled()
-                    && isBulletClassWeapon(gunId)
-                    && isLocalClientPlayer(player)
-                    && isFirstPersonCamera()) {
-                Vec3 look = player.getViewVector(1.0F);
-                if (look.lengthSqr() > 1.0E-6D) {
-                    Vec3 direction = look.normalize();
-                    Vec3 start = currentFirstPersonMuzzlePosition(player, stack);
-                    if (start == null) {
-                        start = player.getEyePosition().add(direction.scale(0.35F));
-                    }
-                    calculateInstantTrail(start, direction, stats, player);
-                }
-            }
+            // The shot's tracer comes from the server with the round's real direction (spread included) and is drawn
+            // from the gun's muzzle by BulletTrailRenderer. A second, client-only tracer used to be drawn here from the
+            // eye straight down the crosshair, which showed every shot leaving the player's face instead of the gun.
         } else {
             if (shouldJamBeforeShot(level, player, stack)) {
                 return false;
@@ -991,65 +984,6 @@ public class GunItem extends Item {
         }
         playAttachmentFireSounds(level, player, stack);
         return true;
-    }
-
-    private static boolean isLocalClientPlayer(Player player) {
-        Object minecraft = minecraftInstance();
-        if (minecraft == null) {
-            return false;
-        }
-        try {
-            return minecraft.getClass().getField("player").get(minecraft) == player;
-        } catch (ReflectiveOperationException ignored) {
-            return false;
-        }
-    }
-
-    private static boolean isFirstPersonCamera() {
-        Object minecraft = minecraftInstance();
-        if (minecraft == null) {
-            return false;
-        }
-        try {
-            Object options = minecraft.getClass().getField("options").get(minecraft);
-            Object cameraType = options.getClass().getMethod("getCameraType").invoke(options);
-            Object firstPerson = cameraType.getClass().getMethod("isFirstPerson").invoke(cameraType);
-            return firstPerson instanceof Boolean bool && bool;
-        } catch (ReflectiveOperationException ignored) {
-            return false;
-        }
-    }
-
-    private static Vec3 currentFirstPersonMuzzlePosition(Player player, ItemStack stack) {
-        try {
-            Class<?> localPlayerClass = Class.forName("net.minecraft.client.player.LocalPlayer");
-            Class<?> eventsClass = Class.forName("ttv.migami.jeg.client.GunClientEvents");
-            Object value = eventsClass
-                    .getMethod("getCurrentFirstPersonMuzzlePosition", localPlayerClass, ItemStack.class)
-                    .invoke(null, player, stack);
-            return value instanceof Vec3 pos ? pos : null;
-        } catch (ReflectiveOperationException ignored) {
-            return null;
-        }
-    }
-
-    private static void calculateInstantTrail(Vec3 start, Vec3 direction, GunStats stats, Player player) {
-        try {
-            Class<?> calculatorClass = Class.forName("ttv.migami.jeg.client.BulletTrailCalculator");
-            calculatorClass
-                    .getMethod("calculateInstantTrail", Vec3.class, Vec3.class, GunStats.class, Player.class)
-                    .invoke(null, start, direction, stats, player);
-        } catch (ReflectiveOperationException ignored) {
-        }
-    }
-
-    private static Object minecraftInstance() {
-        try {
-            Class<?> minecraftClass = Class.forName("net.minecraft.client.Minecraft");
-            return minecraftClass.getMethod("getInstance").invoke(null);
-        } catch (ReflectiveOperationException ignored) {
-            return null;
-        }
     }
 
     private Optional<SoundEvent> fireSoundFor(ItemStack stack) {
@@ -1590,23 +1524,8 @@ public class GunItem extends Item {
         }
 
         if (shooter instanceof Player player) {
-            boolean minigun = isMinigunWeapon(stats.id());
-            gunSpread *= getSpreadMultiplier(player, stats);
-            if (!minigun && NetworkHandler.isAiming(player)) {
-                gunSpread *= 0.5F;
-            }
-            if (!minigun) {
-                gunSpread += getMovementSpreadDegrees(player, stats, NetworkHandler.isAiming(player), baseSpread);
-            } else {
-                gunSpread = Math.max(gunSpread, baseSpread * MINIGUN_SPREAD_FLOOR);
-            }
-            if (isBoltActionRifle(stats.id()) && !NetworkHandler.isAiming(player)) {
-                gunSpread = Math.max(gunSpread, BOLT_ACTION_PLAYER_HIP_SPREAD);
-            }
-            if (isShotgunWeapon(stats.id())) {
-                float shotgunFloor = baseSpread * (NetworkHandler.isAiming(player) ? 0.35F : 0.60F);
-                gunSpread = Math.max(gunSpread, shotgunFloor);
-            }
+            // The same cone the crosshair shows.
+            gunSpread = getClientSpreadDegrees(player, stack, stats, NetworkHandler.isAiming(player));
         } else if (isShotgunWeapon(stats.id())) {
             gunSpread = baseSpread * 0.60F;
         } else {
@@ -1712,6 +1631,7 @@ public class GunItem extends Item {
             float shotgunFloor = baseSpread * (aiming ? 0.35F : 0.60F);
             gunSpread = Math.max(gunSpread, shotgunFloor);
         }
+        gunSpread *= isShotgunWeapon(stats.id()) ? PLAYER_SHOTGUN_SPREAD_SCALE : PLAYER_SPREAD_SCALE;
         return Math.max(0.0F, gunSpread);
     }
 

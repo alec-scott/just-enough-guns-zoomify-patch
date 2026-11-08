@@ -1,5 +1,25 @@
 # Changelog
 
+## 1.7.2+mc26.1.2.yftm.9 - 2026-11-08
+
+### Fixed
+- Switching helicopter or vehicle weapons no longer waits on the other weapon: each weapon reloads on its own (carrying on in the background while another is fired) and has its own fire delay. An empty weapon starts reloading as soon as someone aboard can fire it and there is ammunition.
+- Hand-held gun tracers leave the gun's barrel on screen at any field of view, while sprinting, aiming or zoomed (the first-person gun is drawn at a fixed 70 degrees). A second, client-only tracer that started at the player's eyes is gone.
+- Passengers firing their own guns from a flying helicopter: tracers leave the gun instead of a point behind the helicopter, and move on with it.
+- Missile and rocket explosions close to a helicopter no longer cut out: smoke stays solid around the camera instead of thinning away or popping, fire and smoke no longer cut hard edges out of each other, and puffs fade into the ground instead of ending in straight lines. The white shock dome no longer sweeps over nearby helicopters as a flat sheet.
+- Pilots and gunners holding fire no longer mine blocks or swing, eat, block or place with whatever is in their hand.
+- Taking the controls of a helicopter that is airborne or still has its rotor turning restarts the engine at once instead of making a cold start.
+
+### Changed
+- Player gun spread is much tighter: 40% of the previous cone in every state (65% for shotguns, so pellets still spread). The crosshair matches. Mob gunners are unchanged.
+- Helicopter weapons reload another 30% faster (0.448x the hand-held reload time).
+- Explosion smoke is shaded across the cloud (a lit and a shadowed side) and stays upright as the view banks, so the column reads as solid. Debris leaves thin grey trails instead of thick dark arcs.
+- Explosions are heard and shake the view when their shockwave reaches you, so a far blast is seen before it is heard, with a brief screen flash for close blasts in view.
+- MI-28 gun tracers are back to their yftm.8 look.
+- The AH-6's two miniguns fire alternately from each side, with a smaller muzzle flash.
+- Dyed helicopters keep the original finish on rotors, glass, guns, rocket pods and landing gear.
+- The MI-28 pilot's missile is renamed 9M-120F Thermobaric Missile.
+
 ## 1.7.2+mc26.1.2.yftm.8 - 2026-11-07
 
 ### Fixed

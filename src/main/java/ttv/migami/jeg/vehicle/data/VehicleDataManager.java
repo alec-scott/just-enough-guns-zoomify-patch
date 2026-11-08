@@ -346,7 +346,8 @@ public final class VehicleDataManager {
                     muzzle == null ? Double.NaN : getDouble(muzzle, "x", Double.NaN),
                     muzzle == null ? Double.NaN : getDouble(muzzle, "y", Double.NaN),
                     muzzle == null ? Double.NaN : getDouble(muzzle, "z", Double.NaN),
-                    weapon.has("turret_mounted") ? Boolean.valueOf(getBoolean(weapon, "turret_mounted", true)) : null
+                    weapon.has("turret_mounted") ? Boolean.valueOf(getBoolean(weapon, "turret_mounted", true)) : null,
+                    muzzle != null && getBoolean(muzzle, "mirror", false)
             ));
         }
         return List.copyOf(weapons);

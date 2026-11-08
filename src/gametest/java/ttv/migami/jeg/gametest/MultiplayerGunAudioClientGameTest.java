@@ -81,7 +81,10 @@ public final class MultiplayerGunAudioClientGameTest implements FabricClientGame
             server.runOnServer(mc -> {
                 var player = mc.getPlayerList().getPlayers().getFirst();
                 VehicleEntity heli = (VehicleEntity) player.getVehicle();
-                heli.vehicleInventory().setItem(0, new ItemStack(BuiltInRegistries.ITEM.getValue(Reference.id("rifle_ammo")), 64));
+                // A full 150-round belt: the gun loads as soon as the gunner is aboard and must not run dry while held.
+                for (int slot = 0; slot < 3; slot++) {
+                    heli.vehicleInventory().setItem(slot, new ItemStack(BuiltInRegistries.ITEM.getValue(Reference.id("rifle_ammo")), 64));
+                }
                 heli.changeSeat(player);
             });
             context.waitTicks(10);
