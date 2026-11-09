@@ -1151,6 +1151,35 @@ public final class MissileBlastRenderer {
         }
     }
 
+    /** The soft round sprite, for points of light that have to show against a bright sky (see {@link #dot}). */
+    static Identifier softTexture() {
+        return SOFT_TEXTURE;
+    }
+
+    /**
+     * A soft round spot facing the camera, drawn with the soft sprite and ordinary blending. Added light (see
+     * {@link #disc}) washes out to nothing against a pale daytime sky; this stays a visible spot of colour.
+     */
+    static void dot(VertexConsumer consumer, Matrix4f matrix, Vec3 at, Vector3f right, Vector3f up, float size,
+                    float r, float g, float b, float alpha) {
+        if (alpha <= 0.003F) {
+            return;
+        }
+        float ax = right.x() * size;
+        float ay = right.y() * size;
+        float az = right.z() * size;
+        float bx = up.x() * size;
+        float by = up.y() * size;
+        float bz = up.z() * size;
+        float x = (float) at.x;
+        float y = (float) at.y;
+        float z = (float) at.z;
+        corner(consumer, matrix, x - ax - bx, y - ay - by, z - az - bz, r, g, b, alpha, 0.0F, 1.0F, FULL_BRIGHT);
+        corner(consumer, matrix, x + ax - bx, y + ay - by, z + az - bz, r, g, b, alpha, 1.0F, 1.0F, FULL_BRIGHT);
+        corner(consumer, matrix, x + ax + bx, y + ay + by, z + az + bz, r, g, b, alpha, 1.0F, 0.0F, FULL_BRIGHT);
+        corner(consumer, matrix, x - ax + bx, y - ay + by, z - az + bz, r, g, b, alpha, 0.0F, 0.0F, FULL_BRIGHT);
+    }
+
     static void billboard(VertexConsumer consumer, Matrix4f matrix, Vec3 at, Vector3f right, Vector3f up, float size,
                                   float rotation, float r, float g, float b, float alpha, int light, int variant) {
         billboard(consumer, matrix, at, right, up, size, rotation, r, g, b, alpha, light, variant, 0.0F, Double.NaN);

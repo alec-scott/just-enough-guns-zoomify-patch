@@ -93,7 +93,14 @@ public class MissileLongRangeClientGameTest implements FabricClientGameTest {
                     samples.add(String.format("t%d server x=%.1f, client entity=%s, far followed=%d, blasts=%d",
                             tick, server_[0], clientHasEntity, far, (int) client[2] - blastsBefore));
                 }
-                if (tick == 50 || tick == 80 || tick == 110) {
+                if (tick == 20 || tick == 50 || tick == 110) {
+                    int drawn = context.computeOnClient(mc -> MissileTrailRenderer.motorsDrawn());
+                    report.append(String.format("t%d motors drawn %d%n", tick, drawn));
+                    if (drawn == 0) {
+                        failures.append(String.format("no missile motor was drawn at t%d%n", tick));
+                    }
+                }
+                if (tick == 20 || tick == 50 || tick == 80 || tick == 110) {
                     context.takeScreenshot("missile_long_range_t" + tick);
                 }
                 if (exploded && tick > 140) {
@@ -103,8 +110,15 @@ public class MissileLongRangeClientGameTest implements FabricClientGameTest {
                 }
             }
             float fogStart = context.computeOnClient(mc -> FarDraw.renderFogStart());
-            report.append(String.format("view distance %d chunks, simulation distance %d chunks, render fog starts at %.1f blocks%n",
-                    viewDistance, simulationDistance, fogStart));
+            double reach = context.computeOnClient(mc -> FarDraw.reach());
+            report.append(String.format("view distance %d chunks, simulation distance %d chunks, render fog starts at %.1f blocks, far draw reach %.1f%n",
+                    viewDistance, simulationDistance, fogStart, reach));
+            // Voxy moves the vanilla fog out to a billion blocks, but shader packs still fade the world at the chunk
+            // render distance: far missiles and blasts have to be pulled in inside it either way.
+            if (reach > RENDER_DISTANCE * 16.0D) {
+                failures.append(String.format("far missiles are drawn out to %.1f blocks, past the %d-block render distance%n",
+                        reach, RENDER_DISTANCE * 16));
+            }
             for (String sample : samples) {
                 report.append(sample).append('\n');
             }

@@ -179,7 +179,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     private static final double WRECK_MAX_FALL_SPEED = 1.6D;
     /** The tail spins faster and faster as it goes down, to this many degrees a tick. */
     private static final float WRECK_MAX_SPIN = 20.0F;
-    private static final double WRECK_BLAST_VISIBLE_RANGE = 512.0D;
+    private static final double WRECK_BLAST_VISIBLE_RANGE = 1024.0D;
     private static final EntityDataAccessor<Integer> DATA_DECOY_COOLDOWN = SynchedEntityData.defineId(VehicleEntity.class, EntityDataSerializers.INT);
     private static final EntityDataAccessor<Boolean> DATA_MISSILE_LOCKED = SynchedEntityData.defineId(VehicleEntity.class, EntityDataSerializers.BOOLEAN);
     private static final EntityDataAccessor<Integer> DATA_MISSILE_LOCK_TARGET = SynchedEntityData.defineId(VehicleEntity.class, EntityDataSerializers.INT);

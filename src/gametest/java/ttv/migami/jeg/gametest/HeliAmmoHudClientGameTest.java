@@ -10,7 +10,9 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.item.ItemStack;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.lwjgl.glfw.GLFW;
 import ttv.migami.jeg.Reference;
+import ttv.migami.jeg.client.KeyBindings;
 import ttv.migami.jeg.vehicle.entity.base.VehicleEntity;
 
 /**
@@ -37,10 +39,44 @@ public class HeliAmmoHudClientGameTest implements FabricClientGameTest {
             // AH-6: rifle rounds and rockets aboard. Mi-28: no large missiles aboard, so that type shows empty.
             this.check(context, server, report, failures, "ah6", 0, new String[]{"rifle_ammo", "small_rocket"});
             this.check(context, server, report, failures, "mi28", 40, new String[]{"rifle_ammo", "small_rocket", "medium_anti_ground_missile"});
+            this.checkThermobaricName(context, report, failures);
         }
         LOGGER.info(report.toString());
         if (failures.length() > 0) {
             throw new AssertionError(failures.toString() + report);
+        }
+    }
+
+    /**
+     * The MI-28 pilot's 9M-120F is thermobaric; it loads the same medium anti-ground missiles as the gunner's plain 9M-120,
+     * so once fired its ammo line has to name the weapon, not the ammo item.
+     */
+    private void checkThermobaricName(ClientGameTestContext context, StringBuilder report, StringBuilder failures) {
+        String target = "vehicle_9m120_driver_missile";
+        for (int press = 0; press < 8; press++) {
+            String selected = context.computeOnClient(mc -> {
+                VehicleEntity vehicle = (VehicleEntity) mc.player.getVehicle();
+                int slot = vehicle.selectedVehicleWeaponIndex(mc.player);
+                return vehicle.vehicleData().defaults().weapons().get(slot).weaponId().getPath();
+            });
+            if (selected.equals(target)) {
+                break;
+            }
+            context.getInput().pressKey(KeyBindings.VEHICLE_SWITCH_WEAPON);
+            context.waitTicks(4);
+        }
+        context.getInput().pressMouse(GLFW.GLFW_MOUSE_BUTTON_LEFT);
+        context.waitTicks(10);
+        context.takeScreenshot("heli_ammo_hud_mi28_thermobaric");
+        String[] line = context.computeOnClient(mc -> {
+            VehicleEntity vehicle = (VehicleEntity) mc.player.getVehicle();
+            int slot = vehicle.selectedVehicleWeaponIndex(mc.player);
+            return new String[]{vehicle.vehicleData().defaults().weapons().get(slot).weaponId().getPath(),
+                    vehicle.selectedVehicleWeaponAmmo(mc.player) + "/" + vehicle.selectedVehicleWeaponMagazineSize(mc.player)};
+        });
+        report.append(String.format("mi28 pilot selected %s, loaded %s%n", line[0], line[1]));
+        if (!line[0].equals(target)) {
+            failures.append("could not select the MI-28 pilot's 9M-120F\n");
         }
     }
 

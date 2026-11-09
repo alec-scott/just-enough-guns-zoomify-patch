@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.7.2+mc26.1.2.yftm.12 - 2026-11-09
+
+### Fixed
+- Missiles stay visible past your render distance with Voxy and shaders. Voxy pushes the render-distance fog out to a billion blocks, which switched off drawing far missiles and blasts inside view, and shader packs then faded them out at the chunk render distance. Far missiles and blasts are now drawn inside the chunk render distance as well as the fog.
+- A missile's motor shows as a bright orange-white point at any range, in daylight too: the old glow was added light, which washed out against a pale sky, and the missile's own smoke covered it when seen from behind.
+- The MI-28 pilot's ammo line names the 9M-120F Thermobaric Missile, not the "Medium Anti Ground Missile" it loads (the gunner's plain 9M-120 loads the same ammo). Vehicle ammo lines now always show the weapon's name.
+
+### Changed
+- Missile positions and blasts reach players up to 1024 blocks away (was 512), so the longest shots (9M336 ~600 blocks, KH-39 ~540) are seen to impact. Wreck explosions and rocket blasts too.
+- The vehicle assembling table is laid out afresh: vehicles listed on the left with a green or red mark for whether you can build them now; picking one shows its silhouette and every item it needs as icon, carried/needed (green or red) and name. Assemble builds the picked vehicle and is greyed out until everything is there (clicking a vehicle no longer builds it straight away). Nothing overlaps, inventory slots are drawn, and the pack's sort buttons keep their corners.
+
 ## 1.7.2+mc26.1.2.yftm.11 - 2026-11-08
 
 ### Added

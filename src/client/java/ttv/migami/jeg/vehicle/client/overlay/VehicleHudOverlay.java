@@ -308,8 +308,11 @@ public final class VehicleHudOverlay {
             return Component.empty();
         }
         String ammoCounts = vehicle.selectedVehicleWeaponAmmo(passenger) + "/" + vehicle.selectedVehicleWeaponReserveAmmo(passenger);
-        Identifier ammoId = weapons.get(slot).ammoId();
-        return Component.translatable("item." + ammoId.getNamespace() + "." + ammoId.getPath())
+        // Named for the weapon, not the ammo item: weapons that share an ammo (the MI-28 pilot's thermobaric 9M-120F and
+        // the gunner's plain 9M-120 both load medium anti-ground missiles) read differently. The weapon list beside it
+        // still shows which ammo each one takes.
+        Identifier weaponId = weapons.get(slot).weaponId();
+        return Component.translatable("item." + weaponId.getNamespace() + "." + weaponId.getPath())
                 .append(Component.literal(": " + ammoCounts));
     }
 

@@ -1240,7 +1240,7 @@ public class BulletEntity extends Projectile {
     private void sendVehicleRocketBlast(ServerLevel serverLevel, float power) {
         var blast = new ttv.migami.jeg.network.MissileBlastPayload(this.position(), power, 4.0F, false);
         for (ServerPlayer player : serverLevel.players()) {
-            if (player.distanceToSqr(this) < 512.0D * 512.0D
+            if (player.distanceToSqr(this) < 1024.0D * 1024.0D
                     && net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking.canSend(player, ttv.migami.jeg.network.MissileBlastPayload.TYPE)) {
                 net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking.send(player, blast);
             }

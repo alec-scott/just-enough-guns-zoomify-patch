@@ -36,11 +36,25 @@ public final class MissileTrailRenderer {
     private static final float HEAVY_MOTOR = 1.6F;
     /** A far missile no longer heard of for this long has gone off or left range. */
     private static final int GHOST_TIMEOUT_TICKS = 3;
+    /** Least size of the motor's halo and core, as a share of their distance from the camera (about 8 and 3 pixels). */
+    private static final float MIN_HALO_SPREAD = 0.006F;
+    private static final float MIN_CORE_SPREAD = 0.0025F;
+    /** Least size of the solid flame spot, as a share of its distance (its bright middle about 8 pixels on 1080p). */
+    private static final float MIN_SPOT_SPREAD = 0.008F;
+    /** Share of its distance the flame spot is drawn nearer the camera, in front of the trail behind it. */
+    private static final double SPOT_LIFT = 0.15D;
     private static final Map<Integer, Motor> MOTORS = new HashMap<>();
     private static final List<Puff> PUFFS = new ArrayList<>();
     private static final Map<Integer, Ghost> GHOSTS = new HashMap<>();
 
+    private static int motorsDrawn;
+
     private MissileTrailRenderer() {}
+
+    /** How many motors the last frame with any drew, for checks. */
+    public static int motorsDrawn() {
+        return motorsDrawn;
+    }
 
     /** A far missile's latest position from the server (see MissileTrackPayload). */
     public static void track(MissileTrackPayload payload) {
@@ -190,7 +204,7 @@ public final class MissileTrailRenderer {
         }
 
         if (!MOTORS.isEmpty()) {
-            VertexConsumer glow = bufferSource.getBuffer(RenderTypes.lightning());
+            List<MotorView> views = new ArrayList<>();
             for (Map.Entry<Integer, Motor> entry : MOTORS.entrySet()) {
                 Entity entity = mc.level.getEntity(entry.getKey());
                 Ghost ghost = entity == null ? GHOSTS.get(entry.getKey()) : null;
@@ -207,18 +221,47 @@ public final class MissileTrailRenderer {
                 Vec3 nozzle = position.subtract(forward.scale(0.85D * motor.size));
                 int age = entity != null ? entity.tickCount : ghost.age;
                 float flicker = 0.85F + 0.15F * Mth.sin((age + partialTick) * 2.7F + entry.getKey());
-                Vec3 at = nozzle.subtract(view);
-                float far = FarDraw.scale(at);
-                at = at.scale(far);
+                Vec3 relative = nozzle.subtract(view);
+                float far = FarDraw.scale(relative);
+                views.add(new MotorView(motor, nozzle, relative.scale(far), forward, (float) relative.length(), far, flicker, ghost != null));
+            }
+
+            // A solid spot of flame first: added light alone washes out against a pale daytime sky, so a far missile
+            // vanished in daylight even where it was drawn.
+            motorsDrawn = views.size();
+            VertexConsumer spot = bufferSource.getBuffer(RenderTypes.entityTranslucent(MissileBlastRenderer.softTexture()));
+            for (MotorView motor : views) {
+                float size = Math.max(0.8F * motor.motor.size, motor.distance * MIN_SPOT_SPREAD);
+                // Seen from behind, down the length of its own trail, the smoke just behind the missile lies over it on
+                // screen and is nearer: it buried the spot. The spot is drawn part of the way towards the camera instead,
+                // shrunk to match, so it covers the same pixels but sits in front of that smoke.
+                double lift = Math.min(Math.max(Math.max(2.0D, size * 3.0D), motor.distance * SPOT_LIFT), motor.distance * 0.5D);
+                float shrink = motor.distance > 1.0E-3F ? (float) (1.0D - lift / motor.distance) : 1.0F;
+                Vec3 at = motor.at.scale(shrink);
+                float drawn = size * motor.flicker * motor.far * shrink;
+                // An orange glow round a hot yellow-white centre: the sprite is soft, so only its middle reads at range.
+                MissileBlastRenderer.dot(spot, matrix, at, right, up, drawn, 1.0F, 0.62F, 0.25F, 0.95F);
+                MissileBlastRenderer.dot(spot, matrix, at, right, up, drawn * 0.5F, 1.0F, 0.95F, 0.75F, 1.0F);
+            }
+
+            VertexConsumer glow = bufferSource.getBuffer(RenderTypes.lightning());
+            for (MotorView motor : views) {
                 // Halo, hot core, and a flame cone streaming back from the nozzle. Seen from far beyond entity range
-                // there is no body to draw, so the halo is a little larger to stay a visible point of light.
-                float halo = ghost != null ? 3.0F : 2.2F;
-                MissileBlastRenderer.disc(glow, matrix, at, right, up, halo * motor.size * flicker * far, 1.0F, 0.55F, 0.2F, 0.6F);
-                MissileBlastRenderer.disc(glow, matrix, at, right, up, 0.45F * motor.size * flicker * far, 1.0F, 0.95F, 0.8F, 1.0F);
-                flame(glow, matrix, at, forward.scale(-1.0D), view, nozzle, 2.2F * motor.size * flicker * far, 0.22F * motor.size * far);
+                // there is no body to draw, so the halo is a little larger, and both keep a least size on screen: a
+                // missile hundreds of blocks out stays a bright point of light all the way to its target.
+                float halo = Math.max((motor.ghost ? 3.0F : 2.2F) * motor.motor.size, motor.distance * MIN_HALO_SPREAD);
+                float core = Math.max(0.45F * motor.motor.size, motor.distance * MIN_CORE_SPREAD);
+                float scale = motor.flicker * motor.far;
+                MissileBlastRenderer.disc(glow, matrix, motor.at, right, up, halo * scale, 1.0F, 0.55F, 0.2F, 0.6F);
+                MissileBlastRenderer.disc(glow, matrix, motor.at, right, up, core * scale, 1.0F, 0.95F, 0.8F, 1.0F);
+                flame(glow, matrix, motor.at, motor.forward.scale(-1.0D), view, motor.nozzle,
+                        2.2F * motor.motor.size * scale, 0.22F * motor.motor.size * motor.far);
             }
         }
     }
+
+    /** One motor as it is drawn this frame: {@code at} is where, relative to the camera, after any pulling in. */
+    private record MotorView(Motor motor, Vec3 nozzle, Vec3 at, Vec3 forward, float distance, float far, float flicker, boolean ghost) {}
 
     /** A tapering flame streaming back from the nozzle, turned to face the camera about its own axis. */
     private static void flame(VertexConsumer consumer, Matrix4f matrix, Vec3 at, Vec3 back, Vec3 view, Vec3 nozzleWorld, float length, float width) {

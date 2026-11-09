@@ -115,10 +115,48 @@ if (withPack) {
             "malilib"              : "maven.modrinth:GcWjdA9I:FItuNokS", // 0.28.12
             "carryon"              : "maven.modrinth:joEfVgkn:ISFd6ie5", // 2.10.0
     ]
+    // MaLiLib's test.MixinSharedConstants sets vanilla's SharedConstants.IS_RUNNING_IN_IDE whenever it sees a dev launch
+    // (fabric.development, Fabric's dev launch injector), which switches on Mojang's dev-only render-pass validation
+    // (GlRenderPass.VALIDATION). With an Iris shader pack on, that validation throws "Missing sampler Sampler1" on the
+    // first explosion; players' launchers never set the flag, so they never see it. Pack runs use a MaLiLib copy
+    // without that mixin so they render like players' clients; -PrenderValidation keeps the stock jar (validation on).
+    def patchedMalilib = {
+        def source = configurations.detachedConfiguration(dependencies.create(packMods["malilib"]))
+        source.transitive = false
+        def input = source.singleFile
+        def output = file("build/pack-patched/" + input.name.replace(".jar", "-no-ide-flag.jar"))
+        if (!output.exists() || output.lastModified() < input.lastModified()) {
+            output.parentFile.mkdirs()
+            new java.util.zip.ZipFile(input).withCloseable { zip ->
+                new java.util.zip.ZipOutputStream(new FileOutputStream(output)).withCloseable { out ->
+                    zip.entries().each { entry ->
+                        out.putNextEntry(new java.util.zip.ZipEntry(entry.name))
+                        def bytes = zip.getInputStream(entry).bytes
+                        if (entry.name == "mixins.malilib.json") {
+                            def json = new groovy.json.JsonSlurper().parse(bytes)
+                            json.mixins = json.mixins.findAll { it != "test.MixinSharedConstants" }
+                            bytes = groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(json)).getBytes("UTF-8")
+                        }
+                        out.write(bytes)
+                        out.closeEntry()
+                    }
+                }
+            }
+        }
+        return output
+    }
     dependencies {
         packMods.each { name, coordinate ->
             if (!packExclude.contains(name)) {
-                gametestRuntimeOnly coordinate
+                // -P<name>Jar=<path> (e.g. -PmalilibJar=...) swaps in a local jar for that mod, such as one with
+                // mixins removed to bisect them.
+                if (project.hasProperty(name + "Jar")) {
+                    gametestRuntimeOnly files(project.property(name + "Jar"))
+                } else if (name == "malilib" && !project.hasProperty("renderValidation")) {
+                    gametestRuntimeOnly files(patchedMalilib())
+                } else {
+                    gametestRuntimeOnly coordinate
+                }
             }
         }
     }
@@ -127,9 +165,17 @@ if (withPack) {
 // Run client game tests under Iris with the server pack's shader pack on, like players on yftm:
 // ./gradlew runClientGameTest -PgameTests=GunMuzzleOrigin -PwithIris -Pminecraft_version=26.1.2 -Pfabric_version=0.155.3+26.1.2
 // (Sodium 0.9 needs Fabric API 0.145.1+, which only exists for 26.1.2, the version the server runs.)
-if (project.hasProperty("withIris") || (withPack && !packExclude.contains("iris"))) {
+// With the pack, -PpackExclude=shaders keeps Iris but switches its shader pack off, =iris keeps Sodium alone, and =sodium
+// drops both (Iris needs Sodium).
+def withSodium = project.hasProperty("withIris") || (withPack && !packExclude.contains("sodium"))
+if (withSodium) {
     dependencies {
         gametestRuntimeOnly "maven.modrinth:sodium:vf7UgZpC"
+    }
+}
+if (withSodium && !packExclude.contains("iris")) {
+    def shadersOn = !packExclude.contains("shaders")
+    dependencies {
         gametestRuntimeOnly "maven.modrinth:iris:sZbVsl2Q"
     }
     def shaderPackName = "ComplementaryReimagined_r5.9.3.zip"
@@ -144,13 +190,13 @@ if (project.hasProperty("withIris") || (withPack && !packExclude.contains("iris"
             }
             def config = new File(runDir, "config/iris.properties")
             config.parentFile.mkdirs()
-            config.text = "enableShaders=true\nshaderPack=" + shaderPackName + "\n"
+            config.text = "enableShaders=" + shadersOn + "\nshaderPack=" + shaderPackName + "\n"
         }
     }
 }
 
 // Run client game tests with the yftm pack's Zoomify (zoom on C): ./gradlew runClientGameTest -PgameTests=ZoomifyZoom -PwithZoomify
-if (project.hasProperty("withZoomify") || withPack) {
+if (project.hasProperty("withZoomify") || (withPack && !packExclude.contains("zoomify"))) {
     dependencies {
         gametestRuntimeOnly "maven.modrinth:Ha28R6CL:SKW1BTL3" // Fabric Language Kotlin 1.14.2
         gametestRuntimeOnly "maven.modrinth:1eAoo2KR:IODousKT" // YetAnotherConfigLib 3.9.7
@@ -160,7 +206,9 @@ if (project.hasProperty("withZoomify") || withPack) {
 
 // Run client game tests with the yftm pack's Fresh Animations resource packs and EMF/ETF, which re-animate the player:
 // ./gradlew runClientGameTest -PgameTests=MinigunFreshAnimations -PwithFreshAnimations
-if (project.hasProperty("withFreshAnimations") || withPack) {
+// With the pack, -PpackExclude=freshanimations keeps EMF/ETF without the resource packs, and =etf drops all three.
+if (project.hasProperty("withFreshAnimations") || (withPack && !packExclude.contains("etf"))) {
+    def packsOn = !packExclude.contains("freshanimations")
     dependencies {
         gametestRuntimeOnly "maven.modrinth:BVzZfTc1:2bcqPrsv" // Entity Texture Features 7.2.6
         gametestRuntimeOnly "maven.modrinth:4I1XuqiY:zh2AVI88" // Entity Model Features 3.3.12
@@ -183,7 +231,7 @@ if (project.hasProperty("withFreshAnimations") || withPack) {
                 // With the whole pack the client starts with the packs switched on, as players have them, so every test
                 // sees Fresh Animations' player model (the MinigunFreshAnimations test switches them on itself).
                 def options = file("build/run/clientGameTest/options.txt")
-                def enabled = "resourcePacks:[\"vanilla\",\"fabric\"," + packs.keySet().collect { "\"file/" + it + "\"" }.join(",") + "]"
+                def enabled = "resourcePacks:[\"vanilla\",\"fabric\"" + (packsOn ? "," + packs.keySet().collect { "\"file/" + it + "\"" }.join(",") : "") + "]"
                 def lines = options.exists() ? options.readLines().findAll { !it.startsWith("resourcePacks:") } : []
                 options.parentFile.mkdirs()
                 options.text = (lines + enabled).join("\n") + "\n"

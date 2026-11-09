@@ -54,7 +54,11 @@ public final class VehicleMissileEntity extends Entity {
     /** Share of top speed a missile comes off the rail at, before the motor builds it up. */
     public static final double LAUNCH_SPEED_SHARE = 0.25D;
     private static final int MOTOR_BUILD_TICKS = 14;
-    private static final double BLAST_VISIBLE_RANGE = 512.0D;
+    /**
+     * Out to here players are sent a missile's position and its blast. Missiles fly up to ~600 blocks and Voxy shows
+     * terrain far past that, so a shot is followed from launch to impact even when the shooter is behind the launcher.
+     */
+    public static final double BLAST_VISIBLE_RANGE = 1024.0D;
     /** Within this (horizontally) every player is sent the entity itself, whatever their render distance. */
     private static final double FAR_TRACK_MIN_RANGE = 32.0D;
     /** Ender pearl tickets last 40 ticks; refreshed well before that, and at once on entering a new chunk. */
