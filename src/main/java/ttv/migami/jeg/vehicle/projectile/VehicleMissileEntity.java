@@ -1,9 +1,6 @@
 package ttv.migami.jeg.vehicle.projectile;
 
 import ttv.migami.jeg.network.MissileBlastPayload;
-import ttv.migami.jeg.network.MissileTrackPayload;
-import net.minecraft.server.level.TicketType;
-import net.minecraft.world.level.ChunkPos;
 import net.minecraft.util.random.WeightedList;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.sounds.SoundSource;
@@ -62,19 +59,7 @@ public final class VehicleMissileEntity extends Entity {
      * Out to here players are sent a missile's position and its blast. Missiles fly up to ~600 blocks and Voxy shows
      * terrain far past that, so a shot is followed from launch to impact even when the shooter is behind the launcher.
      */
-    public static final double BLAST_VISIBLE_RANGE = 1024.0D;
-    /** Within this (horizontally) every player is sent the entity itself, whatever their render distance. */
-    private static final double FAR_TRACK_MIN_RANGE = 32.0D;
-    /** Ender pearl tickets last 40 ticks; refreshed well before that, and at once on entering a new chunk. */
-    private static final int TICKET_REFRESH_TICKS = 20;
-    /**
-     * Radius 3 puts the missile's chunk and the eight around it in entity-ticking range, so whichever one it flies into
-     * next is already in range when it gets there.
-     */
-    private static final int TICKET_RADIUS = 3;
-    /** Chunks this far along the flight path (in blocks) are loaded ahead of the missile, 5 chunks across each. */
-    private static final double[] LOAD_AHEAD_BLOCKS = {80.0D, 160.0D};
-    private static final int LOAD_AHEAD_RADIUS = 2;
+    public static final double BLAST_VISIBLE_RANGE = FarFlight.VISIBLE_RANGE;
     /**
      * How much of a block's (capped) blast resistance a warhead has to overcome (see WarheadBlockDamage). Medium missiles
      * blow stone and purpur walls open; a large one flattens a building.
@@ -97,8 +82,7 @@ public final class VehicleMissileEntity extends Entity {
     private int targetId = -1;
     private int directHitVehicleId = -1;
     private Identifier weaponId = Reference.id("vehicle_bmp2_missile");
-    private long ticketChunk = ChunkPos.INVALID_CHUNK_POS;
-    private int ticketRefresh;
+    private final FarFlight farFlight = new FarFlight();
 
     public VehicleMissileEntity(EntityType<? extends VehicleMissileEntity> type, Level level) {
         super(type, level);
@@ -154,48 +138,14 @@ public final class VehicleMissileEntity extends Entity {
         this.setPos(this.position().add(this.getDeltaMovement()));
         // The motor's glow and smoke trail are drawn client-side by MissileTrailRenderer.
         if (this.level() instanceof ServerLevel serverLevel) {
-            this.keepFlightPathTicking(serverLevel);
-            this.sendFarTrack(serverLevel);
-        }
-    }
-
-    /**
-     * Entities only move in chunks within a player's simulation distance (160 blocks on yftm), and only once those chunks
-     * and the ones around them have finished loading, so a long shot used to stop dead in mid-air where the loaded world
-     * ends: the chunks ahead take longer to load than the missile takes to reach them, and a missile that is not moving
-     * cannot ask for them again. It hung there until a player came near.
-     * <p>
-     * A missile therefore always ticks, like a player, whatever state its chunk is in (see {@link #isAlwaysTicking()}).
-     * The tickets here keep it in simulation range, which takes effect at once without waiting on any loading, and start
-     * the terrain along its path loading before it is needed for hit checks.
-     */
-    private void keepFlightPathTicking(ServerLevel level) {
-        ChunkPos here = this.chunkPosition();
-        long key = here.pack();
-        if (key == this.ticketChunk && --this.ticketRefresh > 0) {
-            return;
-        }
-        this.ticketChunk = key;
-        this.ticketRefresh = TICKET_REFRESH_TICKS;
-        level.getChunkSource().addTicketWithRadius(TicketType.ENDER_PEARL, here, TICKET_RADIUS);
-        Vec3 motion = this.getDeltaMovement();
-        double speed = motion.length();
-        if (speed < 1.0E-3D) {
-            return;
-        }
-        double left = (this.profile().lifeTicks() - this.tickCount) * speed;
-        for (double ahead : LOAD_AHEAD_BLOCKS) {
-            if (ahead > left + 48.0D) {
-                break;
-            }
-            Vec3 point = this.position().add(motion.scale(ahead / speed));
-            level.getChunkSource().addTicketWithRadius(TicketType.ENDER_PEARL, ChunkPos.containing(BlockPos.containing(point)), LOAD_AHEAD_RADIUS);
+            this.farFlight.keepTicking(serverLevel, this, this.profile().lifeTicks() - this.tickCount);
+            FarFlight.sendTrack(serverLevel, this, isHeavy(this.weaponId), this.tickCount);
         }
     }
 
     /**
      * Ticked every tick and kept known to the level wherever it is, instead of only in chunks that have finished loading
-     * as entity-ticking. Terrain it reaches before that is loaded on the spot by its hit check.
+     * as entity-ticking (see FarFlight). Terrain it reaches before that is loaded on the spot by its hit check.
      */
     @Override
     public boolean isAlwaysTicking() {
@@ -206,29 +156,6 @@ public final class VehicleMissileEntity extends Entity {
     @Override
     public boolean shouldBeSaved() {
         return false;
-    }
-
-    /**
-     * The entity itself only reaches players within the server's view distance (192 blocks on yftm). Players further
-     * off, out to where the blast is still shown, get its position each tick instead and draw its motor and trail.
-     */
-    private void sendFarTrack(ServerLevel level) {
-        MissileTrackPayload track = null;
-        for (ServerPlayer player : level.players()) {
-            double dx = player.getX() - this.getX();
-            double dz = player.getZ() - this.getZ();
-            double horizontal = dx * dx + dz * dz;
-            if (horizontal < FAR_TRACK_MIN_RANGE * FAR_TRACK_MIN_RANGE
-                    || player.position().distanceToSqr(this.position()) > BLAST_VISIBLE_RANGE * BLAST_VISIBLE_RANGE
-                    || !ServerPlayNetworking.canSend(player, MissileTrackPayload.TYPE)) {
-                continue;
-            }
-            if (track == null) {
-                track = new MissileTrackPayload(this.getId(), this.position(), this.getDeltaMovement(),
-                        isHeavy(this.weaponId), this.tickCount);
-            }
-            ServerPlayNetworking.send(player, track);
-        }
     }
 
     /** The KH-39 is the big one: a larger body, motor and trail. */

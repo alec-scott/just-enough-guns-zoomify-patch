@@ -15,6 +15,7 @@ import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
+import ttv.migami.jeg.vehicle.projectile.FarFlight;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.util.Mth;
@@ -147,6 +148,10 @@ public class BulletEntity extends Projectile {
     private boolean clientHitSolidBlock = false;
     private boolean medalsEnabled;
     private boolean justEnoughAmmoMedal;
+
+    /** Server-side: keeps a helicopter rocket flying and in sight past the loaded world. */
+    @Nullable
+    private FarFlight farFlight;
 
     // Client-side rocket trail storage
     private List<Vec3> trailPositions;
@@ -392,6 +397,13 @@ public class BulletEntity extends Projectile {
 
             // Move bullet to final position (if not stopped by solid block)
             this.setPos(nextPos.x, nextPos.y, nextPos.z);
+            if (isVehicleRocket(gunId) && this.level() instanceof ServerLevel serverLevel) {
+                if (this.farFlight == null) {
+                    this.farFlight = new FarFlight();
+                }
+                this.farFlight.keepTicking(serverLevel, this, this.entityData.get(DATA_LIFE) - this.entityData.get(DATA_TICKS_LIVED));
+                FarFlight.sendTrack(serverLevel, this, false, this.tickCount);
+            }
 
             this.setDeltaMovement(this.helicopterGunRound ? motion : applyGravity(motion, gunStats));
         }
@@ -1222,7 +1234,32 @@ public class BulletEntity extends Projectile {
         }
     }
 
+    /**
+     * A helicopter rocket flies and is followed past the loaded world like a missile (see FarFlight): ticked wherever it
+     * is rather than only in chunks that have finished loading as entity-ticking.
+     */
+    @Override
+    public boolean isAlwaysTicking() {
+        return this.isVehicleRocket();
+    }
+
+    /** A rocket in flight is gone within seconds; never written to disk or unloaded with a chunk. */
+    @Override
+    public boolean shouldBeSaved() {
+        return !this.isVehicleRocket() && super.shouldBeSaved();
+    }
+
+    private boolean isVehicleRocket() {
+        String gun = this.entityData.get(DATA_GUN);
+        return gun.equals(VEHICLE_70MM_ROCKET_ID.toString()) || gun.equals(VEHICLE_80MM_ROCKET_ID.toString());
+    }
+
     private static int projectileLifeFor(GunStats stats) {
+        if (isVehicleRocket(stats.id())) {
+            // Its own range (720 blocks), not the bullet lifetime setting: a rocket that always ticks would otherwise
+            // fly on for a minute, loading terrain all the way.
+            return Math.max(1, stats.projectileLife());
+        }
         int override = BallisticProtection.projectileLifeOverride(stats);
         return override > 0 ? override : Config.bulletLifetimeTicks();
     }

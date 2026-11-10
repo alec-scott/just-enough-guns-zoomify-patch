@@ -43,6 +43,7 @@
       "ttv.migami.jeg.gametest.HeliClimbDescentClientGameTest",
       "ttv.migami.jeg.gametest.MissileLongRangeClientGameTest",
       "ttv.migami.jeg.gametest.MissileRealTerrainClientGameTest",
+      "ttv.migami.jeg.gametest.RocketLongRangeClientGameTest",
       "ttv.migami.jeg.gametest.Mi28GunnerSwivelHeatClientGameTest",
       "ttv.migami.jeg.gametest.VehicleAssemblingScreenClientGameTest",
       "ttv.migami.jeg.gametest.MinigunDualWieldClientGameTest",

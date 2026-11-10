@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.7.2+mc26.1.2.yftm.14 - 2026-11-10
+
+### Fixed
+- Helicopter rockets (70 mm and 80 mm) no longer vanish a moment after launch or hang in mid-air. The server only sent a rocket to players within 64 blocks, which it covers in a third of a second, and it stopped moving at the edge of the simulation distance; yftm.13 fixed this for guided missiles only. Rockets now fly and are followed like missiles: they tick wherever they are, load the terrain ahead of them, and players out to 1024 blocks see their motor and smoke trail.
+
+### Changed
+- A rocket that hits nothing is gone after 720 blocks (80 ticks of flight) rather than after the bullet lifetime setting (60 seconds).
+
 ## 1.7.2+mc26.1.2.yftm.13 - 2026-11-10
 
 ### Fixed
