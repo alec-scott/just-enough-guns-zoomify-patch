@@ -41,7 +41,7 @@ public record VehicleMissileProfile(
                     120,
                     0.95D,
                     0.16D,
-                    3.0F,
+                    4.0F,
                     6.0D,
                     180.0F,
                     12.0F
@@ -52,7 +52,7 @@ public record VehicleMissileProfile(
                     140,
                     3.2D,
                     0.14D,
-                    4.5F,
+                    7.5F,
                     10.0D,
                     240.0F,
                     90.0F
@@ -63,7 +63,7 @@ public record VehicleMissileProfile(
                     140,
                     3.2D,
                     0.14D,
-                    4.5F,
+                    7.5F,
                     10.0D,
                     240.0F,
                     90.0F
@@ -74,7 +74,7 @@ public record VehicleMissileProfile(
                     180,
                     3.0D,
                     0.12D,
-                    11.0F,
+                    14.0F,
                     24.0D,
                     600.0F,
                     110.0F
@@ -85,7 +85,7 @@ public record VehicleMissileProfile(
                     160,
                     3.8D,
                     0.18D,
-                    3.2F,
+                    4.0F,
                     6.0D,
                     70.0F,
                     20.0F

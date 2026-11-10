@@ -54,6 +54,10 @@ public final class VehicleMissileEntity extends Entity {
     /** Share of top speed a missile comes off the rail at, before the motor builds it up. */
     public static final double LAUNCH_SPEED_SHARE = 0.25D;
     private static final int MOTOR_BUILD_TICKS = 14;
+    /** A wall up to this thick is punched through; the missile then carries this far into the space behind it. */
+    private static final double MAX_WALL_THICKNESS = 2.0D;
+    private static final double WALL_PUNCH_DEPTH = 3.0D;
+    private static final double WALL_PUNCH_STEP = 0.25D;
     /**
      * Out to here players are sent a missile's position and its blast. Missiles fly up to ~600 blocks and Voxy shows
      * terrain far past that, so a shot is followed from launch to impact even when the shooter is behind the launcher.
@@ -63,9 +67,14 @@ public final class VehicleMissileEntity extends Entity {
     private static final double FAR_TRACK_MIN_RANGE = 32.0D;
     /** Ender pearl tickets last 40 ticks; refreshed well before that, and at once on entering a new chunk. */
     private static final int TICKET_REFRESH_TICKS = 20;
-    /** Radius 2 makes the centre chunk entity-ticking and loads the ring around it the next chunk needs to tick. */
-    private static final int TICKET_RADIUS = 2;
-    private static final int TICKET_LOOKAHEAD_TICKS = 8;
+    /**
+     * Radius 3 puts the missile's chunk and the eight around it in entity-ticking range, so whichever one it flies into
+     * next is already in range when it gets there.
+     */
+    private static final int TICKET_RADIUS = 3;
+    /** Chunks this far along the flight path (in blocks) are loaded ahead of the missile, 5 chunks across each. */
+    private static final double[] LOAD_AHEAD_BLOCKS = {80.0D, 160.0D};
+    private static final int LOAD_AHEAD_RADIUS = 2;
     /**
      * How much of a block's (capped) blast resistance a warhead has to overcome (see WarheadBlockDamage). Medium missiles
      * blow stone and purpur walls open; a large one flattens a building.
@@ -151,9 +160,14 @@ public final class VehicleMissileEntity extends Entity {
     }
 
     /**
-     * Entities only move in chunks within a player's simulation distance (160 blocks on yftm), so a long shot used to
-     * stop dead in mid-air and never go off. Like a thrown ender pearl, the missile keeps the chunk it is in, and the one
-     * it is about to reach, loaded and ticking with short-lived tickets for as long as it flies.
+     * Entities only move in chunks within a player's simulation distance (160 blocks on yftm), and only once those chunks
+     * and the ones around them have finished loading, so a long shot used to stop dead in mid-air where the loaded world
+     * ends: the chunks ahead take longer to load than the missile takes to reach them, and a missile that is not moving
+     * cannot ask for them again. It hung there until a player came near.
+     * <p>
+     * A missile therefore always ticks, like a player, whatever state its chunk is in (see {@link #isAlwaysTicking()}).
+     * The tickets here keep it in simulation range, which takes effect at once without waiting on any loading, and start
+     * the terrain along its path loading before it is needed for hit checks.
      */
     private void keepFlightPathTicking(ServerLevel level) {
         ChunkPos here = this.chunkPosition();
@@ -164,10 +178,34 @@ public final class VehicleMissileEntity extends Entity {
         this.ticketChunk = key;
         this.ticketRefresh = TICKET_REFRESH_TICKS;
         level.getChunkSource().addTicketWithRadius(TicketType.ENDER_PEARL, here, TICKET_RADIUS);
-        ChunkPos ahead = ChunkPos.containing(BlockPos.containing(this.position().add(this.getDeltaMovement().scale(TICKET_LOOKAHEAD_TICKS))));
-        if (!ahead.equals(here)) {
-            level.getChunkSource().addTicketWithRadius(TicketType.ENDER_PEARL, ahead, TICKET_RADIUS);
+        Vec3 motion = this.getDeltaMovement();
+        double speed = motion.length();
+        if (speed < 1.0E-3D) {
+            return;
         }
+        double left = (this.profile().lifeTicks() - this.tickCount) * speed;
+        for (double ahead : LOAD_AHEAD_BLOCKS) {
+            if (ahead > left + 48.0D) {
+                break;
+            }
+            Vec3 point = this.position().add(motion.scale(ahead / speed));
+            level.getChunkSource().addTicketWithRadius(TicketType.ENDER_PEARL, ChunkPos.containing(BlockPos.containing(point)), LOAD_AHEAD_RADIUS);
+        }
+    }
+
+    /**
+     * Ticked every tick and kept known to the level wherever it is, instead of only in chunks that have finished loading
+     * as entity-ticking. Terrain it reaches before that is loaded on the spot by its hit check.
+     */
+    @Override
+    public boolean isAlwaysTicking() {
+        return true;
+    }
+
+    /** Never written to disk or unloaded with a chunk: a missile in flight is gone within seconds either way. */
+    @Override
+    public boolean shouldBeSaved() {
+        return false;
     }
 
     /**
@@ -265,7 +303,7 @@ public final class VehicleMissileEntity extends Entity {
     private boolean hitAlongPath(Vec3 start, Vec3 end) {
         HitResult blockHit = this.level().clip(new ClipContext(start, end, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, this));
         if (blockHit.getType() != HitResult.Type.MISS) {
-            this.setPos(blockHit.getLocation());
+            this.setPos(this.detonationPoint(blockHit.getLocation(), end.subtract(start)));
             this.explode();
             return true;
         }
@@ -289,6 +327,35 @@ public final class VehicleMissileEntity extends Entity {
             return true;
         }
         return false;
+    }
+
+    /**
+     * Where a missile that struck a block goes off. Against a wall with open space behind it (a house, a tower) it
+     * punches through and bursts a few blocks inside, so the blast takes the building apart from within instead of
+     * spending half of itself on the air outside. Solid ground, thick rock and armour (see WarheadBlockDamage) stop it
+     * where it hit, so craters in the open are no bigger for it.
+     */
+    private Vec3 detonationPoint(Vec3 hit, Vec3 motion) {
+        if (motion.lengthSqr() < 1.0E-6D) {
+            return hit;
+        }
+        Vec3 direction = motion.normalize();
+        double wallEnd = -1.0D;
+        for (double depth = WALL_PUNCH_STEP; depth <= MAX_WALL_THICKNESS + WALL_PUNCH_DEPTH; depth += WALL_PUNCH_STEP) {
+            BlockPos pos = BlockPos.containing(hit.add(direction.scale(depth)));
+            var state = this.level().getBlockState(pos);
+            boolean solid = !state.getCollisionShape(this.level(), pos).isEmpty();
+            if (wallEnd < 0.0D) {
+                if (!solid) {
+                    wallEnd = depth;
+                } else if (depth > MAX_WALL_THICKNESS || state.getBlock().getExplosionResistance() >= WarheadBlockDamage.ARMOUR_RESISTANCE) {
+                    return hit;
+                }
+            } else if (solid || depth - wallEnd >= WALL_PUNCH_DEPTH) {
+                return hit.add(direction.scale(depth - WALL_PUNCH_STEP));
+            }
+        }
+        return wallEnd < 0.0D ? hit : hit.add(direction.scale(MAX_WALL_THICKNESS + WALL_PUNCH_DEPTH));
     }
 
     private boolean canImpact(Entity target, @Nullable Entity owner, @Nullable Entity ownerVehicle) {
@@ -325,12 +392,8 @@ public final class VehicleMissileEntity extends Entity {
             for (VehicleEntity target : this.level().getEntitiesOfClass(VehicleEntity.class, this.getBoundingBox().inflate(profile.blastRadius()))) {
                 if (target != ownerVehicle) {
                     float damage = profile.vehicleDamage();
-                    if (directHitVehicle && target.getId() != this.directHitVehicleId) {
-                        double effectiveDistance = target.position().add(0.0D, target.getBbHeight() * 0.5D, 0.0D).distanceTo(explosionPos) * VEHICLE_DIRECT_HIT_FALLOFF_DISTANCE_SCALE;
-                        if (effectiveDistance > profile.blastRadius()) {
-                            continue;
-                        }
-                        damage *= 1.0F - (float) (effectiveDistance / profile.blastRadius());
+                    if (target.getId() != this.directHitVehicleId) {
+                        damage *= blastFalloff(target, explosionPos, profile.blastRadius(), directHitVehicle);
                     }
                     if (damage > 0.5F) {
                         target.hurt(this.damageSources().explosion(this, owner), damage);
@@ -339,14 +402,7 @@ public final class VehicleMissileEntity extends Entity {
             }
             for (LivingEntity target : this.level().getEntitiesOfClass(LivingEntity.class, this.getBoundingBox().inflate(profile.blastRadius()))) {
                 if (target != owner) {
-                    float damage = profile.livingDamage();
-                    if (directHitVehicle) {
-                        double effectiveDistance = target.position().add(0.0D, target.getBbHeight() * 0.5D, 0.0D).distanceTo(explosionPos) * VEHICLE_DIRECT_HIT_FALLOFF_DISTANCE_SCALE;
-                        if (effectiveDistance > profile.blastRadius()) {
-                            continue;
-                        }
-                        damage *= 1.0F - (float) (effectiveDistance / profile.blastRadius());
-                    }
+                    float damage = profile.livingDamage() * blastFalloff(target, explosionPos, profile.blastRadius(), directHitVehicle);
                     if (damage > 0.5F) {
                         target.hurt(this.damageSources().explosion(this, owner), damage);
                     }
@@ -354,6 +410,24 @@ public final class VehicleMissileEntity extends Entity {
             }
         }
         this.discard();
+    }
+
+    /**
+     * How much of a blast's damage reaches a target: a round zone, full at the centre and easing off towards the edge
+     * (three quarters at half the radius, nothing at the rim). Measured to the nearest part of the target, so a big
+     * vehicle is hit as soon as the blast touches it. A missile that went off against a vehicle spends itself on it:
+     * everything else counts as further away.
+     */
+    private static float blastFalloff(Entity target, Vec3 centre, double radius, boolean directHitVehicle) {
+        double distance = Math.sqrt(target.getBoundingBox().distanceToSqr(centre));
+        if (directHitVehicle) {
+            distance *= VEHICLE_DIRECT_HIT_FALLOFF_DISTANCE_SCALE;
+        }
+        if (distance >= radius) {
+            return 0.0F;
+        }
+        double share = distance / radius;
+        return (float) (1.0D - share * share);
     }
 
     /** Vanilla's explosion, but dense blocks crumble, the more so the bigger the warhead (see WarheadBlockDamage). */

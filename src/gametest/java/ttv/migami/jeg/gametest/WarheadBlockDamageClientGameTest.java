@@ -23,15 +23,20 @@ import ttv.migami.jeg.vehicle.projectile.VehicleMissileEntity;
 import ttv.migami.jeg.vehicle.util.VehicleWeaponStats;
 
 /**
- * Missiles and rockets against the dense blocks End cities are built of: each is fired into a solid 7x7x7 cube of purpur
- * (or end stone brick) and the blocks it blew out are counted. A warhead should tear a real hole, a heavy one gut the cube.
+ * Missiles and rockets against dense blocks: each is fired into a solid 7x7x7 cube and the blocks it blew out are counted.
+ * In ordinary building blocks (purpur, stone, end stone brick) a warhead should tear a real hole and a heavy one gut the
+ * cube. Blocks with a blast resistance of 10 or more are armour: a vault barely gives, an ender chest or obsidian not at all.
  */
 public class WarheadBlockDamageClientGameTest implements FabricClientGameTest {
     private static final Logger LOGGER = LoggerFactory.getLogger("jeg-gametest");
     private static final int SIZE = 7;
     private static final int GROUND_Y = -60;
 
-    private record Shot(String name, String weapon, Block block, int minDestroyed) {}
+    private record Shot(String name, String weapon, Block block, int minDestroyed, int maxDestroyed) {
+        Shot(String name, String weapon, Block block, int minDestroyed) {
+            this(name, weapon, block, minDestroyed, Integer.MAX_VALUE);
+        }
+    }
 
     @Override
     public void runTest(ClientGameTestContext context) {
@@ -39,8 +44,13 @@ public class WarheadBlockDamageClientGameTest implements FabricClientGameTest {
                 new Shot("80mm pod rocket, purpur", "vehicle_80mm_rocket", Blocks.PURPUR_BLOCK, 12),
                 new Shot("rocket launcher, purpur", "rocket_launcher", Blocks.PURPUR_BLOCK, 25),
                 new Shot("9M120 missile, purpur", "vehicle_9m120_passenger_missile", Blocks.PURPUR_BLOCK, 40),
-                new Shot("9M120 missile, end stone brick", "vehicle_9m120_passenger_missile", Blocks.END_STONE_BRICKS, 40),
+                new Shot("9M120 missile, stone", "vehicle_9m120_passenger_missile", Blocks.STONE, 40),
                 new Shot("KH-39 missile, purpur", "vehicle_kh39_missile", Blocks.PURPUR_BLOCK, 200),
+                new Shot("9M120 missile, end stone brick", "vehicle_9m120_passenger_missile", Blocks.END_STONE_BRICKS, 40),
+                new Shot("9M120 missile, vault", "vehicle_9m120_passenger_missile", Blocks.VAULT, 0, 4),
+                new Shot("KH-39 missile, vault", "vehicle_kh39_missile", Blocks.VAULT, 0, 12),
+                new Shot("KH-39 missile, ender chest", "vehicle_kh39_missile", Blocks.ENDER_CHEST, 0, 0),
+                new Shot("KH-39 missile, obsidian", "vehicle_kh39_missile", Blocks.OBSIDIAN, 0, 0),
         };
         StringBuilder report = new StringBuilder("warhead block damage report (7x7x7 cube = 343 blocks)\n");
         StringBuilder failures = new StringBuilder();
@@ -69,6 +79,9 @@ public class WarheadBlockDamageClientGameTest implements FabricClientGameTest {
                 report.append(String.format("%s: %d blocks blown out%n", shot.name(), destroyed));
                 if (destroyed < shot.minDestroyed()) {
                     failures.append(String.format("%s blew out only %d blocks (want %d)%n", shot.name(), destroyed, shot.minDestroyed()));
+                }
+                if (destroyed > shot.maxDestroyed()) {
+                    failures.append(String.format("%s blew out %d blocks (at most %d)%n", shot.name(), destroyed, shot.maxDestroyed()));
                 }
             }
         }

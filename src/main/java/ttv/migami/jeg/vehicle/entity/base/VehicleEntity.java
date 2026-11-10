@@ -1242,6 +1242,32 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         return Mth.lerp(partialTick, this.rotaryGunAngleO, this.rotaryGunAngle);
     }
 
+    /** Whether the rotary gun (the Mi-28's chin gun) is up to speed and firing this tick. */
+    public boolean rotaryGunFiring() {
+        return this.rotaryGunRequested() && this.rotaryGunSpin() >= 1.0F;
+    }
+
+    /** Where the rotary gun's muzzle is, for drawing its heat and smoke; null on a vehicle without one. */
+    @Nullable
+    public Vec3 rotaryGunMuzzle(float partialTick) {
+        for (VehicleWeaponInfo weapon : this.vehicleData().defaults().weapons()) {
+            if (this.isRotaryGun(weapon) && this.usesArticulatedTurretMuzzle(weapon)) {
+                var turret = this.vehicleData().defaults().turret();
+                return this.articulatedBarrelPosition(
+                        weapon.muzzleX() - turret.barrelX(),
+                        weapon.muzzleY() - turret.originY() - turret.barrelY(),
+                        weapon.muzzleZ() - turret.originZ() - turret.barrelZ(),
+                        partialTick);
+            }
+        }
+        return null;
+    }
+
+    /** Which way the turret's barrel points. */
+    public Vec3 turretBarrelDirection(float partialTick) {
+        return this.articulatedBarrelDirection(partialTick);
+    }
+
     public int helicopterShutdownTicks() {
         return "mi28".equals(this.vehicleDataId().getPath()) ? 360 : 240;
     }

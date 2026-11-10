@@ -25,6 +25,7 @@ abstract class AbstractVehicleGeoRenderer<T extends VehicleEntity> extends GeoEn
         super(context, (GeoModel<T>) model);
         this.withRenderLayer(new VehicleBoatWaterMaskLayer<>(this));
         this.withRenderLayer(new VehicleGlowLayer<>(this));
+        this.withRenderLayer(new VehicleBarrelHeatLayer<>(this));
         this.shadowRadius = 0.9F;
     }
 
@@ -167,7 +168,7 @@ abstract class AbstractVehicleGeoRenderer<T extends VehicleEntity> extends GeoEn
             case "bmp2" -> updateTurret(vehicle, partialTick, snapshots, -74.0F, 7.5F);
             case "lav150" -> updateTurret(vehicle, partialTick, snapshots, -15.0F, 32.5F);
             case "mi28" -> {
-                updateTurret(vehicle, partialTick, snapshots, -40.0F, 10.0F);
+                updateTurret(vehicle, partialTick, snapshots, -70.0F, 30.0F);
                 updateHelicopterRotors(vehicle, partialTick, snapshots);
                 snapshots.ifPresent("barrel2", snapshot -> snapshot.setRotZ(vehicle.rotaryGunAngle(partialTick) * Mth.DEG_TO_RAD));
             }

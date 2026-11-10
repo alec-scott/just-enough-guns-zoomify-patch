@@ -92,6 +92,9 @@ public class HeliAmmoHudClientGameTest implements FabricClientGameTest {
                 if (entity instanceof VehicleEntity vehicle && vehicle.vehicleDataId().getPath().equals(id) && vehicle.getPassengers().isEmpty()) {
                     for (int slot = 0; slot < ammo.length; slot++) {
                         vehicle.vehicleInventory().setItem(slot, new ItemStack(BuiltInRegistries.ITEM.getValue(Reference.id(ammo[slot])), 48));
+                        // More of the same further back in the hold: counts in the hundreds have to fit their box.
+                        vehicle.vehicleInventory().setItem(slot + 9, new ItemStack(BuiltInRegistries.ITEM.getValue(Reference.id(ammo[slot])), 64));
+                        vehicle.vehicleInventory().setItem(slot + 18, new ItemStack(BuiltInRegistries.ITEM.getValue(Reference.id(ammo[slot])), 64));
                     }
                 }
             }
@@ -115,7 +118,7 @@ public class HeliAmmoHudClientGameTest implements FabricClientGameTest {
         // Every weapon whose ammo is aboard has a count the HUD can show, selected or not.
         for (String ammoName : ammo) {
             if (slots.contains("(" + ammoName + ") 0/0")) {
-                failures.append(String.format("%s: a weapon taking %s shows no ammo although 48 are aboard%n", id, ammoName));
+                failures.append(String.format("%s: a weapon taking %s shows no ammo although 176 are aboard%n", id, ammoName));
             }
         }
     }

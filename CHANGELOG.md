@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.7.2+mc26.1.2.yftm.13 - 2026-11-10
+
+### Fixed
+- Ammo counts in the vehicle weapon list no longer run over the weapon's icon and out of their box: the boxes widen to fit the longest count ("128/512", a reload countdown).
+- Long-range missiles no longer hang in mid-air at the edge of the loaded world until a player comes near. A missile only moved once the chunks ahead had finished loading, and at speed it got there first; once stopped it could not ask for them again. Missiles now tick every tick wherever they are, load the terrain 80 and 160 blocks ahead of them, and are never saved with a chunk.
+
+### Added
+- The Mi-28's chin gun heats up as it fires: over a few seconds of sustained fire its barrels redden, hottest at the muzzle, and thin wisps of smoke curl off the muzzle once it stops. It cools again in about ten seconds. Kept faint in the gunner's own view.
+
+### Changed
+- The Mi-28 gunner can swing the view and the chin gun much further: 160 degrees to either side (was 110), 70 degrees down (was 40) and 30 degrees up (was 10).
+- A missile's blast damage is a round zone that eases off towards its edge (three quarters at half the radius, none at the rim), measured to the nearest part of the target. It used to be a cube around the impact with full damage out to its corners.
+- Missiles punch through a wall up to two blocks thick with open space behind it and burst up to three blocks inside, so a hit on a house wrecks it from within: a 9M-120 levels a small village house and takes out more than half of a medium one. Solid ground, thick rock and blast-resistant blocks stop a missile where it hits.
+- Bigger blasts: 70 mm rockets 4.0 explosion power (was 3.2), 80 mm 5.0 (was 4.0), 9M113 4.0 (was 3.0), 9M-120 and 9M-120F 7.5 (was 4.5), 9M336 4.0 (was 3.2), KH-39 14 (was 11). Craters, the drawn blast, the boom and vanilla blast damage to anything nearby grow to match; the drawn blast and boom are no longer capped for the biggest warheads (only the view shake is).
+- More blast-resistant materials: any block with a blast resistance of 10 or more now keeps it in full against warheads (it used to take 1200, obsidian-class). That adds trial spawners and vaults (50), ender chests (600) and tough blocks from other mods. Stone, deepslate, bricks, purpur, metal blocks and end stone (9 and below) are still blown apart.
+
 ## 1.7.2+mc26.1.2.yftm.12 - 2026-11-09
 
 ### Fixed

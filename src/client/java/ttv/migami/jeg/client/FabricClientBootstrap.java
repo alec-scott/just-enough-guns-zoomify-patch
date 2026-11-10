@@ -331,6 +331,7 @@ public final class FabricClientBootstrap {
             renderMuzzleFlashes(context.poseStack(), context.bufferSource(), partialTick);
             ttv.migami.jeg.client.render.MissileTrailRenderer.render(context.poseStack(), context.bufferSource(), partialTick);
             ttv.migami.jeg.client.render.MissileBlastRenderer.render(context.poseStack(), context.bufferSource(), partialTick);
+            ttv.migami.jeg.client.render.GunBarrelHeatRenderer.render(context.poseStack(), context.bufferSource(), partialTick);
         });
 
         ClientTickEvents.START_CLIENT_TICK.register(FabricClientBootstrap::handleOffhandSwapOverride);
@@ -348,6 +349,7 @@ public final class FabricClientBootstrap {
             tickMuzzleFlashState();
             ttv.migami.jeg.client.render.MissileBlastRenderer.tick();
             ttv.migami.jeg.client.render.MissileTrailRenderer.tick();
+            ttv.migami.jeg.client.render.GunBarrelHeatRenderer.tick();
             CrosshairHandler.tick();
             tickTransientPrompts(client);
 

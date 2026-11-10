@@ -1118,7 +1118,7 @@ public class BulletEntity extends Projectile {
     }
 
     private static float vehicleRocketExplosionPower(Identifier id) {
-        return id.equals(VEHICLE_80MM_ROCKET_ID) ? 4.0F : 3.2F;
+        return id.equals(VEHICLE_80MM_ROCKET_ID) ? 5.0F : 4.0F;
     }
 
     private static float vehicleRocketBlastDamage(Identifier id) {

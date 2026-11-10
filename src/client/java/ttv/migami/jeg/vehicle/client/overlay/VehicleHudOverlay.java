@@ -47,6 +47,11 @@ public final class VehicleHudOverlay {
     private static final Identifier WEAPON_ICON_CANNON_20MM = Reference.id("textures/overlay/vehicle/weapon/icons/cannon_20mm.png");
     private static final Identifier WEAPON_ICON_COAX_762 = Reference.id("textures/overlay/vehicle/weapon/icons/gun_7_62mm.png");
     private static final Identifier WEAPON_SELECTED = Reference.id("textures/overlay/vehicle/weapon/frame/selected.png");
+    private static final int WEAPON_FRAME_WIDTH = 75;
+    /** The frame's right-hand end, kept whole when the box is widened. */
+    private static final int WEAPON_FRAME_CAP = 4;
+    private static final int WEAPON_AMMO_GAP = 3;
+    private static final int WEAPON_AMMO_INSET = 3;
     private static final int WEAPON_ICON_WIDTH = 75;
     private static final int WEAPON_ICON_HEIGHT = 16;
     private static final int WEAPON_ICON_TEXTURE_WIDTH = 300;
@@ -224,13 +229,23 @@ public final class VehicleHudOverlay {
         }
         int width = guiGraphics.guiWidth();
         int height = guiGraphics.guiHeight();
+        // Every box is widened by the same amount, enough for the longest ammo count to sit clear of its weapon icon:
+        // "128/512" or a reload countdown used to run over the icon and out of the box.
+        SlotAmmo[] ammo = new SlotAmmo[usableWeaponCount];
+        int extra = 0;
+        for (int displayIndex = 0; displayIndex < usableWeaponCount; displayIndex++) {
+            int index = usableWeaponIndexes[displayIndex];
+            ammo[displayIndex] = slotAmmo(vehicle, index, index == selected);
+            int needed = weaponIconEnd(weapons.get(index).weaponId()) + WEAPON_AMMO_GAP + minecraft.font.width(ammo[displayIndex].label()) + WEAPON_AMMO_INSET;
+            extra = Math.max(extra, needed - WEAPON_FRAME_WIDTH);
+        }
         int frameIndex = 0;
         for (int displayIndex = usableWeaponCount - 1; displayIndex >= 0; displayIndex--) {
             int index = usableWeaponIndexes[displayIndex];
-            int x = width - 85;
+            int x = width - 10 - WEAPON_FRAME_WIDTH - extra;
             int y = height - frameIndex * 18 - 20;
             Identifier icon = weaponIcon(weapons.get(index).weaponId());
-            guiGraphics.blit(RenderPipelines.GUI_TEXTURED, WEAPON_FRAMES[Math.min(displayIndex, WEAPON_FRAMES.length - 1)], x, y, 0, 0, 75, 16, 75, 16);
+            blitWeaponFrame(guiGraphics, WEAPON_FRAMES[Math.min(displayIndex, WEAPON_FRAMES.length - 1)], x, y, extra);
             if (icon != null) {
                 blitWeaponIcon(guiGraphics, icon, x, y);
             } else {
@@ -238,28 +253,50 @@ public final class VehicleHudOverlay {
                 guiGraphics.text(minecraft.font, name, x + 4, y + 4, 0xFFFFFFFF, false);
             }
             // Every weapon shows its own ammo, so what is left for each ammo type is clear without switching to it.
-            renderSlotAmmo(guiGraphics, minecraft, vehicle, index, index == selected, width - 13, y + 4);
+            SlotAmmo slotAmmo = ammo[displayIndex];
+            guiGraphics.text(minecraft.font, slotAmmo.label(), width - 10 - WEAPON_AMMO_INSET - minecraft.font.width(slotAmmo.label()), y + 4, slotAmmo.color(), true);
             if (index == selected) {
-                guiGraphics.blit(RenderPipelines.GUI_TEXTURED, WEAPON_SELECTED, width - 95, y + 4, 0, 0, 8, 8, 8, 8);
+                guiGraphics.blit(RenderPipelines.GUI_TEXTURED, WEAPON_SELECTED, x - 10, y + 4, 0, 0, 8, 8, 8, 8);
             }
             // The ammo it takes, as the item: tells apart weapons that share an icon.
             ItemStack ammoItem = ammoItem(weapons.get(index).ammoId());
             if (!ammoItem.isEmpty()) {
-                guiGraphics.item(ammoItem, width - 115, y);
+                guiGraphics.item(ammoItem, x - 30, y);
             }
             frameIndex++;
         }
     }
 
+    /** A weapon box: the frame art is 75 wide; a wider one repeats a strip from its plain right-hand part. */
+    private static void blitWeaponFrame(GuiGraphicsExtractor guiGraphics, Identifier frame, int x, int y, int extra) {
+        if (extra <= 0) {
+            guiGraphics.blit(RenderPipelines.GUI_TEXTURED, frame, x, y, 0, 0, WEAPON_FRAME_WIDTH, 16, WEAPON_FRAME_WIDTH, 16);
+            return;
+        }
+        int left = WEAPON_FRAME_WIDTH - WEAPON_FRAME_CAP;
+        guiGraphics.blit(RenderPipelines.GUI_TEXTURED, frame, x, y, 0, 0, left, 16, WEAPON_FRAME_WIDTH, 16);
+        guiGraphics.blit(RenderPipelines.GUI_TEXTURED, frame, x + left, y, left - 1, 0, extra, 16, 1, 16, WEAPON_FRAME_WIDTH, 16);
+        guiGraphics.blit(RenderPipelines.GUI_TEXTURED, frame, x + left + extra, y, left, 0, WEAPON_FRAME_CAP, 16, WEAPON_FRAME_WIDTH, 16);
+    }
+
+    /** How far across its box (in pixels) a weapon icon reaches; the ammo count starts after it. */
+    private static int weaponIconEnd(Identifier weaponId) {
+        return switch (weaponId.getPath()) {
+            case "vehicle_70mm_rocket", "vehicle_80mm_rocket" -> 62;
+            default -> 48;
+        };
+    }
+
+    private record SlotAmmo(String label, int color) {}
+
     /**
-     * One weapon's ammo, right-aligned at rightX: loaded / spare for a magazine weapon, the rounds aboard for a belt-fed
-     * one, the seconds left while it reloads. Red when it has nothing left, gold when selected.
+     * One weapon's ammo: loaded / spare for a magazine weapon, the rounds aboard for a belt-fed one, the seconds left
+     * while it reloads. Red when it has nothing left, gold when selected.
      */
-    private static void renderSlotAmmo(GuiGraphicsExtractor guiGraphics, Minecraft minecraft, VehicleEntity vehicle, int slot,
-                                       boolean selected, int rightX, int y) {
+    private static SlotAmmo slotAmmo(VehicleEntity vehicle, int slot, boolean selected) {
         var weapons = vehicle.vehicleData().defaults().weapons();
         if (slot < 0 || slot >= weapons.size()) {
-            return;
+            return new SlotAmmo("", 0xFFFFFFFF);
         }
         var stats = VehicleWeaponStats.get(weapons.get(slot).weaponId());
         boolean magazine = stats != null && stats.usesMagazine() && !stats.isInventoryFed();
@@ -276,7 +313,7 @@ public final class VehicleHudOverlay {
             label = magazine ? loaded + "/" + reserve : String.valueOf(loaded);
             color = loaded + reserve <= 0 ? 0xFFFF5555 : selected ? 0xFFFFDD88 : 0xFFFFFFFF;
         }
-        guiGraphics.text(minecraft.font, label, rightX - minecraft.font.width(label), y, color, true);
+        return new SlotAmmo(label, color);
     }
 
     private static ItemStack ammoItem(Identifier ammoId) {

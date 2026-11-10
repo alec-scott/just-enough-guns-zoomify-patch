@@ -52,8 +52,10 @@ public final class MissileBlastRenderer {
     private static final int FULL_BRIGHT = 0x00F000F0;
     /** A medium anti-ground missile (power 4.5) is the reference size. */
     private static final float REFERENCE_POWER = 4.5F;
-    /** The biggest warhead's power: a blast's shake and boom are measured against it. */
+    /** A blast's shake and boom are measured against this power. */
     private static final float BIGGEST_POWER = 9.0F;
+    /** The view shake stops growing here, however big the warhead; nothing else about a blast is capped. */
+    private static final float MAX_SHAKE = 1.3F;
     private static final int FLASH_TICKS = 6;
     /** The visible shockwave tears out over this long; past it, it carries on unseen at the speed of sound. */
     private static final int SHOCK_TICKS = 12;
@@ -261,7 +263,7 @@ public final class MissileBlastRenderer {
         Blast(MissileBlastPayload payload, long seed) {
             this.centre = payload.position();
             this.power = payload.power();
-            this.scale = Mth.clamp(payload.power() / REFERENCE_POWER, 0.55F, 2.6F);
+            this.scale = Math.max(0.55F, payload.power() / REFERENCE_POWER);
             this.radius = Math.max(payload.blastRadius(), 4.0F * this.scale);
             this.shockRadius = Math.max(this.radius * 2.2F, 12.0F * this.scale);
             this.incendiary = payload.incendiary();
@@ -477,15 +479,16 @@ public final class MissileBlastRenderer {
             }
             this.felt = true;
             shocksFelt++;
-            float size = Mth.clamp(this.power / BIGGEST_POWER, 0.1F, 1.3F);
-            double range = SHAKE_RANGE * Math.sqrt(size);
+            float size = Math.max(0.1F, this.power / BIGGEST_POWER);
+            float shake = Math.min(size, MAX_SHAKE);
+            double range = SHAKE_RANGE * Math.sqrt(shake);
             if (distance < range) {
-                GunCameraSwayHandler.addShake((float) (size * (1.0D - distance / range)));
+                GunCameraSwayHandler.addShake((float) (shake * (1.0D - distance / range)));
             }
             if (this.boom) {
                 float volume = 8.0F + size * 18.0F;
                 mc.level.playLocalSound(this.centre.x, this.centre.y, this.centre.z, SoundEvents.GENERIC_EXPLODE.value(), SoundSource.BLOCKS,
-                        volume, 0.75F - size * 0.2F, false);
+                        volume, Math.max(0.5F, 0.75F - size * 0.2F), false);
                 mc.level.playLocalSound(this.centre.x, this.centre.y, this.centre.z, SoundEvents.GENERIC_EXPLODE.value(), SoundSource.BLOCKS,
                         volume, 0.5F, false);
                 if (distance > 40.0D) {

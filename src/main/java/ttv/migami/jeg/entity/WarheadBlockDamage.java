@@ -12,16 +12,19 @@ import net.minecraft.world.level.material.FluidState;
 
 /**
  * What a missile's or rocket's blast does to blocks. Vanilla's explosion barely scratches dense blocks, so a warhead used
- * to bounce off stone, deepslate, purpur and end stone brick (an End city shrugged off a missile). Here anything denser
- * than {@link #DENSE_RESISTANCE} crumbles as if it were that soft, and a warhead's {@code scale} softens it further: a
- * heavy one tears a building open. Soft ground (dirt, sand, grass) is unchanged, so craters in the open stay their size.
- * Blocks made to stop explosions (obsidian, bedrock, ancient debris and anything as tough) keep their full resistance.
+ * to bounce off stone, deepslate, purpur and end stone brick (an End city shrugged off a missile). Here ordinary building
+ * blocks denser than {@link #DENSE_RESISTANCE} crumble as if they were that soft, and a warhead's {@code scale} softens
+ * them further: a heavy one tears a building open. Soft ground (dirt, sand, grass) is unchanged by rockets.
+ * <p>
+ * Blocks with a blast resistance of {@link #ARMOUR_RESISTANCE} or more keep it in full, so there are materials worth
+ * building a bunker from: trial spawners and vaults (50), ender chests (600), obsidian, netherite and the like (1200),
+ * and whatever tough blocks other mods add.
  */
 public final class WarheadBlockDamage {
     /** Blast resistance the densest ordinary block counts as (wool and glass are about this; stone is 6, end stone 9). */
     public static final float DENSE_RESISTANCE = 1.0F;
-    /** Resistance from which a block is blast proof (obsidian is 1200). */
-    public static final float BLAST_PROOF_RESISTANCE = 1200.0F;
+    /** Resistance from which a block is armour and resists in full. Stone and metal blocks are 6, end stone is 9. */
+    public static final float ARMOUR_RESISTANCE = 10.0F;
 
     private WarheadBlockDamage() {}
 
@@ -37,7 +40,7 @@ public final class WarheadBlockDamage {
                 if (!fluid.isEmpty()) {
                     return resistance;
                 }
-                return resistance.map(value -> value >= BLAST_PROOF_RESISTANCE ? value : Math.min(value, DENSE_RESISTANCE) * scale);
+                return resistance.map(value -> value >= ARMOUR_RESISTANCE ? value : Math.min(value, DENSE_RESISTANCE) * scale);
             }
         };
     }

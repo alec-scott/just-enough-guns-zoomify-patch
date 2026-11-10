@@ -38,14 +38,70 @@ public class MissileBlastClientGameTest implements FabricClientGameTest {
             int large = this.strike(context, server, "vehicle_kh39_missile", 200, "large");
             int incendiary = this.strike(context, server, "vehicle_9m120_driver_missile", 400, "incendiary");
             int fires = server.computeOnServer(s -> countBlocks(s.overworld(), new BlockPos(400, -61, 40), 9, Blocks.FIRE));
-            LOGGER.info("[missile-blast] hut blocks destroyed: medium={} large={} incendiary={} fires={}", medium, large, incendiary, fires);
+            LOGGER.info("[missile-blast] hut and ground blocks destroyed: medium={} large={} incendiary={} fires={}", medium, large, incendiary, fires);
             check(medium >= 20, "A medium missile should break through the stone hut, broke " + medium);
             check(large > medium * 2, "A large missile should be far more destructive: large=" + large + " medium=" + medium);
             check(fires >= 12, "The incendiary missile should set the ground alight, fires=" + fires);
+            // Real village houses, as the game builds them: a medium missile has to wreck one, not just scorch it.
+            for (String house : new String[]{"plains/houses/plains_small_house_1", "plains/houses/plains_medium_house_1", "taiga/houses/taiga_medium_house_1"}) {
+                int[] result = this.strikeHouse(context, server, house, 600 + 60 * houses++);
+                LOGGER.info("[missile-blast] village house {}: {} of {} blocks destroyed", house, result[0], result[1]);
+                check(result[1] > 40, house + " was not placed (" + result[1] + " blocks)");
+                check(result[0] * 2 >= result[1], "A medium missile should wreck a village house: " + house + " lost " + result[0] + " of " + result[1] + " blocks");
+            }
         }
     }
 
-    /** Builds a hut 40 blocks ahead, drops the missile on it while the player watches, and returns how many hut blocks went. */
+    private int houses;
+
+    /** Places a village house, drops a medium missile on its middle, and returns {blocks destroyed, blocks it had}. */
+    private int[] strikeHouse(ClientGameTestContext context, TestServerContext server, String house, int x) {
+        int z = 40;
+        server.runCommand("tp @p " + x + " -59 " + (z - 20) + " 0 5");
+        context.waitTicks(40);
+        server.runCommand(String.format("place template minecraft:village/%s %d -60 %d", house, x, z));
+        context.waitTicks(20);
+        int before = server.computeOnServer(s -> countHouse(s.overworld(), x, z));
+        int blasts = MissileBlastRenderer.blastsStarted();
+        server.runOnServer(s -> {
+            ServerLevel level = s.overworld();
+            Entity owner = net.minecraft.world.entity.EntityType.MARKER.create(level, net.minecraft.world.entity.EntitySpawnReason.COMMAND);
+            owner.setPos(x + 4.5D, -30.0D, z + 4.5D);
+            level.addFreshEntity(owner);
+            // Into the middle of the front wall at head height, as a shot from a helicopter comes in.
+            int minX = Integer.MAX_VALUE;
+            int maxX = Integer.MIN_VALUE;
+            for (BlockPos pos : BlockPos.betweenClosed(x - 2, -59, z - 2, x + 16, -45, z + 16)) {
+                if (!level.getBlockState(pos).isAir()) {
+                    minX = Math.min(minX, pos.getX());
+                    maxX = Math.max(maxX, pos.getX());
+                }
+            }
+            level.addFreshEntity(new VehicleMissileEntity(level, owner, null, new Vec3((minX + maxX + 1) / 2.0D, -57.5D, z - 14.0D),
+                    new Vec3(0.0D, 0.0D, 1.5D), Reference.id("vehicle_9m120_passenger_missile")));
+        });
+        context.waitFor(mc -> MissileBlastRenderer.blastsStarted() > blasts, 100);
+        context.waitTicks(40);
+        context.takeScreenshot("missile_house_" + house.substring(house.lastIndexOf('/') + 1));
+        int after = server.computeOnServer(s -> countHouse(s.overworld(), x, z));
+        return new int[]{before - after, before};
+    }
+
+    private static int countHouse(ServerLevel level, int x, int z) {
+        int count = 0;
+        for (BlockPos pos : BlockPos.betweenClosed(x - 2, -59, z - 2, x + 16, -45, z + 16)) {
+            var state = level.getBlockState(pos);
+            if (!state.isAir() && !state.is(Blocks.FIRE)) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    /**
+     * Builds a hut 40 blocks ahead, drops the missile on it while the player watches, and returns how many blocks went:
+     * of the hut and of the ground around and under it (a medium missile alone levels most of the hut).
+     */
     private int strike(ClientGameTestContext context, TestServerContext server, String weapon, int x, String label) {
         int z = 40;
         server.runCommand("tp @p " + x + " -59 " + (z - 34) + " 0 2");
@@ -85,9 +141,9 @@ public class MissileBlastClientGameTest implements FabricClientGameTest {
 
     private static int countHut(ServerLevel level, int x, int z) {
         int count = 0;
-        for (BlockPos pos : BlockPos.betweenClosed(x - 4, -61, z - 4, x + 4, -57, z + 4)) {
+        for (BlockPos pos : BlockPos.betweenClosed(x - 16, -63, z - 16, x + 16, -57, z + 16)) {
             var state = level.getBlockState(pos);
-            if (state.is(Blocks.COBBLESTONE) || state.is(Blocks.OAK_PLANKS)) {
+            if (!state.isAir() && !state.is(Blocks.FIRE)) {
                 count++;
             }
         }
