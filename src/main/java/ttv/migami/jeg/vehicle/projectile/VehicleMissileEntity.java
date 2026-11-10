@@ -311,6 +311,7 @@ public final class VehicleMissileEntity extends Entity {
             this.level().explode(this, null, this.blockBreakingCalculator(), this.getX(), this.getY(), this.getZ(),
                     explosionPower, incendiary, ExplosionInteraction.MOB, ParticleTypes.SMOKE, ParticleTypes.SMOKE,
                     WeightedList.of(), Holder.direct(SoundEvents.EMPTY));
+            DistantTerrainRefresh.afterBlast();
             if (incendiary) {
                 this.igniteSurroundings(serverLevel);
             }

@@ -1055,6 +1055,7 @@ public class BulletEntity extends Projectile {
                     spawnCustomExplosionEffects((ServerLevel) this.level(), this.position(), id);
                     this.level().explode(this, null, blocks, this.getX(), this.getY(), this.getZ(), explosionPower, false, ExplosionInteraction.TNT);
                 }
+                ttv.migami.jeg.vehicle.projectile.DistantTerrainRefresh.afterBlast();
                 if (id.equals(ROCKET_LAUNCHER_ID)) {
                     applyRocketBlastDamage(owner, directHitVehicle);
                 } else if (isVehicleRocket(id)) {
@@ -1092,6 +1093,7 @@ public class BulletEntity extends Projectile {
                         ? ExplosionInteraction.TNT
                         : ExplosionInteraction.NONE;
                 this.level().explode(this, pos.x, pos.y, pos.z, vehicleCannonExplosionPower(id), interaction);
+                ttv.migami.jeg.vehicle.projectile.DistantTerrainRefresh.afterBlast();
 
                 if (result instanceof EntityHitResult entityHit) {
                     Entity hitEntity = entityHit.getEntity();

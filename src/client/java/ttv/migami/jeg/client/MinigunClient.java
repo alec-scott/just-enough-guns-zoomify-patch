@@ -11,7 +11,13 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.Mth;
+import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.HumanoidArm;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.phys.Vec3;
+import ttv.migami.jeg.client.render.gun.GunMuzzleTracker;
+import ttv.migami.jeg.item.GunItem;
 import ttv.migami.jeg.Reference;
 import ttv.migami.jeg.gun.MinigunSpin;
 import ttv.migami.jeg.init.ModSounds;
@@ -27,6 +33,15 @@ public final class MinigunClient {
     private static final float WHIR_MIN_PITCH = 0.55F;
     // Below this the barrels are as good as stopped, so starting again plays the full charge-up.
     private static final float RESTART_FROM_STOPPED = 0.15F;
+    private static final float VENT_VOLUME = 0.6F;
+    /** The hiss dies away over this many ticks when the cooling ends before the sample does. */
+    private static final int VENT_FADE_TICKS = 6;
+    /** Puffs of gas a cooling gun lets off each tick. */
+    private static final int VENT_PUFFS_PER_TICK = 3;
+    /** The gas leaves the barrels up to this far (blocks) behind the muzzle. */
+    private static final double VENT_BEHIND_MUZZLE = 0.3D;
+    /** Puffs of vented gas spawned so far, for checks. */
+    public static int ventPuffs;
     private static final Map<Integer, Barrels> BARRELS = new HashMap<>();
 
     private MinigunClient() {}
@@ -44,10 +59,13 @@ public final class MinigunClient {
         Audio audio = Audio.SILENT;
         MinigunSound loop;
         MinigunSound oneShot;
+        /** The hiss of barrels being run cool (the reload key), while it lasts. */
+        MinigunSound vent;
     }
 
     private static final class MinigunSound extends AbstractTickableSoundInstance {
         private final Entity entity;
+        private float fadePerTick;
 
         MinigunSound(SoundEvent event, Entity entity, boolean looping, float volume) {
             super(event, SoundSource.PLAYERS, SoundInstance.createUnseededRandom());
@@ -70,11 +88,26 @@ public final class MinigunClient {
             this.stop();
         }
 
+        /** Dies away over the given number of ticks, then stops. */
+        void fadeOut(int ticks) {
+            if (this.fadePerTick <= 0.0F) {
+                this.fadePerTick = this.volume / ticks;
+            }
+        }
+
         @Override
         public void tick() {
             if (this.entity.isRemoved()) {
                 this.stop();
                 return;
+            }
+            if (this.fadePerTick > 0.0F) {
+                this.volume -= this.fadePerTick;
+                if (this.volume <= 0.0F) {
+                    this.volume = 0.0F;
+                    this.stop();
+                    return;
+                }
             }
             this.follow();
         }
@@ -127,6 +160,9 @@ public final class MinigunClient {
             Entity entity = minecraft.level.getEntity(entry.getKey());
             if (entity == null || entity.isRemoved()) {
                 haltAll(minecraft, barrels);
+                if (barrels.vent != null) {
+                    barrels.vent.halt();
+                }
                 iterator.remove();
                 continue;
             }
@@ -148,6 +184,7 @@ public final class MinigunClient {
                 barrels.angleO -= 360.0F;
             }
             tickAudio(minecraft, entity, barrels);
+            tickVent(minecraft, entity, barrels);
             if (!barrels.wanted && barrels.spin <= 0.0F && barrels.audio == Audio.SILENT
                     && (barrels.oneShot == null || barrels.oneShot.isStopped() || !minecraft.getSoundManager().isActive(barrels.oneShot))) {
                 iterator.remove();
@@ -190,6 +227,67 @@ public final class MinigunClient {
         if (barrels.audio == Audio.WHIR && barrels.loop != null) {
             barrels.loop.setPitch(Mth.lerp(barrels.spin * barrels.spin, WHIR_MIN_PITCH, 1.0F));
         }
+    }
+
+    /**
+     * A minigun being run cool on the reload key hisses and lets gas off its barrels. Read off the held gun, which
+     * every client is sent, so it shows on other players as well.
+     */
+    private static void tickVent(Minecraft minecraft, Entity entity, Barrels barrels) {
+        boolean main = false;
+        boolean off = false;
+        if (entity instanceof LivingEntity living) {
+            main = GunItem.isRapidCooling(living.getMainHandItem());
+            off = MinigunSpin.isDualWielding(living) && GunItem.isRapidCooling(living.getOffhandItem());
+        }
+        if (!main && !off) {
+            if (barrels.vent != null) {
+                barrels.vent.fadeOut(VENT_FADE_TICKS);
+                barrels.vent = null;
+            }
+            return;
+        }
+        if (barrels.vent == null) {
+            barrels.vent = play(minecraft, "item.minigun.vent", entity, false, VENT_VOLUME);
+        }
+        LivingEntity living = (LivingEntity) entity;
+        boolean firstPerson = entity == minecraft.player && minecraft.options.getCameraType().isFirstPerson();
+        if (main) {
+            puff(minecraft, living, living.getMainArm(), firstPerson);
+        }
+        if (off) {
+            puff(minecraft, living, living.getMainArm().getOpposite(), firstPerson);
+        }
+    }
+
+    /** White gas out of both sides of the barrels of the gun in that arm, where it was last drawn, curling upwards. */
+    private static void puff(Minecraft minecraft, LivingEntity living, HumanoidArm arm, boolean firstPerson) {
+        Vec3 muzzle = GunMuzzleTracker.muzzle(living.getId(), firstPerson, arm);
+        if (muzzle == null) {
+            // Not on screen.
+            return;
+        }
+        Vec3 look = living.getViewVector(1.0F);
+        Vec3 side = look.cross(new Vec3(0.0D, 1.0D, 0.0D));
+        side = side.lengthSqr() < 1.0E-4D ? new Vec3(1.0D, 0.0D, 0.0D) : side.normalize();
+        Vec3 moving = living.getDeltaMovement();
+        var random = living.getRandom();
+        for (int i = 0; i < VENT_PUFFS_PER_TICK; i++) {
+            double out = (random.nextBoolean() ? 1.0D : -1.0D) * (0.03D + random.nextDouble() * 0.04D);
+            Vec3 from = muzzle.subtract(look.scale(VENT_BEHIND_MUZZLE * random.nextDouble()));
+            minecraft.level.addParticle(ParticleTypes.WHITE_SMOKE, from.x, from.y, from.z,
+                    moving.x + side.x * out + look.x * 0.02D,
+                    0.02D + random.nextDouble() * 0.03D,
+                    moving.z + side.z * out + look.z * 0.02D);
+            ventPuffs++;
+        }
+    }
+
+    /** Whether the hiss of barrels being run cool is playing for this entity. */
+    public static boolean venting(int entityId) {
+        Barrels barrels = BARRELS.get(entityId);
+        return barrels != null && barrels.vent != null && !barrels.vent.isStopped()
+                && Minecraft.getInstance().getSoundManager().isActive(barrels.vent);
     }
 
     private static MinigunSound play(Minecraft minecraft, String key, Entity entity, boolean looping, float volume) {

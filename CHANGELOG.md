@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.7.2+mc26.1.2.yftm.15 - 2026-11-10
+
+### Added
+- Minigun rapid cool-down: press the reload key (R) with a hot minigun and the barrels spin without firing, hissing and venting white gas, until the gun is cold. From fully overheated that takes about 3.5 seconds; left alone in the hand it takes over a minute. The gun cannot fire meanwhile; press the key again to stop part way. Putting the gun away stops it, and with a minigun in each hand both cool on one press. Coolant in the off hand still takes the key first. Other players see the gas and hear the hiss.
+- New sound: the vent hiss, mixed from two CC0 Freesound recordings (365071 by sniperous, 234782 by wubitog); see `assets/jeg/sounds/item/minigun/VENT_CREDITS.md`.
+
+### Fixed
+- The crater of a missile, helicopter rocket or cannon shell in terrain beyond the view distance (drawn by Voxy from Voxy Server Side) shows about 4 seconds after the blast, under the smoke, instead of up to 14. Voxy Server Side only told players about changed terrain on its 10-second timer; for 12 seconds after a blast the change now goes out as soon as it is noted, at most once a second. The server config is untouched. This reaches into Voxy Server Side 0.19.0 internals; if a later version differs it logs one warning and the crater arrives on the usual timer.
+
 ## 1.7.2+mc26.1.2.yftm.14 - 2026-11-10
 
 ### Fixed

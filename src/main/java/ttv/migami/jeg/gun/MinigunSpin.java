@@ -101,14 +101,15 @@ public final class MinigunSpin {
         ItemStack held = player.getMainHandItem();
         boolean holding = isMinigun(held) && !GunItem.isDrawOperationLocked(held);
         if (state == null) {
-            if (!holding || !NetworkHandler.isAiming(player)) {
+            if (!holding || !(NetworkHandler.isAiming(player) || GunItem.isRapidCooling(held))) {
                 return;
             }
             state = new State();
             STATES.put(player.getUUID(), state);
         }
 
-        boolean wanted = holding && (state.trigger || NetworkHandler.isAiming(player));
+        // Rapid cooling runs the barrels without firing.
+        boolean wanted = holding && (state.trigger || NetworkHandler.isAiming(player) || GunItem.isRapidCooling(held));
         if (wanted) {
             state.spin = Math.min(1.0F, state.spin + 1.0F / SPOOL_TICKS);
         } else {

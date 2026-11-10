@@ -282,6 +282,8 @@ public class GunItem extends Item {
     private static final int OVERHEAT_COOL_NUMERATOR_HELD = 2;
     private static final int OVERHEAT_COOL_NUMERATOR_IDLE = 4;
     private static final int OVERHEAT_COOL_DENOMINATOR = 5;
+    /** Heat a minigun sheds each tick while its barrels are run dry: fully overheated to cold in 3.5 seconds. */
+    private static final int RAPID_COOL_PER_TICK = 4;
 
     private final GunStats stats;
 
@@ -595,6 +597,47 @@ public class GunItem extends Item {
         return stack.getItem() instanceof GunItem gun
                 && gun.usesOverheatMechanic()
                 && getTrackedHeat(stack) > 0;
+    }
+
+    /** A gun that can shed its heat fast on the reload key: the minigun, which has nothing to reload. */
+    public static boolean canRapidCool(ItemStack stack) {
+        return stack.getItem() instanceof GunItem gun
+                && isMinigunWeapon(gun.getStats().id())
+                && getTrackedHeat(stack) > 0;
+    }
+
+    public static boolean isRapidCooling(ItemStack stack) {
+        return stack.getOrDefault(ModDataComponents.GUN_RAPID_COOLING.get(), false);
+    }
+
+    /**
+     * The reload key on a minigun: spins the barrels without firing so the air cools them, far faster than leaving the
+     * gun alone. It cannot fire until it is cold or the key is pressed again. With one in each hand, both cool.
+     *
+     * @return whether a gun started or stopped cooling
+     */
+    public static boolean toggleRapidCooling(Player player) {
+        ItemStack main = player.getMainHandItem();
+        ItemStack off = player.getOffhandItem();
+        boolean dual = MinigunSpin.isDualWielding(player);
+        if (isRapidCooling(main) || (dual && isRapidCooling(off))) {
+            main.remove(ModDataComponents.GUN_RAPID_COOLING.get());
+            if (dual) {
+                off.remove(ModDataComponents.GUN_RAPID_COOLING.get());
+            }
+            return true;
+        }
+        boolean started = false;
+        if (canRapidCool(main) && !isDrawOperationLocked(main) && !isCoolingWithWater(main)) {
+            main.set(ModDataComponents.GUN_RAPID_COOLING.get(), true);
+            started = true;
+        }
+        if (dual && canRapidCool(off) && !isDrawOperationLocked(off) && !isCoolingWithWater(off)) {
+            off.set(ModDataComponents.GUN_RAPID_COOLING.get(), true);
+            started = true;
+        }
+        // The hiss and the gas are the client (MinigunClient), going by the flag on the gun.
+        return started;
     }
 
     public static boolean isCoolingWithWater(ItemStack stack) {
@@ -955,6 +998,9 @@ public class GunItem extends Item {
             clearReloadVisualState(stack);
         }
 
+        if (isRapidCooling(stack)) {
+            return false;
+        }
         if (usesOverheatMechanic() && isOverheated(stack)) {
             if (level.isClientSide()) {
                 HudMessageHelper.showActionBar(player, Component.translatable("item.jeg.gun.overheated"));
@@ -2436,6 +2482,19 @@ public class GunItem extends Item {
         }
 
         boolean heldInHand = selected;
+
+        if (isRapidCooling(stack)) {
+            int heat = getTrackedHeat(stack) - RAPID_COOL_PER_TICK;
+            if (heldInHand && !isCoolingWithWater(stack) && heat > 0) {
+                setTrackedHeat(stack, heat);
+                return;
+            }
+            // Cold, put away, or handed over to a coolant bottle.
+            stack.remove(ModDataComponents.GUN_RAPID_COOLING.get());
+            if (heldInHand && heat <= 0) {
+                setTrackedHeat(stack, 0);
+            }
+        }
 
         if (isCoolingWithWater(stack)) {
             int remainingCooling = stack.getOrDefault(ModDataComponents.GUN_WATER_COOLING_TICKS_REMAINING.get(), 0);

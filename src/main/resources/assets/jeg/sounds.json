@@ -1641,6 +1641,15 @@
       }
     ]
   },
+  "item.minigun.vent": {
+    "subtitle": "subtitle.jeg.minigun.vent",
+    "sounds": [
+      {
+        "name": "jeg:item/minigun/vent",
+        "attenuation_distance": 24
+      }
+    ]
+  },
   "item.minigun.fire_loop": {
     "subtitle": "subtitle.jeg.fire",
     "sounds": [

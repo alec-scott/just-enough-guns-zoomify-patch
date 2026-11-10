@@ -32,6 +32,16 @@ public final class ModDataComponents {
                     .build()
     );
 
+    /** Set while a minigun's barrels are being run dry to shed heat (see GunItem#toggleRapidCooling). */
+    public static final DeferredHolder<DataComponentType<?>, DataComponentType<Boolean>> GUN_RAPID_COOLING = REGISTER.register(
+            "gun_rapid_cooling",
+            () -> DataComponentType.<Boolean>builder()
+                    .persistent(Codec.BOOL)
+                    .networkSynchronized(ByteBufCodecs.BOOL)
+                    .ignoreSwapAnimation()
+                    .build()
+    );
+
     public static final DeferredHolder<DataComponentType<?>, DataComponentType<Float>> ARMORED_HARNESS_PLATING = REGISTER.register(
             "armored_harness_plating",
             () -> DataComponentType.<Float>builder()

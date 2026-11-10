@@ -279,6 +279,10 @@ public final class NetworkHandler {
         }
 
         ItemStack stack = player.getItemInHand(payload.hand());
+        if (payload.hand() == InteractionHand.MAIN_HAND && MinigunSpin.isMinigun(stack)) {
+            GunItem.toggleRapidCooling(player);
+            return;
+        }
         if (payload.hand() == InteractionHand.MAIN_HAND && stack.getItem() instanceof MagazineItem magazine) {
             boolean notify = magazine.getLoadPromptMessage(stack, player.getOffhandItem()) == null;
             boolean loaded = magazine.tryLoad(player.level(), player, stack, player.getOffhandItem(), notify);

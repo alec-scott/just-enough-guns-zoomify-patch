@@ -152,7 +152,7 @@ Just Enough Guns New is a fork and modern Fabric/NeoForge port of the original J
 - Just Enough Guns New is an independent port project and is not affiliated with, endorsed by, or an official addon for Just Enough Guns or Superb Warfare.
 - Just Enough Guns New porting and maintenance is handled by maoruiq.
 - Contributor: **realorangewool**, who provided the Fabric 26.1.2 backport.
-- Helicopter recordings: AH-6 startup/flight uses [Freesound 410604 by Paul368](https://freesound.org/people/Paul368/sounds/410604/) under CC BY 4.0; MI-28 startup/flight uses [Freesound 81454 by joly1](https://freesound.org/people/joly1/sounds/81454/) under CC0. Adaptation details are included in `assets/jeg/sounds/vehicle/HELICOPTER_CREDITS.md`.
+- Helicopter recordings: AH-6 startup/flight uses [Freesound 410604 by Paul368](https://freesound.org/people/Paul368/sounds/410604/) under CC BY 4.0; MI-28 startup/flight uses [Freesound 81454 by joly1](https://freesound.org/people/joly1/sounds/81454/) under CC0. Adaptation details are included in `assets/jeg/sounds/vehicle/HELICOPTER_CREDITS.md`. The minigun vent hiss is mixed from [Freesound 365071 by sniperous](https://freesound.org/people/sniperous/sounds/365071/) and [Freesound 234782 by wubitog](https://freesound.org/people/wubitog/sounds/234782/), both CC0; details in `assets/jeg/sounds/item/minigun/VENT_CREDITS.md`.
 - Project **code** based on Just Enough Guns is licensed under GPL-3.0. Original JEG assets remain ARR under authorized use as noted above. SBW-derived assets remain under the SBW terms noted above.
 
 Suggestions and bug reports are welcome. Clear reproduction steps, Minecraft version, loader, mod version, dependency versions, and crash logs help much more than vague reports.

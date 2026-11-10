@@ -677,6 +677,9 @@ public final class FabricClientBootstrap {
         if (gun.usesOverheatMechanic() && gun.getOverheatPercent(stack) >= 100) {
             return false;
         }
+        if (GunItem.isRapidCooling(stack)) {
+            return false;
+        }
         return hasShootableAmmo(player, stack, gun);
     }
 
@@ -788,8 +791,12 @@ public final class FabricClientBootstrap {
                 guiGraphics.blit(RenderPipelines.GUI_TEXTURED, OVERHEAT_TEXTURE, x, y, 0.0F, TIMER_BAR_HEIGHT, fill, TIMER_BAR_HEIGHT, TIMER_BAR_WIDTH, TIMER_BAR_HEIGHT * 2);
             }
 
-            if (gun.shouldShowWaterCoolingPrompt(held)) {
-                promptText = Component.translatable("jeg.water_cooling.prompt");
+            if (GunItem.isRapidCooling(held)) {
+                promptText = Component.translatable("jeg.rapid_cooling.active", KeyBindings.RELOAD.getTranslatedKeyMessage());
+            } else if (gun.shouldShowWaterCoolingPrompt(held)) {
+                promptText = GunItem.canRapidCool(held)
+                        ? Component.translatable("jeg.rapid_cooling.prompt", KeyBindings.RELOAD.getTranslatedKeyMessage())
+                        : Component.translatable("jeg.water_cooling.prompt");
             }
 
             ItemStack offhand = player.getOffhandItem();
@@ -907,16 +914,20 @@ public final class FabricClientBootstrap {
             ClientNetworkHandler.sendHoldFire(InteractionHand.MAIN_HAND, attackDown);
             rocketHoldStartSent = attackDown;
         }
-        boolean canFire = !(gun.usesOverheatMechanic() && gun.getOverheatPercent(stack) >= 100) && hasShootableAmmo(player, stack, gun);
+        boolean cooling = GunItem.isRapidCooling(stack);
+        boolean canFire = !cooling && !(gun.usesOverheatMechanic() && gun.getOverheatPercent(stack) >= 100)
+                && hasShootableAmmo(player, stack, gun);
         // A second minigun in the off hand spins with the first and fires on the same trigger, as long as it has the
         // heat to spare; each gun overheats on its own.
         ItemStack offhand = player.getOffhandItem();
         boolean offhandCanFire = MinigunSpin.isDualWielding(player)
                 && !GunItem.isDrawOperationLocked(offhand)
                 && offhand.getItem() instanceof GunItem offhandGun
+                && !GunItem.isRapidCooling(offhand)
                 && !(offhandGun.usesOverheatMechanic() && offhandGun.getOverheatPercent(offhand) >= 100)
                 && hasShootableAmmo(player, offhand, offhandGun);
-        boolean spunUp = MinigunClient.updateLocal(player, attackDown || aiming, attackDown && (canFire || offhandCanFire));
+        // Rapid cooling runs the barrels without firing.
+        boolean spunUp = MinigunClient.updateLocal(player, attackDown || aiming || cooling, attackDown && (canFire || offhandCanFire));
         if (!attackDown) {
             nextVisualShotTickMain = 0L;
             GunRecoilHandler.releaseTrigger();
