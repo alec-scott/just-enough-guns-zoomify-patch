@@ -77,7 +77,8 @@ Vehicles in the Walkürenritt update are built through vehicle assembly progress
 | Fire the active vehicle weapon | Left Click |
 | Aim, lock, zoom, or use the secondary vehicle function where supported | Right Click |
 | Reload the active vehicle weapon where supported | R |
-| Dismount | Shift |
+| Helicopter climb / descend | Space / Left Ctrl |
+| Dismount (Shift does not leave a vehicle) | Left Alt |
 
 Vehicle behavior depends on the vehicle type and seat. Driver seats control movement, while weapon seats or co-pilot seats may control turrets, missiles, target locks, or defensive tools. Keep ammunition, repair tools, and charged support items in the vehicle inventory when the vehicle expects them, and watch the vehicle HUD for weapon state, reload timing, lock warnings, and damage feedback.
 

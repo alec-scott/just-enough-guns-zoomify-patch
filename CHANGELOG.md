@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.7.2+mc26.1.2.yftm.16 - 2026-11-11
+
+### Changed
+- Sneaking (Shift) no longer throws you out of a JEG vehicle. Vanilla ejects a rider as soon as they sneak, which made Shift an eject button in a helicopter. Use the Vehicle Dismount key (Left Alt by default) to get out; other mods' and vanilla vehicles are unchanged.
+- Helicopters climb faster (0.5 blocks/tick, was 0.4) and descend faster (0.55, was 0.45). The landing assist now starts at 15 blocks (was 12) so touchdowns stay gentle.
+
 ## 1.7.2+mc26.1.2.yftm.15 - 2026-11-10
 
 ### Added

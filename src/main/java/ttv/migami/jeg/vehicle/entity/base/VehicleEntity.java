@@ -293,8 +293,8 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     private static final double TRACK_PIVOT_TURN_RATE = 6.0D;
     private static final double TRACK_PIVOT_POWER_THRESHOLD = 0.05D;
     // Player pilots fly on demand: holding ascend/descend sets a vertical speed, releasing holds altitude.
-    private static final double HELICOPTER_CLIMB_SPEED = 0.4D;
-    private static final double HELICOPTER_COMMANDED_DESCENT_SPEED = 0.45D;
+    private static final double HELICOPTER_CLIMB_SPEED = 0.5D;
+    private static final double HELICOPTER_COMMANDED_DESCENT_SPEED = 0.55D;
     /** Fastest the hull may rise: a full climb plus the balloon of a flare at speed (WEIGHTY_FLARE_BALLOON). */
     private static final double HELICOPTER_MAX_RISE_SPEED = HELICOPTER_CLIMB_SPEED + 0.15D;
     /**
@@ -305,7 +305,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     private static final double HELICOPTER_VERTICAL_RESPONSE = 0.2D;
     // Landing assist: below this height a commanded descent slows down so the skids touch down gently. Tall enough for
     // the heaviest airframe to bleed a full-speed descent off below HELICOPTER_SAFE_DESCENT_SPEED before it touches.
-    private static final double HELICOPTER_LANDING_ASSIST_ALTITUDE = 12.0D;
+    private static final double HELICOPTER_LANDING_ASSIST_ALTITUDE = 15.0D;
     private static final double HELICOPTER_TOUCHDOWN_SPEED = 0.05D;
     private static final double HELICOPTER_HOVER_POWER = 0.085D;
     private static final double HELICOPTER_CLIMB_POWER = 0.105D;

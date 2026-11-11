@@ -13,14 +13,14 @@ import ttv.migami.jeg.client.KeyBindings;
 import ttv.migami.jeg.vehicle.entity.base.VehicleEntity;
 
 /**
- * The AH-6 and Mi-28 climb on Space and come back down on the descend key from high up: both rates are brisk (0.4 and
- * 0.45 blocks a tick), the landing assist still brings the skids down gently enough to cost no health, and holding
+ * The AH-6 and Mi-28 climb on Space and come back down on the descend key from high up: both rates are brisk (0.5 and
+ * 0.55 blocks a tick), the landing assist still brings the skids down gently enough to cost no health, and holding
  * descend never sets off the descent warning.
  */
 public class HeliClimbDescentClientGameTest implements FabricClientGameTest {
     private static final Logger LOGGER = LoggerFactory.getLogger("jeg-gametest");
-    private static final double MIN_CLIMB = 0.37D;
-    private static final double MIN_SINK = 0.42D;
+    private static final double MIN_CLIMB = 0.46D;
+    private static final double MIN_SINK = 0.51D;
     private static final double SAFE_TOUCHDOWN = 0.35D;
 
     @Override

@@ -7,6 +7,7 @@
     "PhantomFinalizeSpawnMixin",
     "PillagerFinalizeSpawnMixin",
     "ServerGamePacketListenerImplMixin",
+    "PlayerVehicleSneakDismountMixin",
     "TargetGoalMixin",
     "NearestAttackableTargetGoalMixin",
     "GunnerSunBurnMixin",
