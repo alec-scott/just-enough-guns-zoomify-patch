@@ -69,6 +69,13 @@ public abstract class VehicleCameraMixin implements VehicleCameraHandler.Vehicle
         CameraType cameraType = minecraft.options.getCameraType();
         boolean detached = !cameraType.isFirstPerson();
         boolean thirdPersonReverse = cameraType.isMirrored();
+        if (detached && vehicle.isJetPodView(player)) {
+            // A jet's targeting pod is the same view in every camera mode.
+            Vec3 podPosition = vehicle.cameraPositionFor(player, partialTick);
+            this.jeg$setCameraRotation(vehicle.cameraRotationFor(player, partialTick));
+            this.setPosition(podPosition.x, podPosition.y, podPosition.z);
+            return;
+        }
         if (detached) {
             if (VehicleCameraHandler.isTailCameraActive(vehicle)) {
                 Vec3 position = vehicle.tailCameraPosition(partialTick);

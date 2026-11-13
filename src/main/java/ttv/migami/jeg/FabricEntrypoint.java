@@ -82,6 +82,8 @@ public final class FabricEntrypoint implements ModInitializer {
         ServerLifecycleEvents.SERVER_STARTED.register(server -> GunEvents.onServerStarted(new ServerStartedEvent(server)));
         ServerTickEvents.END_SERVER_TICK.register(server -> FactionEventTicker.onServerTick(new ServerTickEvent.Post(server)));
         ServerTickEvents.END_SERVER_TICK.register(server -> ttv.migami.jeg.vehicle.projectile.DistantTerrainRefresh.onServerTick());
+        ServerTickEvents.END_SERVER_TICK.register(ttv.migami.jeg.vehicle.projectile.SecondaryBlasts::onServerTick);
+        net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents.SERVER_STOPPING.register(server -> ttv.migami.jeg.vehicle.projectile.SecondaryBlasts.clear());
 
         // Bridge commonly used event-style handlers used by shared code.
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {

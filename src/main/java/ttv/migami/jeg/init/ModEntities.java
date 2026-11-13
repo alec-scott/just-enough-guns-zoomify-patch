@@ -238,7 +238,7 @@ public final class ModEntities {
     public static final DeferredHolder<EntityType<?>, EntityType<ConfiguredVehicleEntity>> LAV150 = configuredVehicle("lav150", 2.8F, 3.1F);
     public static final DeferredHolder<EntityType<?>, EntityType<ConfiguredVehicleEntity>> SPEEDBOAT = configuredVehicle("speedboat", 3.0F, 2.0F);
     public static final DeferredHolder<EntityType<?>, EntityType<ConfiguredVehicleEntity>> AH6 = configuredVehicle("ah6", 2.4F, 2.9F);
-    public static final DeferredHolder<EntityType<?>, EntityType<ConfiguredVehicleEntity>> A10 = configuredVehicle("a10", 2.8F, 1.0F);
+    public static final DeferredHolder<EntityType<?>, EntityType<ConfiguredVehicleEntity>> A10 = configuredVehicle("a10", 3.2F, 3.4F);
     public static final DeferredHolder<EntityType<?>, EntityType<ConfiguredVehicleEntity>> BMP2 = configuredVehicle("bmp2", 4.4F, 3.0F);
     public static final DeferredHolder<EntityType<?>, EntityType<ConfiguredVehicleEntity>> MI28 = configuredVehicle("mi28", 3.0F, 4.5F);
     public static final DeferredHolder<EntityType<?>, EntityType<ConfiguredVehicleEntity>> TOM6 = configuredVehicle("tom6", 2.2F, 1.5F);
@@ -250,7 +250,7 @@ public final class ModEntities {
             "vehicle_decoy",
             () -> EntityType.Builder.<VehicleDecoyEntity>of(VehicleDecoyEntity::new, MobCategory.MISC)
                     .sized(0.35F, 0.35F)
-                    .clientTrackingRange(8)
+                    .clientTrackingRange(16)
                     .updateInterval(1)
                     .build(entityKey("vehicle_decoy"))
     );

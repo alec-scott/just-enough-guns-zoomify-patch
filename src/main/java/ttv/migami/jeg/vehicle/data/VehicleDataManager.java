@@ -223,7 +223,10 @@ public final class VehicleDataManager {
                 getFloat(object, "engine_sound_volume", fallback.engineSoundVolume()),
                 getDouble(object, "player_max_speed", fallback.playerMaxSpeed()),
                 getDouble(object, "player_acceleration", fallback.playerAcceleration()),
-                getDouble(object, "player_weight", fallback.playerWeight())
+                getDouble(object, "player_weight", fallback.playerWeight()),
+                getDouble(object, "stall_speed", fallback.stallSpeed()),
+                getDouble(object, "rotate_speed", fallback.rotateSpeed()),
+                getDouble(object, "max_dive_speed", fallback.maxDiveSpeed())
         );
     }
 

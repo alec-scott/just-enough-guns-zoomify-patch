@@ -69,7 +69,9 @@ public final class VehicleMissileEntity extends Entity {
             Reference.id("vehicle_9m120_driver_missile"), 0.45F,
             Reference.id("vehicle_9m120_passenger_missile"), 0.45F,
             Reference.id("vehicle_9m336_missile"), 0.45F,
-            Reference.id("vehicle_kh39_missile"), 0.2F
+            Reference.id("vehicle_kh39_missile"), 0.2F,
+            Reference.id("vehicle_agm65_missile"), 0.45F,
+            Reference.id("vehicle_agm65g_missile"), 0.2F
     );
     /** Incendiary warheads: the MI-28 pilot's 9M-120 sets the ground around the blast alight. */
     private static final Set<Identifier> INCENDIARY = Set.of(Reference.id("vehicle_9m120_driver_missile"));
@@ -81,6 +83,15 @@ public final class VehicleMissileEntity extends Entity {
     private int ownerId = -1;
     private int targetId = -1;
     private int directHitVehicleId = -1;
+    /** A spot to fly to, when launched at a point on the ground (a jet's targeting pod) with nothing there to lock. */
+    @Nullable
+    private Vec3 targetPoint;
+    /**
+     * Launched from a jet's targeting pod: while the pilot keeps looking through it the missile follows its crosshair,
+     * homing on a vehicle or creature under it, else the spot; once the pilot looks away it flies on to the last one.
+     */
+    private boolean podGuided;
+    private static final double POD_LOCK_RADIUS = 7.0D;
     private Identifier weaponId = Reference.id("vehicle_bmp2_missile");
     private final FarFlight farFlight = new FarFlight();
 
@@ -97,6 +108,37 @@ public final class VehicleMissileEntity extends Entity {
         this.entityData.set(DATA_WEAPON, weaponId.toString());
         this.setPos(position);
         this.setDeltaMovement(velocity);
+    }
+
+    public void setTargetPoint(Vec3 point) {
+        this.targetPoint = point;
+    }
+
+    public void setPodGuided() {
+        this.podGuided = true;
+    }
+
+    /** Follows the targeting pod's crosshair while the pilot still looks through it. */
+    private void followPod(VehicleMissileProfile profile, @Nullable Entity owner, @Nullable Entity ownerVehicle) {
+        if (!this.podGuided || !(owner instanceof LivingEntity shooter) || !(ownerVehicle instanceof VehicleEntity jet)) {
+            return;
+        }
+        Vec3 crosshair = jet.freshAimPoint(shooter);
+        if (crosshair == null) {
+            return;
+        }
+        this.targetPoint = crosshair;
+        Entity best = null;
+        double bestDistance = POD_LOCK_RADIUS * POD_LOCK_RADIUS;
+        for (Entity candidate : this.level().getEntities(this, new AABB(crosshair, crosshair).inflate(POD_LOCK_RADIUS),
+                candidate -> candidate.isAlive() && profile.canLock(candidate, shooter, jet))) {
+            double distance = candidate.position().add(0.0D, candidate.getBbHeight() * 0.5D, 0.0D).distanceToSqr(crosshair);
+            if (distance < bestDistance) {
+                bestDistance = distance;
+                best = candidate;
+            }
+        }
+        this.targetId = best == null ? -1 : best.getId();
     }
 
     @Override
@@ -158,9 +200,9 @@ public final class VehicleMissileEntity extends Entity {
         return false;
     }
 
-    /** The KH-39 is the big one: a larger body, motor and trail. */
+    /** The KH-39 and the A-10's AGM-65G are the big ones: a larger body, motor and trail. */
     public static boolean isHeavy(Identifier weaponId) {
-        return weaponId.getPath().contains("kh39");
+        return weaponId.getPath().contains("kh39") || weaponId.getPath().equals("vehicle_agm65g_missile");
     }
 
     /** The motor builds speed through the first moments of flight. */
@@ -196,6 +238,8 @@ public final class VehicleMissileEntity extends Entity {
         }
         Entity owner = this.ownerId < 0 ? null : this.level().getEntity(this.ownerId);
         Entity ownerVehicle = owner == null ? null : owner.getVehicle();
+        this.followPod(profile, owner, ownerVehicle);
+        target = this.currentTarget();
         boolean validTarget = target instanceof VehicleDecoyEntity
                 || (target != null && profile.canContinueTracking(target, owner, ownerVehicle) && !VehicleDecoyEntity.isSmokeBlockingTarget(target));
         if (profile.usesLockOn() && target != null && validTarget) {
@@ -209,6 +253,10 @@ public final class VehicleMissileEntity extends Entity {
                 }
                 this.explode();
             }
+        } else if (this.targetPoint != null) {
+            // Launched at a spot: straight for it.
+            Vec3 desired = this.targetPoint.subtract(this.position()).normalize().scale(profile.maxSpeed());
+            this.setDeltaMovement(this.getDeltaMovement().scale(1.0D - profile.turnRate()).add(desired.scale(profile.turnRate())));
         } else if (profile.usesWireGuidance() && owner instanceof LivingEntity livingOwner) {
             // Toward what the crosshair is on, where that is known; the camera is well away from the launcher.
             Vec3 aim = ownerVehicle instanceof VehicleEntity vehicle ? vehicle.freshAimPoint(livingOwner) : null;
@@ -315,6 +363,8 @@ public final class VehicleMissileEntity extends Entity {
             if (incendiary) {
                 this.igniteSurroundings(serverLevel);
             }
+            // What it hit cooks off around the crater (the A-10's Mavericks).
+            SecondaryBlasts.afterImpact(serverLevel, this.weaponId, this.position(), this.random);
             Entity ownerVehicle = owner == null ? null : owner.getVehicle();
             Vec3 explosionPos = this.position();
             for (VehicleEntity target : this.level().getEntitiesOfClass(VehicleEntity.class, this.getBoundingBox().inflate(profile.blastRadius()))) {

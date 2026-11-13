@@ -100,7 +100,10 @@ public final class BallisticProtection {
             case "vehicle_9m336_missile" -> 8.40F;
             case "vehicle_bmp2_missile" -> 10.80F;
             case "vehicle_9m120_driver_missile", "vehicle_9m120_passenger_missile" -> 11.80F;
-            case "vehicle_kh39_missile" -> 13.20F;
+            case "vehicle_kh39_missile", "vehicle_agm65g_missile" -> 13.20F;
+            case "vehicle_agm65_missile" -> 11.80F;
+            // 30 mm armour-piercing incendiary: through the BMP-2's and LAV-150's armour.
+            case "vehicle_gau8_cannon" -> 10.50F;
             default -> -1.0F;
         };
     }

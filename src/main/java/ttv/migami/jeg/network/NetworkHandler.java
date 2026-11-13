@@ -499,7 +499,8 @@ public final class NetworkHandler {
                 vehicle.getDeltaMovement().z,
                 vehicle.getYRot(),
                 vehicle.getXRot(),
-                forceApply
+                forceApply,
+                vehicle.roll()
         ));
     }
 

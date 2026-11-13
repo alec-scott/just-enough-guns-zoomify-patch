@@ -103,11 +103,26 @@ public final class VehicleHudOverlay {
         boolean focusedSight = isFocusedVehicleSight(vehicle);
         renderLandVehicleStatus(guiGraphics, minecraft, vehicle);
         if (vehicle.hasVehicleWeapons() && vehicle.canPassengerUseSelectedVehicleWeapon(minecraft.player)) {
-            renderReticle(guiGraphics, vehicle);
+            boolean jetPilot = vehicle.isJet() && vehicle.getControllingPassenger() == minecraft.player;
+            // A jet's guns are fixed: its marker sits where the nose points and banks with the jet. Zoomed (the targeting
+            // pod) only the pod's reticle shows: where the missiles go.
+            boolean pod = vehicle.isJetPodView(minecraft.player);
+            if (jetPilot && pod) {
+                renderPodCamera(guiGraphics, minecraft, vehicle);
+            } else if (!jetPilot) {
+                renderReticle(guiGraphics, vehicle);
+            }
+            if (jetPilot && !pod) {
+                renderJetGunMarker(guiGraphics, minecraft, vehicle);
+            }
         }
         renderPassengerInfo(guiGraphics, minecraft, vehicle);
         renderWeaponSelector(guiGraphics, minecraft, vehicle);
-        renderSpeedIndicator(guiGraphics, minecraft, vehicle);
+        if (vehicle.isJet()) {
+            renderJetInstruments(guiGraphics, minecraft, vehicle);
+        } else {
+            renderSpeedIndicator(guiGraphics, minecraft, vehicle);
+        }
         renderVehicleWarning(guiGraphics, minecraft, vehicle);
         boolean showCompactVehicleInfo = !focusedSight || vehicle.vehicleData().defaults().vehicleType() == VehicleType.BOAT;
         if (!showCompactVehicleInfo) {
@@ -143,7 +158,10 @@ public final class VehicleHudOverlay {
                 Component ammo = vehicleUsesLoadedAmmo(vehicle, minecraft.player)
                         ? vehicleAmmoComponent(vehicle, minecraft.player)
                         : Component.translatable("hud.jeg.vehicle.weapon", Component.translatable("item." + selectedWeaponId.getNamespace() + "." + selectedWeaponId.getPath()), String.valueOf(vehicle.selectedVehicleWeaponAmmo(minecraft.player)));
-                renderSelectedWeaponIcon(guiGraphics, vehicle, minecraft.player, width / 2 - 128, lineY - 4);
+                if (!vehicle.isJet()) {
+                    // A jet's weapon list (right) already shows each weapon's icon.
+                    renderSelectedWeaponIcon(guiGraphics, vehicle, minecraft.player, width / 2 - 128, lineY - 4);
+                }
                 guiGraphics.text(minecraft.font, ammo, (width - minecraft.font.width(ammo)) / 2, lineY, 0xFFFFDD88);
                 lineY += 11;
                 if (vehicle.selectedVehicleWeaponReloading(minecraft.player)) {
@@ -199,6 +217,9 @@ public final class VehicleHudOverlay {
             case "vehicle_20mm_cannon" -> WEAPON_ICON_CANNON_20MM;
             case "vehicle_30mm_cannon" -> Reference.id("textures/overlay/vehicle/weapon/icons/cannon_30mm.png");
             case "vehicle_coax_machine_gun", "light_machine_gun" -> WEAPON_ICON_COAX_762;
+            case "vehicle_gau8_cannon" -> Reference.id("textures/overlay/vehicle/weapon/icons/cannon_30mm.png");
+            case "vehicle_agm65_missile" -> Reference.id("textures/overlay/vehicle/weapon/icons/agm_65d.png");
+            case "vehicle_agm65g_missile" -> Reference.id("textures/overlay/vehicle/weapon/icons/agm_65g.png");
             case "vehicle_70mm_rocket", "vehicle_80mm_rocket" -> Reference.id("textures/overlay/vehicle/weapon/icons/small_rocket.png");
             case "vehicle_bmp2_missile" -> Reference.id("textures/overlay/vehicle/weapon/icons/missile_9m113.png");
             case "vehicle_9m120_driver_missile", "vehicle_9m120_passenger_missile" -> Reference.id("textures/overlay/vehicle/weapon/icons/missile_9m120.png");
@@ -329,6 +350,9 @@ public final class VehicleHudOverlay {
             case "vehicle_20mm_cannon" -> WEAPON_ICON_CANNON_20MM;
             case "vehicle_30mm_cannon" -> Reference.id("textures/overlay/vehicle/weapon/icons/cannon_30mm.png");
             case "vehicle_coax_machine_gun", "light_machine_gun" -> WEAPON_ICON_COAX_762;
+            case "vehicle_gau8_cannon" -> Reference.id("textures/overlay/vehicle/weapon/icons/cannon_30mm.png");
+            case "vehicle_agm65_missile" -> Reference.id("textures/overlay/vehicle/weapon/icons/agm_65d.png");
+            case "vehicle_agm65g_missile" -> Reference.id("textures/overlay/vehicle/weapon/icons/agm_65g.png");
             case "vehicle_70mm_rocket", "vehicle_80mm_rocket" -> Reference.id("textures/overlay/vehicle/weapon/icons/small_rocket.png");
             case "vehicle_bmp2_missile" -> Reference.id("textures/overlay/vehicle/weapon/icons/missile_9m113.png");
             case "vehicle_9m120_driver_missile", "vehicle_9m120_passenger_missile" -> Reference.id("textures/overlay/vehicle/weapon/icons/missile_9m120.png");
@@ -393,6 +417,95 @@ public final class VehicleHudOverlay {
         guiGraphics.text(minecraft.font, speed, x, y, 0xFF66FF00);
     }
 
+    /**
+     * The jet's gun marker: where its rounds go, 250 blocks down the nose (with the jet's own speed on them), drawn where
+     * that point is on screen and turned with the jet's bank against the view. The chase camera lags the jet a little, so
+     * in a turn the marker swings ahead of the screen's centre with the nose.
+     */
+    private static void renderJetGunMarker(GuiGraphicsExtractor guiGraphics, Minecraft minecraft, VehicleEntity jet) {
+        float partialTick = minecraft.getDeltaTracker().getGameTimeDeltaPartialTick(false);
+        net.minecraft.client.Camera camera = minecraft.gameRenderer.getMainCamera();
+        net.minecraft.world.phys.Vec3 point = jet.jetGunAimPoint(partialTick, 250.0D);
+        net.minecraft.world.phys.Vec3 eye = camera.position();
+        org.joml.Vector3f local = new org.joml.Vector3f((float) (point.x - eye.x), (float) (point.y - eye.y), (float) (point.z - eye.z));
+        camera.rotation().conjugate(new org.joml.Quaternionf()).transform(local);
+        if (local.z >= -0.5F) {
+            return;
+        }
+        // Tangent-space position on the view plane (x right, y up).
+        float x = local.x / -local.z;
+        float y = local.y / -local.z;
+        boolean pod = jet.isJetPodView(minecraft.player);
+        if (!camera.isDetached() && !pod) {
+            // The cockpit view's roll goes on after the camera (VehicleGameRendererMixin); turn the point with it.
+            float roll = jet.cameraRoll(partialTick) * Mth.DEG_TO_RAD;
+            float rx = x * Mth.cos(roll) - y * Mth.sin(roll);
+            y = x * Mth.sin(roll) + y * Mth.cos(roll);
+            x = rx;
+        }
+        float width = guiGraphics.guiWidth();
+        float height = guiGraphics.guiHeight();
+        float tanHalf = (float) Math.tan(Math.toRadians(camera.getFov() * 0.5D));
+        float screenX = width * 0.5F + x / (tanHalf * width / height) * width * 0.5F;
+        float screenY = height * 0.5F - y / tanHalf * height * 0.5F;
+        float viewRoll = camera.isDetached() && !pod ? (float) jet.aircraftCameraRotationFor(partialTick).z
+                : pod ? 0.0F : jet.cameraRoll(partialTick);
+        float bank = Mth.wrapDegrees((float) jet.poseAngles(partialTick).z - viewRoll);
+        var pose = guiGraphics.pose();
+        pose.pushMatrix();
+        pose.translate(screenX, screenY);
+        pose.rotate(bank * Mth.DEG_TO_RAD);
+        preciseBlit(guiGraphics, CROSSHAIR_THIRD_CAMERA, -12.0F, -12.0F, 24, 24, 0.0F, 0.0F, 64.0F, 64.0F, 64.0F, 64.0F);
+        pose.popMatrix();
+    }
+
+    /**
+     * A jet's instruments, top right: airspeed, height above the ground, throttle and gear, plus what the brake key is
+     * doing. The pilot also gets a flashing stall or pull-up warning under the crosshair.
+     */
+    private static void renderJetInstruments(GuiGraphicsExtractor guiGraphics, Minecraft minecraft, VehicleEntity jet) {
+        double speed = jet.getDeltaMovement().length() * 20.0D * 3.6D;
+        double altitude = jet.exactAltitudeAboveGround();
+        boolean grounded = jet.onGround();
+        float gear = jet.jetGear();
+        Component[] lines = {
+                Component.translatable("hud.jeg.vehicle.jet_speed", Math.round(speed)),
+                Component.translatable("hud.jeg.vehicle.jet_altitude", grounded ? "0" : String.valueOf(Math.round(altitude))),
+                Component.translatable("hud.jeg.vehicle.jet_throttle", Math.round(jet.jetThrottle() * 100.0F)),
+                Component.translatable(gear >= 0.99F ? "hud.jeg.vehicle.jet_gear_down" : gear <= 0.01F ? "hud.jeg.vehicle.jet_gear_up" : "hud.jeg.vehicle.jet_gear_moving")
+        };
+        int y = 16;
+        for (Component line : lines) {
+            guiGraphics.text(minecraft.font, line, guiGraphics.guiWidth() - minecraft.font.width(line) - 16, y, 0xFF66FF00);
+            y += 11;
+        }
+        float cruise = ttv.migami.jeg.vehicle.client.VehicleInputHandler.jetCruiseTarget();
+        if (minecraft.player != null && jet.getControllingPassenger() == minecraft.player && cruise >= 0.0F) {
+            Component line = Component.translatable("hud.jeg.vehicle.jet_cruise", Math.round(cruise * 72.0F));
+            guiGraphics.text(minecraft.font, line, guiGraphics.guiWidth() - minecraft.font.width(line) - 16, y, 0xFF66CCFF);
+            y += 11;
+        }
+        if (minecraft.player != null && jet.getControllingPassenger() == minecraft.player
+                && ttv.migami.jeg.client.KeyBindings.VEHICLE_BRAKE_DESCEND.isDown()) {
+            Component brake = Component.translatable(grounded ? "hud.jeg.vehicle.jet_wheel_brake" : "hud.jeg.vehicle.jet_airbrake");
+            guiGraphics.text(minecraft.font, brake, guiGraphics.guiWidth() - minecraft.font.width(brake) - 16, y, 0xFFFFDD88);
+        }
+        if (minecraft.player == null || jet.getControllingPassenger() != minecraft.player) {
+            return;
+        }
+        String warning = null;
+        if (jet.jetPullUpWarning()) {
+            warning = "message.jeg.vehicle.jet_pull_up";
+        } else if (jet.jetStallWarning()) {
+            warning = "message.jeg.vehicle.jet_stall_warning";
+        }
+        if (warning != null) {
+            Component text = Component.translatable(warning);
+            int color = (jet.tickCount / 5) % 2 == 0 ? 0xFFFF2222 : 0xFFFFAA00;
+            guiGraphics.text(minecraft.font, text, (guiGraphics.guiWidth() - minecraft.font.width(text)) / 2, guiGraphics.guiHeight() / 2 + 20, color);
+        }
+    }
+
     private static void renderVehicleWarning(GuiGraphicsExtractor guiGraphics, Minecraft minecraft, VehicleEntity vehicle) {
         if (minecraft.player == null) {
             return;
@@ -423,6 +536,136 @@ public final class VehicleHudOverlay {
 
     private static void blitWeaponIcon(GuiGraphicsExtractor guiGraphics, Identifier icon, int x, int y) {
         guiGraphics.blit(RenderPipelines.GUI_TEXTURED, icon, x, y, 0, 0, WEAPON_ICON_WIDTH, WEAPON_ICON_HEIGHT, WEAPON_ICON_TEXTURE_WIDTH, WEAPON_ICON_TEXTURE_HEIGHT, WEAPON_ICON_TEXTURE_WIDTH, WEAPON_ICON_TEXTURE_HEIGHT);
+    }
+
+    private static final int POD_TEXT = 0xFFE4EEE4;
+    private static final int POD_LINE = 0xE6F2F7F2;
+    private static final int POD_SHADOW = 0x8C000000;
+    private static final double POD_RANGE = 640.0D;
+    private static final double POD_TRACK_RADIUS = 7.0D;
+
+    /**
+     * Zoomed in a jet, the screen is the targeting pod's camera, laid out like a real aerial sensor feed: a sensor-grey
+     * wash with scan lines and a dark vignette, the camera's frame corners, a gapped crosshair with brackets (where the
+     * missiles go), and its readouts: recording, mode and zoom; heading; where the pod points from the nose; and the
+     * slant range and position of what is under the crosshair, with TRACK when that is a vehicle or creature.
+     */
+    private static void renderPodCamera(GuiGraphicsExtractor guiGraphics, Minecraft minecraft, VehicleEntity jet) {
+        int width = guiGraphics.guiWidth();
+        int height = guiGraphics.guiHeight();
+        int cx = width / 2;
+        int cy = height / 2;
+        // The feed: a faint sensor tint, scan lines, and the edges falling off into the dark.
+        guiGraphics.fill(0, 0, width, height, 0x22142218);
+        for (int y = 0; y < height; y += 3) {
+            guiGraphics.fill(0, y, width, y + 1, 0x12000000);
+        }
+        int bands = 10;
+        int band = Math.max(2, Math.min(width, height) / 36);
+        for (int i = 0; i < bands; i++) {
+            int inset = i * band;
+            int alpha = (bands - i) * 9;
+            int colour = alpha << 24;
+            guiGraphics.fill(inset, inset, width - inset, inset + band, colour);
+            guiGraphics.fill(inset, height - inset - band, width - inset, height - inset, colour);
+            guiGraphics.fill(inset, inset + band, inset + band, height - inset - band, colour);
+            guiGraphics.fill(width - inset - band, inset + band, width - inset, height - inset - band, colour);
+        }
+        // The camera's frame corners.
+        int frame = 14;
+        int corner = 22;
+        bracket(guiGraphics, frame, frame, corner, 1, 1);
+        bracket(guiGraphics, width - frame - 1, frame, corner, -1, 1);
+        bracket(guiGraphics, frame, height - frame - 1, corner, 1, -1);
+        bracket(guiGraphics, width - frame - 1, height - frame - 1, corner, -1, -1);
+
+        // The crosshair: four arms around an open centre, and brackets boxing the aim.
+        int gap = 5;
+        int arm = 13;
+        crossArm(guiGraphics, cx - gap - arm, cy, cx - gap, cy + 1);
+        crossArm(guiGraphics, cx + gap + 1, cy, cx + gap + arm + 1, cy + 1);
+        crossArm(guiGraphics, cx, cy - gap - arm, cx + 1, cy - gap);
+        crossArm(guiGraphics, cx, cy + gap + 1, cx + 1, cy + gap + arm + 1);
+        int box = 30;
+        int boxCorner = 8;
+        bracket(guiGraphics, cx - box, cy - box, boxCorner, 1, 1);
+        bracket(guiGraphics, cx + box, cy - box, boxCorner, -1, 1);
+        bracket(guiGraphics, cx - box, cy + box, boxCorner, 1, -1);
+        bracket(guiGraphics, cx + box, cy + box, boxCorner, -1, -1);
+
+        // What the pod is looking at.
+        net.minecraft.client.Camera camera = minecraft.gameRenderer.getMainCamera();
+        float yaw = camera.yRot();
+        float pitch = camera.xRot();
+        net.minecraft.world.phys.Vec3 eye = camera.position();
+        net.minecraft.world.phys.Vec3 look = net.minecraft.world.phys.Vec3.directionFromRotation(pitch, yaw);
+        net.minecraft.world.phys.Vec3 end = eye.add(look.scale(POD_RANGE));
+        net.minecraft.world.phys.BlockHitResult hit = minecraft.level.clip(new net.minecraft.world.level.ClipContext(eye, end,
+                net.minecraft.world.level.ClipContext.Block.COLLIDER, net.minecraft.world.level.ClipContext.Fluid.NONE, minecraft.player));
+        boolean ground = hit.getType() != net.minecraft.world.phys.HitResult.Type.MISS;
+        net.minecraft.world.phys.Vec3 point = ground ? hit.getLocation() : end;
+        boolean tracking = false;
+        if (ground) {
+            for (Entity entity : minecraft.level.getEntities(jet, new net.minecraft.world.phys.AABB(point, point).inflate(POD_TRACK_RADIUS))) {
+                if (entity.isAlive() && entity != minecraft.player && entity.getRootVehicle() != jet
+                        && (entity instanceof net.minecraft.world.entity.LivingEntity || entity instanceof VehicleEntity)) {
+                    tracking = true;
+                    break;
+                }
+            }
+        }
+
+        var font = minecraft.font;
+        int left = frame + 8;
+        int top = frame + 6;
+        // Top left: recording, sensor mode, zoom.
+        boolean blink = (jet.tickCount / 10) % 2 == 0;
+        if (blink) {
+            guiGraphics.fill(left, top + 2, left + 4, top + 6, 0xFFFF3030);
+        }
+        podText(guiGraphics, font, "REC", left + 7, top);
+        podText(guiGraphics, font, "EO/IR  WHT", left, top + 11);
+        double zoom = Math.tan(Math.toRadians(minecraft.options.fov().get() * 0.5D)) / Math.tan(Math.toRadians(camera.getFov() * 0.5D));
+        podText(guiGraphics, font, String.format(java.util.Locale.ROOT, "ZOOM %.1fx", Math.max(1.0D, zoom)), left, top + 22);
+        // Top centre: heading, with a tick under it.
+        int heading = Math.floorMod(Math.round(yaw + 180.0F), 360);
+        String headingText = String.format(java.util.Locale.ROOT, "HDG %03d", heading);
+        podText(guiGraphics, font, headingText, cx - font.width(headingText) / 2, top);
+        guiGraphics.fill(cx, top + 11, cx + 1, top + 16, POD_LINE);
+        // Left of centre: where the pod points from the jet's nose.
+        float azimuth = Mth.wrapDegrees(yaw - jet.getYRot());
+        podText(guiGraphics, font, String.format(java.util.Locale.ROOT, "AZ %+04d", Math.round(azimuth)), left, cy - 11);
+        podText(guiGraphics, font, String.format(java.util.Locale.ROOT, "EL %+03d", Math.round(-pitch)), left, cy + 1);
+        // Under the crosshair: range to, and position of, what it is on.
+        String range = ground ? String.format(java.util.Locale.ROOT, "RNG %d m", Math.round(eye.distanceTo(point))) : "RNG ----";
+        podText(guiGraphics, font, range, cx - font.width(range) / 2, cy + box + 6);
+        if (ground) {
+            String position = String.format(java.util.Locale.ROOT, "TGT %d / %d / %d", Math.round(point.x), Math.round(point.y), Math.round(point.z));
+            podText(guiGraphics, font, position, cx - font.width(position) / 2, cy + box + 17);
+        }
+        if (tracking) {
+            String track = "TRACK";
+            int colour = blink ? 0xFFFFC040 : 0xFFFFE080;
+            guiGraphics.text(font, Component.literal(track), cx - font.width(track) / 2, cy - box - 14, colour);
+        }
+    }
+
+    private static void podText(GuiGraphicsExtractor guiGraphics, net.minecraft.client.gui.Font font, String text, int x, int y) {
+        guiGraphics.text(font, Component.literal(text), x, y, POD_TEXT);
+    }
+
+    /** One arm of the crosshair, from (x0, y0) to (x1, y1) exclusive, with a dark shadow to stand out on bright ground. */
+    private static void crossArm(GuiGraphicsExtractor guiGraphics, int x0, int y0, int x1, int y1) {
+        guiGraphics.fill(x0 - 1, y0 - 1, x1 + 1, y1 + 1, POD_SHADOW);
+        guiGraphics.fill(x0, y0, x1, y1, POD_LINE);
+    }
+
+    /** An L-shaped corner at (x, y), its arms running {@code length} pixels in the directions dx and dy. */
+    private static void bracket(GuiGraphicsExtractor guiGraphics, int x, int y, int length, int dx, int dy) {
+        int hx0 = dx > 0 ? x : x - length + 1;
+        int vy0 = dy > 0 ? y : y - length + 1;
+        crossArm(guiGraphics, hx0, y, hx0 + length, y + 1);
+        crossArm(guiGraphics, x, vy0, x + 1, vy0 + length);
     }
 
     private static void renderReticle(GuiGraphicsExtractor guiGraphics, VehicleEntity vehicle) {

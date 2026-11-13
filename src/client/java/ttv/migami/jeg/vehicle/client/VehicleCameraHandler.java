@@ -58,13 +58,14 @@ public final class VehicleCameraHandler {
         }
     }
 
-    /** In a helicopter, the reversed third-person view is the tail-boom action camera (unless looking around freely). */
+    /** In a helicopter or jet, the reversed third-person view is the tail action camera (unless looking around freely). */
     public static boolean isTailCameraActive(VehicleEntity vehicle) {
         LocalPlayer player = Minecraft.getInstance().player;
         return player != null
                 && player.getVehicle() == vehicle
                 && Minecraft.getInstance().options.getCameraType().isMirrored()
-                && vehicle.vehicleData().defaults().vehicleType() == ttv.migami.jeg.vehicle.data.subdata.VehicleType.HELICOPTER
+                && (vehicle.vehicleData().defaults().vehicleType() == ttv.migami.jeg.vehicle.data.subdata.VehicleType.HELICOPTER
+                        || vehicle.isJet())
                 && !isFreeLookActive(vehicle);
     }
 

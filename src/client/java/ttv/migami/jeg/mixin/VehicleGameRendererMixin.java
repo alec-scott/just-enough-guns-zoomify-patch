@@ -36,7 +36,7 @@ public abstract class VehicleGameRendererMixin {
             return;
         }
         boolean fixedCamera = vehicle.usesFixedCameraPosition(entity);
-        float yawDelta = Mth.wrapDegrees(this.mainCamera.yRot() - Mth.rotLerp(partialTick, vehicle.yRotO, vehicle.getYRot()));
+        float yawDelta = Mth.wrapDegrees(this.mainCamera.yRot() - vehicle.renderYaw(partialTick));
         float rollFactor = (Mth.abs(yawDelta) - 90.0F) / 90.0F;
         float pitchFactor;
         if (Mth.abs(yawDelta) <= 90.0F) {
@@ -46,8 +46,10 @@ public abstract class VehicleGameRendererMixin {
         } else {
             pitchFactor = (180.0F - yawDelta) / 90.0F;
         }
-        if (!vehicle.keepsCameraLevel()) {
-            poseStack.mulPose(Axis.ZP.rotationDegrees(-rollFactor * vehicle.roll(partialTick) - pitchFactor * Mth.lerp(partialTick, vehicle.xRotO, vehicle.getXRot())));
+        if (vehicle.isJetPodView(entity)) {
+            // The targeting pod is stabilised: no roll on its view.
+        } else if (!vehicle.keepsCameraLevel()) {
+            poseStack.mulPose(Axis.ZP.rotationDegrees(-rollFactor * vehicle.cameraRoll(partialTick) - pitchFactor * vehicle.cameraPitch(partialTick)));
         } else {
             // Level-horizon hulls (helicopters) only turn the view during a barrel roll.
             float cameraRoll = vehicle.cameraRoll(partialTick);

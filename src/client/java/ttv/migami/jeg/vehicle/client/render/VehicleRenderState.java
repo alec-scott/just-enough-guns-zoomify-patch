@@ -14,6 +14,8 @@ final class VehicleRenderState extends EntityRenderState implements GeoRenderSta
     float yaw;
     float pitch;
     float roll;
+    /** A jet's orientation this frame (slerped between ticks); null for everything else. */
+    org.joml.Quaternionf jetPose;
 
     @Override
     public Map<DataTicket<?>, Object> getDataMap() {

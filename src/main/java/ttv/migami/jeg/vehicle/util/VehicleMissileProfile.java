@@ -79,6 +79,29 @@ public record VehicleMissileProfile(
                     600.0F,
                     110.0F
             ),
+            // The A-10's Mavericks: fire-and-forget, locked on with the seek key, launched from a fast jet.
+            Reference.id("vehicle_agm65_missile"), new VehicleMissileProfile(
+                    GuidanceMode.LOCK_ON,
+                    TargetMode.GROUND_ENTITY,
+                    200,
+                    3.8D,
+                    0.13D,
+                    7.5F,
+                    10.0D,
+                    260.0F,
+                    90.0F
+            ),
+            Reference.id("vehicle_agm65g_missile"), new VehicleMissileProfile(
+                    GuidanceMode.LOCK_ON,
+                    TargetMode.GROUND_ENTITY,
+                    220,
+                    3.4D,
+                    0.11D,
+                    14.0F,
+                    24.0D,
+                    600.0F,
+                    110.0F
+            ),
             Reference.id("vehicle_9m336_missile"), new VehicleMissileProfile(
                     GuidanceMode.LOCK_ON,
                     TargetMode.AIR_ENTITY,

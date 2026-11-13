@@ -40,6 +40,14 @@ import ttv.migami.jeg.network.BulletTrailPayload;
  */
 public final class BulletTrailRenderer {
     private static final Identifier TRAIL_TEXTURE = Identifier.fromNamespaceAndPath("jeg", "textures/effect/tracer.png");
+    /** The A-10's rounds: a smooth, high-resolution streak and a round glow for their heads. */
+    private static final Identifier HEAVY_TRAIL_TEXTURE = Identifier.fromNamespaceAndPath("jeg", "textures/effect/tracer_heavy.png");
+    private static final Identifier HEAVY_GLOW_TEXTURE = Identifier.fromNamespaceAndPath("jeg", "textures/effect/tracer_glow.png");
+    /** The GAU-8's tracer colour (VehicleWeaponStats): its rounds are drawn with the heavy look. */
+    private static final int GAU8_TRACER_COLOUR = 0xFFC040;
+    private static final double HEAVY_CORE_HALF_WIDTH_SCALE = 2.2D;
+    private static final double HEAVY_GLOW_HALF_WIDTH_SCALE = 6.0D;
+    private static final double HEAVY_HEAD_SIZE_SCALE = 2.4D;
     private static final double TRACER_MAX_LENGTH = 16.0D;
     private static final double TRACER_LENGTH_TICKS = 1.6D;
     private static final double TRACER_NEAR_FADE_START = 1.0D;
@@ -233,8 +241,101 @@ public final class BulletTrailRenderer {
         Vec3 view = mc.gameRenderer.getMainCamera().position();
         VertexConsumer consumer = bufferSource.getBuffer(RenderTypes.entityTranslucentEmissive(TRAIL_TEXTURE));
 
+        boolean anyHeavy = false;
         for (TrailState trail : TRAILS.values()) {
+            if (isHeavy(trail)) {
+                anyHeavy = true;
+                continue;
+            }
             renderTrail(trail, poseStack, consumer, view, partialTick);
+        }
+        if (!anyHeavy) {
+            return;
+        }
+        // One texture per pass, so the batches do not interleave.
+        VertexConsumer streaks = bufferSource.getBuffer(RenderTypes.entityTranslucentEmissive(HEAVY_TRAIL_TEXTURE));
+        for (TrailState trail : TRAILS.values()) {
+            if (isHeavy(trail)) {
+                renderHeavyTrail(trail, poseStack, streaks, null, view, partialTick);
+            }
+        }
+        VertexConsumer heads = bufferSource.getBuffer(RenderTypes.entityTranslucentEmissive(HEAVY_GLOW_TEXTURE));
+        for (TrailState trail : TRAILS.values()) {
+            if (isHeavy(trail)) {
+                renderHeavyTrail(trail, poseStack, null, heads, view, partialTick);
+            }
+        }
+    }
+
+    private static boolean isHeavy(TrailState trail) {
+        return trail.vehicleRound && (trail.color & 0xFFFFFF) == GAU8_TRACER_COLOUR;
+    }
+
+    /**
+     * The A-10's rounds, drawn smooth rather than from the pixel-art sprite: a wide faint glow and a narrow white-hot core
+     * along the streak (into {@code streaks}), and a soft round glow at the head (into {@code heads}). Same path and
+     * convergence onto the muzzle as {@link #renderTrail}.
+     */
+    private static void renderHeavyTrail(TrailState trail, PoseStack poseStack, VertexConsumer streaks, VertexConsumer heads, Vec3 view, float partialTick) {
+        Vec3 headWorld = trail.ended ? trail.position : trail.position.add(trail.motion.scale(partialTick));
+        Vec3 head = headWorld.subtract(view);
+        Vec3 origin = trail.origin.subtract(view);
+        double travelled = trail.origin.distanceTo(headWorld);
+        double speed = trail.motion.length();
+        if (speed < 1.0E-4D || travelled < 1.0E-3D) {
+            return;
+        }
+        Vec3 back = trail.motion.scale(-1.0D / speed);
+        double fullLength = Math.min(TRACER_MAX_LENGTH * VEHICLE_TRACER_LENGTH_SCALE, speed * TRACER_LENGTH_TICKS);
+        double length = Math.min(travelled, fullLength);
+        Vec3 tail = travelled <= length ? origin : head.add(back.scale(length));
+        Vec3 offset = trail.muzzleOffset;
+        if (trail.carrier != null && !trail.carrier.isRemoved()) {
+            offset = offset.add(trail.carrier.getPosition(partialTick).subtract(trail.carrierStart));
+        }
+        head = head.add(offset.scale(tracerConvergence(travelled, trail.convergeDistance)));
+        tail = tail.add(offset.scale(tracerConvergence(travelled - length, trail.convergeDistance)));
+        double headDistance = head.length();
+        float nearFade = (float) Mth.clamp((headDistance - TRACER_NEAR_FADE_START) / TRACER_NEAR_FADE_LENGTH, 0.0D, 1.0D);
+        if (nearFade <= 0.0F) {
+            return;
+        }
+        Matrix4f matrix = poseStack.last().pose();
+        if (streaks != null) {
+            Vec3 along = head.subtract(tail);
+            Vec3 side = along.cross(head.add(tail).scale(0.5D));
+            if (side.lengthSqr() < 1.0E-8D) {
+                return;
+            }
+            side = side.normalize();
+            for (int layer = 0; layer < 2; layer++) {
+                boolean glow = layer == 0;
+                double scale = glow ? HEAVY_GLOW_HALF_WIDTH_SCALE : HEAVY_CORE_HALF_WIDTH_SCALE;
+                Vec3 headSide = side.scale(tracerHalfWidth(headDistance) * scale);
+                Vec3 tailSide = side.scale(tracerHalfWidth(tail.length()) * scale);
+                int red = 255;
+                int green = glow ? 150 : 236;
+                int blue = glow ? 50 : 190;
+                int alpha = (int) ((glow ? 90 : 255) * nearFade);
+                vertex(streaks, matrix, red, green, blue, alpha, tail.subtract(tailSide), 0.0F, 1.0F);
+                vertex(streaks, matrix, red, green, blue, alpha, head.subtract(headSide), 1.0F, 1.0F);
+                vertex(streaks, matrix, red, green, blue, alpha, head.add(headSide), 1.0F, 0.0F);
+                vertex(streaks, matrix, red, green, blue, alpha, tail.add(tailSide), 0.0F, 0.0F);
+            }
+        }
+        if (heads != null) {
+            Vec3 toCamera = head.scale(-1.0D / Math.max(1.0E-4D, headDistance));
+            Vec3 right = toCamera.cross(new Vec3(0.0D, 1.0D, 0.0D));
+            right = right.lengthSqr() < 1.0E-6D ? new Vec3(1.0D, 0.0D, 0.0D) : right.normalize();
+            Vec3 up = right.cross(toCamera).normalize();
+            double size = Mth.clamp(headDistance * TRACER_HEAD_SIZE_PER_BLOCK, TRACER_HEAD_MIN_SIZE, TRACER_HEAD_MAX_SIZE) * HEAVY_HEAD_SIZE_SCALE;
+            Vec3 r = right.scale(size);
+            Vec3 u = up.scale(size);
+            int alpha = (int) (230 * nearFade);
+            vertex(heads, matrix, 255, 230, 170, alpha, head.subtract(r).subtract(u), 0.0F, 1.0F);
+            vertex(heads, matrix, 255, 230, 170, alpha, head.add(r).subtract(u), 1.0F, 1.0F);
+            vertex(heads, matrix, 255, 230, 170, alpha, head.add(r).add(u), 1.0F, 0.0F);
+            vertex(heads, matrix, 255, 230, 170, alpha, head.subtract(r).add(u), 0.0F, 0.0F);
         }
     }
 

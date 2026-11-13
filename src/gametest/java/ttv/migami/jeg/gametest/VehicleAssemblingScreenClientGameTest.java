@@ -70,6 +70,15 @@ public class VehicleAssemblingScreenClientGameTest implements FabricClientGameTe
             }
             shot(context, "vehicle_assembling_ah6");
 
+            // The A-10 is on the list too, a little dearer than the MI-28; nowhere near enough carried for it.
+            click(context, "A-10", failures);
+            context.waitTicks(2);
+            String a10 = context.computeOnClient(mc -> String.valueOf(screen(mc).selectedVehicle()) + " " + screen(mc).canAssemble());
+            if (!a10.equals(Reference.id("a10") + " false")) {
+                failures.append("the A-10 should be listed and need more than is carried, got ").append(a10).append('\n');
+            }
+            shot(context, "vehicle_assembling_a10");
+
             click(context, "BMP-2", failures);
             context.waitTicks(2);
             click(context, Component.translatable("gui.jeg.vehicle_assembling.assemble").getString(), failures);

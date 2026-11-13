@@ -53,7 +53,15 @@
       "ttv.migami.jeg.gametest.WarheadBlockDamageClientGameTest",
       "ttv.migami.jeg.gametest.ChargingStationRangeClientGameTest",
       "ttv.migami.jeg.gametest.HeliAmmoHudClientGameTest",
-      "ttv.migami.jeg.gametest.HeliWreckClientGameTest"
+      "ttv.migami.jeg.gametest.HeliWreckClientGameTest",
+      "ttv.migami.jeg.gametest.A10FlightClientGameTest",
+      "ttv.migami.jeg.gametest.A10GroundObserverClientGameTest",
+      "ttv.migami.jeg.gametest.A10EngineCloseupClientGameTest",
+      "ttv.migami.jeg.gametest.A10TaxiClientGameTest",
+      "ttv.migami.jeg.gametest.A10PodStrikeClientGameTest",
+      "ttv.migami.jeg.gametest.A10RotateClientGameTest",
+      "ttv.migami.jeg.gametest.A10FlaresClientGameTest",
+      "ttv.migami.jeg.gametest.A10SandboxSetupClientGameTest"
     ]
   },
   "depends": {

@@ -15,18 +15,21 @@ public final class VehicleFireSoundInstance extends AbstractTickableSoundInstanc
     private final VehicleEntity vehicle;
     private final SoundEvent sound;
     private final boolean helicopter;
+    private final boolean jet;
 
     public VehicleFireSoundInstance(VehicleEntity vehicle, SoundEvent sound) {
         super(sound, SoundSource.PLAYERS, SoundInstance.createUnseededRandom());
         this.vehicle = vehicle;
         this.sound = sound;
-        this.helicopter = vehicle.vehicleData().defaults().vehicleType() == VehicleType.HELICOPTER;
+        // Jets' guns are heard like a helicopter's: from inside the cockpit when aboard, positionally from outside.
+        this.helicopter = vehicle.vehicleData().defaults().vehicleType() == VehicleType.HELICOPTER || vehicle.isJet();
+        this.jet = vehicle.isJet();
         this.looping = true;
         this.delay = 0;
         // SoundEngine discards zero-volume sounds before the first tick unless canStartSilent is enabled.
         this.volume = this.helicopter ? MIN_VOLUME : 3.5F;
         this.pitch = 1.0F;
-        this.relative = this.helicopter && isAboard(vehicle);
+        this.relative = this.listensFromInside();
         this.attenuation = this.relative ? Attenuation.NONE : Attenuation.LINEAR;
         this.updatePosition();
     }
@@ -36,7 +39,12 @@ public final class VehicleFireSoundInstance extends AbstractTickableSoundInstanc
     }
 
     public boolean listenerModeMatches() {
-        return this.relative == (this.helicopter && isAboard(this.vehicle));
+        return this.relative == this.listensFromInside();
+    }
+
+    /** A helicopter's gun is heard from inside by anyone aboard; a jet's only from its cockpit view (JetAudio). */
+    private boolean listensFromInside() {
+        return this.helicopter && (this.jet ? JetAudio.inCockpit(this.vehicle) : isAboard(this.vehicle));
     }
 
     private static boolean isAboard(VehicleEntity vehicle) {
@@ -52,6 +60,12 @@ public final class VehicleFireSoundInstance extends AbstractTickableSoundInstanc
         }
         this.updatePosition();
         double speed = this.vehicle.getDeltaMovement().length();
+        if (this.jet) {
+            // The GAU-8 is heard a long way off: the volume sets its range (16 blocks per unit) outside the cockpit.
+            this.volume = this.relative ? 1.0F : 12.0F;
+            this.pitch = 1.0F;
+            return;
+        }
         this.volume = this.helicopter
                 ? Mth.clamp(MIN_VOLUME + (float) speed * 0.1F, MIN_VOLUME, MAX_VOLUME)
                 : Mth.clamp(3.5F + (float) speed * 4.0F, 3.5F, 6.5F);

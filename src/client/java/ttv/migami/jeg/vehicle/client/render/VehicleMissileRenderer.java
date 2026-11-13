@@ -29,7 +29,7 @@ public final class VehicleMissileRenderer extends EntityRenderer<VehicleMissileE
     public void extractRenderState(VehicleMissileEntity entity, State state, float partialTick) {
         super.extractRenderState(entity, state, partialTick);
         state.motion = entity.getDeltaMovement();
-        state.big = entity.missileWeaponId().getPath().contains("kh39");
+        state.big = ttv.migami.jeg.vehicle.projectile.VehicleMissileEntity.isHeavy(entity.missileWeaponId());
         state.flicker = (entity.tickCount * 0.137F) % 1.0F;
     }
 

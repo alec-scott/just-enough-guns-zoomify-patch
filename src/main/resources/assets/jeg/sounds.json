@@ -1453,7 +1453,16 @@
     "subtitle": "subtitle.jeg.vehicle.fire",
     "sounds": [
       {
-        "name": "jeg:vehicle/a10/fire"
+        "name": "jeg:vehicle/a10/fire",
+        "attenuation_distance": 192
+      }
+    ]
+  },
+  "vehicle.a10.fire_cockpit": {
+    "subtitle": "subtitle.jeg.vehicle.fire",
+    "sounds": [
+      {
+        "name": "jeg:vehicle/a10/fire_cockpit"
       }
     ]
   },
@@ -1461,7 +1470,179 @@
     "subtitle": "subtitle.jeg.vehicle.engine",
     "sounds": [
       {
-        "name": "jeg:vehicle/a10/engine"
+        "name": "jeg:vehicle/a10/engine",
+        "attenuation_distance": 160
+      }
+    ]
+  },
+  "vehicle.a10.engine_cockpit": {
+    "subtitle": "subtitle.jeg.vehicle.engine",
+    "sounds": [
+      {
+        "name": "jeg:vehicle/a10/engine_cockpit"
+      }
+    ]
+  },
+  "vehicle.a10.engine_start": {
+    "subtitle": "subtitle.jeg.vehicle.engine_start",
+    "sounds": [
+      {
+        "name": "jeg:vehicle/a10/engine_start",
+        "attenuation_distance": 160
+      }
+    ]
+  },
+  "vehicle.a10.engine_start_cockpit": {
+    "subtitle": "subtitle.jeg.vehicle.engine_start",
+    "sounds": [
+      {
+        "name": "jeg:vehicle/a10/engine_start_cockpit"
+      }
+    ]
+  },
+  "vehicle.a10.cockpit_flight": {
+    "subtitle": "subtitle.jeg.vehicle.engine",
+    "sounds": [
+      {
+        "name": "jeg:vehicle/a10/cockpit_flight",
+        "attenuation_distance": 16
+      }
+    ]
+  },
+  "vehicle.a10.flyby": {
+    "subtitle": "subtitle.jeg.vehicle.flyby",
+    "sounds": [
+      {
+        "name": "jeg:vehicle/a10/flyby1",
+        "attenuation_distance": 256
+      },
+      {
+        "name": "jeg:vehicle/a10/flyby2",
+        "attenuation_distance": 256
+      },
+      {
+        "name": "jeg:vehicle/a10/flyby3",
+        "attenuation_distance": 256
+      },
+      {
+        "name": "jeg:vehicle/a10/flyby4",
+        "attenuation_distance": 256
+      }
+    ]
+  },
+  "vehicle.a10.gun_stop": {
+    "subtitle": "subtitle.jeg.vehicle.fire",
+    "sounds": [
+      {
+        "name": "jeg:vehicle/a10/gun_stop",
+        "attenuation_distance": 192
+      }
+    ]
+  },
+  "vehicle.a10.gun_stop_cockpit": {
+    "subtitle": "subtitle.jeg.vehicle.fire",
+    "sounds": [
+      {
+        "name": "jeg:vehicle/a10/gun_stop_cockpit"
+      }
+    ]
+  },
+  "vehicle.a10.gun_reload_start": {
+    "subtitle": "subtitle.jeg.reload",
+    "sounds": [
+      {
+        "name": "jeg:vehicle/a10/gun_reload_start",
+        "attenuation_distance": 32
+      }
+    ]
+  },
+  "vehicle.a10.gun_reload_end": {
+    "subtitle": "subtitle.jeg.reload",
+    "sounds": [
+      {
+        "name": "jeg:vehicle/a10/gun_reload_end",
+        "attenuation_distance": 32
+      }
+    ]
+  },
+  "vehicle.a10.touchdown": {
+    "subtitle": "subtitle.jeg.vehicle.touchdown",
+    "sounds": [
+      {
+        "name": "jeg:vehicle/a10/touchdown1",
+        "attenuation_distance": 64
+      },
+      {
+        "name": "jeg:vehicle/a10/touchdown2",
+        "attenuation_distance": 64
+      },
+      {
+        "name": "jeg:vehicle/a10/touchdown3",
+        "attenuation_distance": 64
+      }
+    ]
+  },
+  "vehicle.a10.touchdown_cockpit": {
+    "subtitle": "subtitle.jeg.vehicle.touchdown",
+    "sounds": [
+      {
+        "name": "jeg:vehicle/a10/touchdown1_cockpit"
+      },
+      {
+        "name": "jeg:vehicle/a10/touchdown2_cockpit"
+      },
+      {
+        "name": "jeg:vehicle/a10/touchdown3_cockpit"
+      }
+    ]
+  },
+  "vehicle.a10.runway_roll": {
+    "subtitle": "subtitle.jeg.vehicle.runway_roll",
+    "sounds": [
+      {
+        "name": "jeg:vehicle/a10/runway_roll",
+        "attenuation_distance": 48
+      }
+    ]
+  },
+  "vehicle.a10.runway_roll_cockpit": {
+    "subtitle": "subtitle.jeg.vehicle.runway_roll",
+    "sounds": [
+      {
+        "name": "jeg:vehicle/a10/runway_roll_cockpit"
+      }
+    ]
+  },
+  "vehicle.a10.gear": {
+    "subtitle": "subtitle.jeg.vehicle.gear",
+    "sounds": [
+      {
+        "name": "jeg:vehicle/a10/gear",
+        "attenuation_distance": 32
+      }
+    ]
+  },
+  "vehicle.a10.gear_cockpit": {
+    "subtitle": "subtitle.jeg.vehicle.gear",
+    "sounds": [
+      {
+        "name": "jeg:vehicle/a10/gear_cockpit"
+      }
+    ]
+  },
+  "vehicle.a10.pull_up": {
+    "subtitle": "subtitle.jeg.vehicle.pull_up",
+    "sounds": [
+      {
+        "name": "jeg:vehicle/a10/pull_up"
+      }
+    ]
+  },
+  "vehicle.a10.stall_warning": {
+    "subtitle": "subtitle.jeg.vehicle.stall_warning",
+    "sounds": [
+      {
+        "name": "jeg:vehicle/a10/stall_warning"
       }
     ]
   },

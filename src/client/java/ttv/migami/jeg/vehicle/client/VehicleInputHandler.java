@@ -21,6 +21,7 @@ import ttv.migami.jeg.vehicle.entity.base.VehicleInput;
 
 public final class VehicleInputHandler {
     private static final double CROSSHAIR_RANGE = 320.0D;
+    private static final double POD_CROSSHAIR_RANGE = 640.0D;
     private static final int VEHICLE_INVENTORY_INPUT_BLOCK_TICKS = 4;
     private static boolean suppressPlayerInventoryClick;
     private static boolean suppressVehicleInventoryClick;
@@ -32,6 +33,15 @@ public final class VehicleInputHandler {
     private static boolean autoForward;
     /** Forward speed (blocks per tick) that cruise control holds; locked when it is switched on. */
     private static float cruiseSpeed;
+    /** A jet's cruise control: the airspeed (blocks a tick) its autothrottle holds, or below zero when off. */
+    private static float jetCruise = -1.0F;
+    /** How fast W and S move a jet's cruise speed while it is on: about 11 km/h a second. */
+    private static final float JET_CRUISE_STEP = 0.008F;
+
+    /** The airspeed a jet's cruise control holds (blocks a tick), or below zero when it is off. */
+    public static float jetCruiseTarget() {
+        return jetCruise;
+    }
     private static boolean wasRidingVehicle;
 
     // Double-tap a strafe key and keep it held to roll the helicopter that way by hand; letting go hands the roll back.
@@ -97,6 +107,7 @@ public final class VehicleInputHandler {
         if (player == null || minecraft.getConnection() == null || !(player.getVehicle() instanceof VehicleEntity vehicle)) {
             VehicleClientState.clear();
             autoForward = false;
+            jetCruise = -1.0F;
             ignorePlayerInventoryUntilRelease = false;
             ignoreVehicleInventoryUntilRelease = false;
             vehicleInventoryWasDown = false;
@@ -133,8 +144,17 @@ public final class VehicleInputHandler {
         boolean freeLook = KeyBindings.vehicleFreeLookDown();
         boolean seek = KeyBindings.VEHICLE_SEEK.isDown();
         boolean aircraftControls = isAircraftDriver(player, vehicle);
+        // Zoomed in a jet the mouse turns the targeting pod's view, not the jet.
+        boolean podView = vehicle.isJet() && minecraft.options.keyUse.isDown() && vehicle.canPassengerUseSelectedVehicleWeapon(player);
         if (aircraftControls && minecraft.screen == null) {
-            VehicleClientState.updateAircraftMouse(0.1F, 0.5F, 0.35F, false, freeLook);
+            if (vehicle.isJet()) {
+                // A jet's stick follows the player's own mouse sensitivity and invert setting (1x at the default).
+                double setting = minecraft.options.sensitivity().get() * 0.6D + 0.2D;
+                float scale = (float) (setting * setting * setting / (0.5D * 0.5D * 0.5D));
+                VehicleClientState.updateAircraftMouse(0.1F * scale, 0.35F, 0.3F, minecraft.options.invertMouseY().get(), freeLook || podView);
+            } else {
+                VehicleClientState.updateAircraftMouse(0.1F, 0.5F, 0.35F, false, freeLook);
+            }
         }
         boolean reload = KeyBindings.RELOAD.consumeClick();
         int weaponSlot = -1;
@@ -201,10 +221,30 @@ public final class VehicleInputHandler {
             cruiseSpeed = Math.max(cruiseSpeed, forwardSpeed(vehicle));
         }
         boolean cruising = autoForward && !minecraft.options.keyUp.isDown();
+        // A jet's cruise control is an autothrottle: switched on it holds the airspeed it had; W and S then set the
+        // speed it holds rather than moving the throttle.
+        boolean jetPilot = aircraftControls && vehicle.isJet();
+        if (!jetPilot) {
+            jetCruise = -1.0F;
+        } else if (autoForwardToggled) {
+            jetCruise = jetCruise >= 0.0F ? -1.0F : (float) vehicle.getDeltaMovement().length();
+            minecraft.gui.setOverlayMessage(jetCruise >= 0.0F
+                    ? net.minecraft.network.chat.Component.translatable("message.jeg.vehicle.jet_cruise_on", Math.round(jetCruise * 72.0F))
+                    : net.minecraft.network.chat.Component.translatable("message.jeg.vehicle.auto_forward_off"), false);
+        } else if (jetCruise >= 0.0F) {
+            float top = (float) vehicle.jetTopSpeed();
+            if (minecraft.options.keyUp.isDown()) {
+                jetCruise = Math.min(top, jetCruise + JET_CRUISE_STEP);
+            }
+            if (minecraft.options.keyDown.isDown()) {
+                jetCruise = Math.max(0.0F, jetCruise - JET_CRUISE_STEP);
+            }
+        }
+        boolean jetCruising = jetPilot && jetCruise >= 0.0F;
         int barrelRoll = tickBarrelRollRequest(minecraft, helicopterPilot);
         VehicleInput input = new VehicleInput(
-                minecraft.options.keyUp.isDown() || (cruising && cruiseSpeed > 0.0F),
-                minecraft.options.keyDown.isDown(),
+                !jetCruising && (minecraft.options.keyUp.isDown() || (cruising && cruiseSpeed > 0.0F)),
+                !jetCruising && minecraft.options.keyDown.isDown(),
                 minecraft.options.keyLeft.isDown(),
                 minecraft.options.keyRight.isDown(),
                 KeyBindings.VEHICLE_BRAKE_DESCEND.isDown(),
@@ -218,13 +258,15 @@ public final class VehicleInputHandler {
                 weaponSlot,
                 seek,
                 KeyBindings.VEHICLE_DEPLOY_DECOY.consumeClick(),
-                aircraftControls && !freeLook ? VehicleClientState.mouseLerpX() : 0.0F,
-                aircraftControls && !freeLook ? VehicleClientState.mouseLerpY() : 0.0F,
-                cruising ? cruiseSpeed : 0.0F,
+                aircraftControls && !freeLook && !podView ? VehicleClientState.mouseLerpX() : 0.0F,
+                aircraftControls && !freeLook && !podView ? VehicleClientState.mouseLerpY() : 0.0F,
+                jetCruising ? Math.max(0.001F, jetCruise) : cruising ? cruiseSpeed : 0.0F,
                 barrelRoll
         );
         vehicle.processClientInput(player, input);
-        if (vehicle.usesVehiclePoseTransform() && !freeLook) {
+        // A jet's guns are fixed down the nose, so its crosshair point is only sent from the targeting pod (zoomed),
+        // where it designates the missiles' target.
+        if (vehicle.usesVehiclePoseTransform() && !freeLook && (!vehicle.isJet() || podView)) {
             sendCrosshairPoint(minecraft, player, vehicle);
         }
         // The server can fire as soon as it receives this input, so send the matching aim point first.
@@ -239,7 +281,8 @@ public final class VehicleInputHandler {
         // Skip what is between a chase camera and the aircraft: the crosshair is not meant to aim at that.
         double skip = minecraft.options.getCameraType().isFirstPerson() ? 0.0D : from.distanceTo(vehicle.position());
         Vec3 start = from.add(look.scale(skip));
-        Vec3 end = from.add(look.scale(CROSSHAIR_RANGE));
+        // A jet's targeting pod looks a long way down from altitude.
+        Vec3 end = from.add(look.scale(vehicle.isJet() ? POD_CROSSHAIR_RANGE : CROSSHAIR_RANGE));
         BlockHitResult blockHit = player.level().clip(new ClipContext(start, end, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, player));
         Vec3 reach = blockHit.getType() == HitResult.Type.MISS ? end : blockHit.getLocation();
         EntityHitResult entityHit = ProjectileUtil.getEntityHitResult(player, start, reach, new AABB(start, reach).inflate(1.0D),
@@ -333,11 +376,12 @@ public final class VehicleInputHandler {
     }
 
     private static boolean isViewLockedToAircraft(LocalPlayer player, VehicleEntity vehicle, ttv.migami.jeg.vehicle.data.subdata.SeatInfo seat) {
-        return isAircraftDriver(player, vehicle) && seat.sensitivityY() == 0.0F && seat.sensitivityZ() == 0.0F && !VehicleClientState.freeLookDown();
+        return isAircraftDriver(player, vehicle) && seat.sensitivityY() == 0.0F && seat.sensitivityZ() == 0.0F && !VehicleClientState.freeLookDown()
+                && !vehicle.isJetPodView(player);
     }
 
     private static float aircraftBoundYaw(LocalPlayer player, VehicleEntity vehicle, ttv.migami.jeg.vehicle.data.subdata.SeatInfo seat) {
-        if (isAircraftDriver(player, vehicle) && seat.sensitivityY() == 0.0F && seat.sensitivityZ() == 0.0F && !VehicleClientState.freeLookDown()) {
+        if (isViewLockedToAircraft(player, vehicle, seat)) {
             return vehicle.getYRot();
         }
         if (vehicle.usesVehiclePoseTransform()
@@ -352,7 +396,7 @@ public final class VehicleInputHandler {
     }
 
     private static float aircraftBoundPitch(LocalPlayer player, VehicleEntity vehicle, ttv.migami.jeg.vehicle.data.subdata.SeatInfo seat) {
-        if (isAircraftDriver(player, vehicle) && seat.sensitivityY() == 0.0F && seat.sensitivityZ() == 0.0F && !VehicleClientState.freeLookDown()) {
+        if (isViewLockedToAircraft(player, vehicle, seat)) {
             return Mth.clamp(vehicle.cameraPitch(1.0F), seat.minPitch(), seat.maxPitch());
         }
         return Mth.clamp(player.getXRot(), seat.minPitch(), seat.maxPitch());

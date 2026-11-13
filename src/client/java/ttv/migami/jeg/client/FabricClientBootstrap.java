@@ -342,6 +342,7 @@ public final class FabricClientBootstrap {
             MinigunClient.tick(client);
             ttv.migami.jeg.client.compat.NeaCompat.registerOnce();
             ttv.migami.jeg.vehicle.client.audio.HelicopterEngineAudio.tick(client);
+            ttv.migami.jeg.vehicle.client.audio.JetAudio.tick(client);
             MedalManager.tick();
             if (NetworkHandler.shouldRenderLegacyBulletTrail()) {
                 BulletTrailRenderer.tick();
@@ -371,6 +372,7 @@ public final class FabricClientBootstrap {
 
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
             ttv.migami.jeg.vehicle.client.audio.HelicopterEngineAudio.clear(client);
+            ttv.migami.jeg.vehicle.client.audio.JetAudio.clear(client);
             VehicleRotaryGunAudio.clear(client);
             Config.setSyncedMagazineFeedEnabled(null);
             Config.setSyncedHelicopterFlight(null);
@@ -410,6 +412,19 @@ public final class FabricClientBootstrap {
         swapOffhandHeldLastTick = swapDown;
     }
 
+    /**
+     * The weapon sound the player hears from a vehicle's fire: a jet's gun is only played here for its pilot in the cockpit
+     * view, so it is the cockpit version (muffled through the airframe, and heavier); everything else is the weapon's own.
+     */
+    private static net.minecraft.sounds.SoundEvent pilotFireSound(VehicleEntity vehicle) {
+        var sound = vehicle.activeVehicleFireSound();
+        if (sound != null && vehicle.isJet() && sound == ttv.migami.jeg.vehicle.util.VehicleSoundHelper.jetSound(vehicle, "fire")) {
+            var cockpit = ttv.migami.jeg.vehicle.util.VehicleSoundHelper.jetCockpitSound(vehicle, "fire");
+            return cockpit != null ? cockpit : sound;
+        }
+        return sound;
+    }
+
     private static void tickVehicleFireAudio(LocalPlayer player) {
         Minecraft minecraft = Minecraft.getInstance();
         VehicleRotaryGunAudio.tick(minecraft);
@@ -421,7 +436,8 @@ public final class FabricClientBootstrap {
             Entity entity = minecraft.level.getEntity(entry.getKey());
             if (!(entity instanceof VehicleEntity vehicle)
                     || !vehicle.isWeaponFiring()
-                    || vehicle.distanceToSqr(player) > 16384.0D) {
+                    || vehicle.distanceToSqr(player) > 16384.0D
+                    || (vehicle.isJet() && !ttv.migami.jeg.vehicle.client.audio.JetAudio.inCockpit(vehicle))) {
                 minecraft.getSoundManager().stop(entry.getValue());
                 // The barrels run on for a moment after the gun stops firing.
                 var fireLoop = ModSounds.ALL.get(Reference.id("item.minigun.fire_loop"));
@@ -430,9 +446,20 @@ public final class FabricClientBootstrap {
                         && entry.getValue().matches(fireLoop.get())) {
                     VehicleRotaryGunAudio.playStop(minecraft, vehicle);
                 }
+                // The GAU-8 burst ends with its roar rolling away.
+                if (entity instanceof VehicleEntity jet && jet.isJet() && !jet.isWeaponFiring() && ttv.migami.jeg.vehicle.client.audio.JetAudio.inCockpit(jet)) {
+                    var tail = ttv.migami.jeg.vehicle.util.VehicleSoundHelper.jetCockpitSound(jet, "gun_stop");
+                    if (tail != null) {
+                        boolean aboard = player.getRootVehicle() == jet;
+                        minecraft.getSoundManager().play(aboard
+                                ? net.minecraft.client.resources.sounds.SimpleSoundInstance.forUI(tail, 1.0F, 0.9F)
+                                : new net.minecraft.client.resources.sounds.SimpleSoundInstance(tail, net.minecraft.sounds.SoundSource.PLAYERS,
+                                        8.0F, 1.0F, net.minecraft.util.RandomSource.create(), jet.getX(), jet.getY(), jet.getZ()));
+                    }
+                }
                 return true;
             }
-            var sound = vehicle.activeVehicleFireSound();
+            var sound = pilotFireSound(vehicle);
             if (sound == null || !entry.getValue().matches(sound) || !entry.getValue().listenerModeMatches()) {
                 minecraft.getSoundManager().stop(entry.getValue());
                 return true;
@@ -443,10 +470,11 @@ public final class FabricClientBootstrap {
             if (!(entity instanceof VehicleEntity vehicle)
                     || !vehicle.isWeaponFiring()
                     || vehicle.distanceToSqr(player) > 16384.0D
-                    || VEHICLE_FIRE_SOUNDS.containsKey(vehicle.getId())) {
+                    || VEHICLE_FIRE_SOUNDS.containsKey(vehicle.getId())
+                    || (vehicle.isJet() && !ttv.migami.jeg.vehicle.client.audio.JetAudio.inCockpit(vehicle))) {
                 continue;
             }
-            var sound = vehicle.activeVehicleFireSound();
+            var sound = pilotFireSound(vehicle);
             if (sound == null) {
                 continue;
             }

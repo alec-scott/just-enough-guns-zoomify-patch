@@ -18,12 +18,16 @@ public final class VehicleWeaponStats {
     private static final Identifier LARGE_ANTI_GROUND_MISSILE = Reference.id("large_anti_ground_missile");
     private static final Identifier ROCKET_FIRE = Reference.id("item.rocket_launcher.fire");
     private static final Identifier ROCKET_RELOAD_START = Reference.id("item.rocket_launcher.lid_open");
+    /** The GAU-8's reload: the ammunition drum opened, then refilled, the feed seated and the bolt home. */
+    private static final Identifier A10_GUN_RELOAD_START = Reference.id("vehicle.a10.gun_reload_start");
+    private static final Identifier A10_GUN_RELOAD_END = Reference.id("vehicle.a10.gun_reload_end");
     private static final Identifier ROCKET_RELOAD_LOAD = Reference.id("item.rocket_launcher.rocket_in");
     private static final Identifier ROCKET_RELOAD_END = Reference.id("item.rocket_launcher.lid_close");
     private static final Identifier LAV150_CANNON_FIRE = Reference.id("vehicle.lav150.cannon_fire");
     private static final Identifier BMP2_CANNON_FIRE = Reference.id("vehicle.bmp2.cannon_fire");
     private static final Identifier BMP2_MISSILE_FIRE = Reference.id("vehicle.bmp2.missile_fire");
     private static final Identifier MACHINE_GUN_FIRE = Reference.id("item.light_machine_gun.fire");
+    private static final Identifier A10_GUN_FIRE = Reference.id("vehicle.a10.fire");
 
     private static final Map<Identifier, GunStats> STATS = createStats();
 
@@ -117,6 +121,38 @@ public final class VehicleWeaponStats {
                         GunStats.STANDARD_BULLET_PROJECTILE_SIZE,
                         0x66FF00,
                         1.5F
+                )
+        );
+        // The A-10's GAU-8: fed from rifle ammo like the helicopter guns, but every 30 mm round bursts on impact. Spread is
+        // the cone (degrees) the rounds scatter over, so a burst covers an area rather than one point.
+        stats.put(
+                Reference.id("vehicle_gau8_cannon"),
+                new GunStats(
+                        Reference.id("vehicle_gau8_cannon"),
+                        RIFLE_AMMO,
+                        "jeg:magazine",
+                        300,
+                        120,
+                        0,
+                        1,
+                        16.0F,
+                        24.0F,
+                        60,
+                        false,
+                        false,
+                        1.4F,
+                        1,
+                        A10_GUN_FIRE,
+                        null,
+                        A10_GUN_FIRE,
+                        A10_GUN_RELOAD_START,
+                        null,
+                        A10_GUN_RELOAD_END,
+                        null,
+                        null,
+                        0.16F,
+                        0xFFC040,
+                        2.8F
                 )
         );
         stats.put(
@@ -250,6 +286,14 @@ public final class VehicleWeaponStats {
         stats.put(
                 Reference.id("vehicle_kh39_missile"),
                 vehicleMissileStats(Reference.id("vehicle_kh39_missile"), LARGE_ANTI_GROUND_MISSILE, 2, 260, 60, 1100.0F)
+        );
+        stats.put(
+                Reference.id("vehicle_agm65_missile"),
+                vehicleMissileStats(Reference.id("vehicle_agm65_missile"), MEDIUM_ANTI_GROUND_MISSILE, 2, 200, 16, 650.0F)
+        );
+        stats.put(
+                Reference.id("vehicle_agm65g_missile"),
+                vehicleMissileStats(Reference.id("vehicle_agm65g_missile"), LARGE_ANTI_GROUND_MISSILE, 2, 280, 30, 1100.0F)
         );
         stats.put(
                 Reference.id("vehicle_9m336_missile"),

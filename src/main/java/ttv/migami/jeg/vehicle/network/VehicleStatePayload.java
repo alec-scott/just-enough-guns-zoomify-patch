@@ -5,7 +5,7 @@ import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import ttv.migami.jeg.Reference;
 
-public record VehicleStatePayload(int vehicleId, double x, double y, double z, double motionX, double motionY, double motionZ, float yaw, float pitch, boolean forceApply) implements CustomPacketPayload {
+public record VehicleStatePayload(int vehicleId, double x, double y, double z, double motionX, double motionY, double motionZ, float yaw, float pitch, boolean forceApply, float roll) implements CustomPacketPayload {
     public static final Type<VehicleStatePayload> TYPE = new Type<>(Reference.id("vehicle_state"));
     public static final StreamCodec<RegistryFriendlyByteBuf, VehicleStatePayload> STREAM_CODEC = StreamCodec.of(
             (buf, payload) -> {
@@ -19,6 +19,7 @@ public record VehicleStatePayload(int vehicleId, double x, double y, double z, d
                 buf.writeFloat(payload.yaw());
                 buf.writeFloat(payload.pitch());
                 buf.writeBoolean(payload.forceApply());
+                buf.writeFloat(payload.roll());
             },
             buf -> new VehicleStatePayload(
                     buf.readInt(),
@@ -30,7 +31,9 @@ public record VehicleStatePayload(int vehicleId, double x, double y, double z, d
                     buf.readDouble(),
                     buf.readFloat(),
                     buf.readFloat(),
-                    buf.readBoolean()
+                    buf.readBoolean(),
+                    // A jet's roll goes with its yaw and pitch; servers from before yftm.17 send none.
+                    buf.isReadable() ? buf.readFloat() : Float.NaN
             )
     );
 

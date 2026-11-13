@@ -63,6 +63,38 @@ public final class VehicleSoundHelper {
         return sound != null ? sound.get() : lockedWarning();
     }
 
+    /** A jet's gun (the A-10's GAU-8), as opposed to its missiles: fired as a looping burst like a helicopter's. */
+    public static boolean isJetGun(VehicleEntity vehicle, VehicleWeaponInfo weapon) {
+        String weaponPath = weapon.weaponId().getPath();
+        return vehicle.isJet() && !weapon.guided() && !weaponPath.contains("rocket") && !weaponPath.contains("missile");
+    }
+
+    /** A jet's own sound: {@code vehicle.<id>.<name>}, falling back to the A-10's; null if neither exists. */
+    public static SoundEvent jetSound(VehicleEntity vehicle, String name) {
+        DeferredHolder<SoundEvent, SoundEvent> sound = ModSounds.ALL.get(Reference.id("vehicle." + vehicle.vehicleDataId().getPath() + "." + name));
+        if (sound == null) {
+            sound = ModSounds.ALL.get(Reference.id("vehicle.a10." + name));
+        }
+        return sound == null ? null : sound.get();
+    }
+
+    /**
+     * The same sound as the pilot hears it from inside: the "_cockpit" version (muffled through the airframe) where the
+     * jet has one, else the sound itself.
+     */
+    public static SoundEvent jetCockpitSound(VehicleEntity vehicle, String name) {
+        SoundEvent cockpit = jetSound(vehicle, name + "_cockpit");
+        return cockpit != null ? cockpit : jetSound(vehicle, name);
+    }
+
+    public static SoundEvent jetGearSound(VehicleEntity vehicle) {
+        return jetSound(vehicle, "gear");
+    }
+
+    public static SoundEvent jetTouchdownSound(VehicleEntity vehicle) {
+        return jetSound(vehicle, "touchdown");
+    }
+
     /** A helicopter's machine gun, as opposed to its rockets and missiles. */
     public static boolean isHelicopterGun(VehicleEntity vehicle, VehicleWeaponInfo weapon) {
         String weaponPath = weapon.weaponId().getPath();

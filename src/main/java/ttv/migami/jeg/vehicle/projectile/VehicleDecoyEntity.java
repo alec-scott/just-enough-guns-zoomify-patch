@@ -18,10 +18,14 @@ import net.minecraft.world.level.storage.ValueOutput;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import ttv.migami.jeg.init.ModEntities;
+import ttv.migami.jeg.particle.ColoredFlareOption;
 
 public final class VehicleDecoyEntity extends Entity {
     private static final EntityDataAccessor<Boolean> DATA_SMOKE = SynchedEntityData.defineId(VehicleDecoyEntity.class, EntityDataSerializers.BOOLEAN);
     private static final int FLARE_LIFE_TICKS = 200;
+    private static final float FLARE_FADE_TICKS = 50.0F;
+    /** A flare's smoke: off-white. */
+    private static final int TRAIL_COLOUR = 0xFFFFFF;
     private static final int SMOKE_LIFE_TICKS = 400;
     private static final int SMOKE_IGNITE_TICKS = 4;
     private static final double SMOKE_BLOCK_RANGE = 12.0D;
@@ -85,13 +89,68 @@ public final class VehicleDecoyEntity extends Entity {
         this.setDeltaMovement(this.getDeltaMovement().add(0.0D, -0.02D, 0.0D));
         this.move(MoverType.SELF, this.getDeltaMovement());
         if (this.level().isClientSide()) {
-            this.level().addAlwaysVisibleParticle(ParticleTypes.END_ROD, true, this.xo, this.yo, this.zo, 0.0D, 0.0D, 0.0D);
-            this.level().addAlwaysVisibleParticle(ParticleTypes.CLOUD, true, this.xo, this.yo, this.zo, 0.0D, 0.0D, 0.0D);
-            this.level().addParticle(ParticleTypes.FLAME, this.getX(), this.getY(), this.getZ(), 0.0D, 0.01D, 0.0D);
+            this.flareParticles();
         }
         if (this.tickCount > FLARE_LIFE_TICKS || this.isInWater() || this.onGround()) {
             this.discard();
         }
+    }
+
+    /**
+     * A flare burning: thick white smoke left hanging along its path (the arcs a salvo draws across the sky), white
+     * sparks shedding off it and falling, a lick of flame at its heart; a spray of sparks as it ignites.
+     */
+    private void flareParticles() {
+        float burn = this.flareBurn(1.0F);
+        double x = this.getX();
+        double y = this.getY() + 0.17D;
+        double z = this.getZ();
+        if (this.tickCount <= 2) {
+            for (int i = 0; i < 14; i++) {
+                this.level().addAlwaysVisibleParticle(ParticleTypes.FIREWORK, true, x, y, z,
+                        this.random.nextGaussian() * 0.22D, this.random.nextGaussian() * 0.18D + 0.05D, this.random.nextGaussian() * 0.22D);
+            }
+        }
+        if (burn <= 0.05F) {
+            return;
+        }
+        // The smoke trail, drawn back along this tick's path so it stays unbroken at speed.
+        double px = this.xo;
+        double py = this.yo + 0.17D;
+        double pz = this.zo;
+        int puffs = this.getDeltaMovement().length() > 0.8D ? 2 : 1;
+        for (int i = 0; i < puffs; i++) {
+            double t = (i + this.random.nextDouble() * 0.5D) / puffs;
+            this.level().addAlwaysVisibleParticle(new ColoredFlareOption(TRAIL_COLOUR), true,
+                    Mth.lerp(t, px, x), Mth.lerp(t, py, y), Mth.lerp(t, pz, z),
+                    this.random.nextGaussian() * 0.004D, 0.006D, this.random.nextGaussian() * 0.004D);
+        }
+        // Fresh smoke is bright white right behind the flare, greying as it hangs.
+        this.level().addAlwaysVisibleParticle(ParticleTypes.CLOUD, true, px, py, pz,
+                this.random.nextGaussian() * 0.01D, 0.01D, this.random.nextGaussian() * 0.01D);
+        int sparks = burn > 0.5F ? 2 : 1;
+        for (int i = 0; i < sparks; i++) {
+            this.level().addAlwaysVisibleParticle(ParticleTypes.FIREWORK, true, x, y, z,
+                    this.random.nextGaussian() * 0.06D, -0.04D + this.random.nextGaussian() * 0.03D, this.random.nextGaussian() * 0.06D);
+        }
+        if (this.random.nextFloat() < 0.5F) {
+            this.level().addParticle(ParticleTypes.FLAME, x, y, z, this.random.nextGaussian() * 0.01D, 0.01D, this.random.nextGaussian() * 0.01D);
+        }
+    }
+
+    /** How brightly a flare still burns: fully for most of its life, dying away over its last two and a half seconds. */
+    public float flareBurn(float partialTick) {
+        if (this.isSmokeDecoy()) {
+            return 0.0F;
+        }
+        float age = this.tickCount + partialTick;
+        return Mth.clamp((FLARE_LIFE_TICKS - age) / FLARE_FADE_TICKS, 0.0F, 1.0F);
+    }
+
+    @Override
+    public boolean shouldRenderAtSqrDistance(double distance) {
+        // A burning flare lights the sky a long way off.
+        return distance < 320.0D * 320.0D;
     }
 
     private void tickSmoke() {

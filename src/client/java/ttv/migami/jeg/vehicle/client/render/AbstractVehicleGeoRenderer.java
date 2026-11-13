@@ -26,6 +26,8 @@ abstract class AbstractVehicleGeoRenderer<T extends VehicleEntity> extends GeoEn
         this.withRenderLayer(new VehicleBoatWaterMaskLayer<>(this));
         this.withRenderLayer(new VehicleGlowLayer<>(this));
         this.withRenderLayer(new VehicleBarrelHeatLayer<>(this));
+        this.withRenderLayer(new VehicleExhaustGlowLayer<>(this));
+        this.withRenderLayer(new VehicleFanBlurLayer<>(this));
         this.shadowRadius = 0.9F;
     }
 
@@ -72,6 +74,7 @@ abstract class AbstractVehicleGeoRenderer<T extends VehicleEntity> extends GeoEn
         renderState.yaw = Mth.rotLerp(partialTick, vehicle.yRotO, vehicle.getYRot());
         renderState.pitch = Mth.lerp(partialTick, vehicle.xRotO, vehicle.getXRot());
         renderState.roll = vehicle.roll(partialTick);
+        renderState.jetPose = vehicle.isJet() ? new org.joml.Quaternionf(vehicle.poseRotation(partialTick)) : null;
     }
 
     @Override
@@ -126,6 +129,11 @@ abstract class AbstractVehicleGeoRenderer<T extends VehicleEntity> extends GeoEn
 
     private void vehicleAxis(VehicleRenderState renderState, PoseStack poseStack) {
         float rootY = renderState.rootY;
+        if (renderState.jetPose != null) {
+            // The model faces -Z: turn it round, then by the jet's own orientation.
+            poseStack.rotateAround(new org.joml.Quaternionf(renderState.jetPose).mul(Axis.YP.rotationDegrees(180.0F)), 0.0F, rootY, 0.0F);
+            return;
+        }
         poseStack.rotateAround(Axis.YP.rotationDegrees(180.0F - renderState.yaw), 0.0F, rootY, 0.0F);
         poseStack.rotateAround(Axis.XP.rotationDegrees(-renderState.pitch), 0.0F, rootY, 0.0F);
         poseStack.rotateAround(Axis.ZP.rotationDegrees(-renderState.roll), 0.0F, rootY, 0.0F);
@@ -173,8 +181,115 @@ abstract class AbstractVehicleGeoRenderer<T extends VehicleEntity> extends GeoEn
                 snapshots.ifPresent("barrel2", snapshot -> snapshot.setRotZ(vehicle.rotaryGunAngle(partialTick) * Mth.DEG_TO_RAD));
             }
             case "speedboat" -> updateTurret(vehicle, partialTick, snapshots, -25.0F, 50.0F);
+            case "a10" -> updateA10(vehicle, partialTick, snapshots);
             default -> {
             }
+        }
+    }
+
+    /**
+     * The spinning parts of each engine: the rear turbine blades and the spinner, all centred on the nacelle's axis. The
+     * intake and exhaust rims around them stay still.
+     */
+    private static final String[] A10_FAN_BONES = {"houwaiyuan", "houneiyuan", "qianzhou", "houwaiyuan2", "houneiyuan2", "qianzhou2"};
+    /**
+     * The front fan blades, whose pivots sit 0.338 blocks off the nacelle's axis (outboard on the left engine, which is
+     * +X in the model, and on the right one -X): spun as they are they swing round in a circle. Each is moved back by
+     * as much as the spin carries its centre, so it turns in place.
+     */
+    private static final String[] A10_FRONT_FANS = {"qianwaiyuan", "qianwaiyuan2"};
+    private static final float[] A10_FRONT_FAN_PIVOT_OFFSET = {0.338F, -0.338F};
+    /** Rocket pods and bombs the A-10's loadout does not carry. */
+    private static final String[] A10_UNUSED_STORES = {"weapon", "bomb1", "bomb2", "bomb3"};
+
+    /**
+     * The A-10: fans spin with the engines, the gear folds forward into its pods and nose once airborne, and each
+     * pylon shows its missile while it is still loaded. Mirrored weapons fire the muzzle side (the left wing: the model's
+     * +X, which GeckoLib's mirroring and the half turn leave on the jet's left) on an even count of rounds left and the
+     * right wing on an odd count, so with one left it is on the right.
+     */
+    private static void updateA10(VehicleEntity vehicle, float partialTick, com.geckolib.renderer.base.BoneSnapshots snapshots) {
+        float fan = vehicle.jetFanRotation(partialTick) * Mth.DEG_TO_RAD;
+        for (String bone : A10_FAN_BONES) {
+            snapshots.ifPresent(bone, snapshot -> snapshot.setRotZ(fan));
+        }
+        for (int i = 0; i < A10_FRONT_FANS.length; i++) {
+            // Spinning by fan about the pivot carries the fan's centre, offset by v from it, to v rotated; translate it
+            // back. Snapshot translations are in pixels, X negated, in the parent's frame.
+            float offset = A10_FRONT_FAN_PIVOT_OFFSET[i];
+            float dx = offset * (1.0F - Mth.cos(fan));
+            float dy = -offset * Mth.sin(fan);
+            snapshots.ifPresent(A10_FRONT_FANS[i], snapshot -> {
+                snapshot.setRotZ(fan);
+                snapshot.setTranslateX(-dx * 16.0F);
+                snapshot.setTranslateY(dy * 16.0F);
+            });
+        }
+        // The wheels roll forward (the model faces -Z, so that is a negative turn about X).
+        float wheels = -vehicle.jetWheelRotation(partialTick) * Mth.DEG_TO_RAD;
+        for (String bone : new String[]{"wheel1", "wheel2", "wheel3"}) {
+            snapshots.ifPresent(bone, snapshot -> snapshot.setRotX(wheels));
+        }
+        // The GAU-8's seven barrels turn about the gun's axis.
+        snapshots.ifPresent("maingun", snapshot -> snapshot.setRotZ(vehicle.jetGunAngle(partialTick) * Mth.DEG_TO_RAD));
+        // Battle damage: below 30% health the ailerons and an elevator are shot away; a wreck has lost the outer
+        // right wing, its pylons and a fin, and the burning hulk lies on its belly with the gear gone.
+        float max = vehicle.maxVehicleHealth();
+        float ratio = max <= 0.0F ? 1.0F : vehicle.vehicleHealth() / max;
+        boolean wrecked = vehicle.isWrecked();
+        hideIf(snapshots, "wingRR", wrecked || ratio < 0.3F);
+        hideIf(snapshots, "wingRR2", wrecked || ratio < 0.3F);
+        hideIf(snapshots, "wingLB", wrecked || ratio < 0.3F);
+        hideIf(snapshots, "youyi", wrecked);
+        hideIf(snapshots, "guajia2", wrecked);
+        hideIf(snapshots, "guajia3", wrecked);
+        hideIf(snapshots, "weiyiR", wrecked);
+        boolean hulk = vehicle.wreckState() == VehicleEntity.WRECK_BURNING;
+        for (String bone : new String[]{"gear", "gear2", "gear3"}) {
+            hideIf(snapshots, bone, hulk);
+        }
+        float stowed = (1.0F - vehicle.jetGear(partialTick)) * 90.0F * Mth.DEG_TO_RAD;
+        for (String bone : new String[]{"gear", "gear2", "gear3"}) {
+            snapshots.ifPresent(bone, snapshot -> {
+                // Folds forward (towards the nose, model -Z) and hides once fully up.
+                snapshot.setRotX(stowed);
+                if (stowed >= 89.0F * Mth.DEG_TO_RAD) {
+                    snapshot.skipRender(true);
+                    snapshot.skipChildrenRender(true);
+                }
+            });
+        }
+        for (String bone : A10_UNUSED_STORES) {
+            snapshots.ifPresent(bone, snapshot -> {
+                snapshot.skipRender(true);
+                snapshot.skipChildrenRender(true);
+            });
+        }
+        int medium = a10WeaponSlotAmmo(vehicle, "vehicle_agm65_missile");
+        int large = a10WeaponSlotAmmo(vehicle, "vehicle_agm65g_missile");
+        // missile2 / missile1 hang under the left wing (the muzzle side), missile3 / missile4 under the right.
+        hideIf(snapshots, "missile2", medium < 2);
+        hideIf(snapshots, "missile3", medium < 1);
+        hideIf(snapshots, "missile1", large < 2);
+        hideIf(snapshots, "missile4", large < 1);
+    }
+
+    private static int a10WeaponSlotAmmo(VehicleEntity vehicle, String weaponPath) {
+        var weapons = vehicle.vehicleData().defaults().weapons();
+        for (int slot = 0; slot < weapons.size(); slot++) {
+            if (weapons.get(slot).weaponId().getPath().equals(weaponPath)) {
+                return vehicle.vehicleWeaponSlotAmmo(slot);
+            }
+        }
+        return 0;
+    }
+
+    private static void hideIf(com.geckolib.renderer.base.BoneSnapshots snapshots, String bone, boolean hide) {
+        if (hide) {
+            snapshots.ifPresent(bone, snapshot -> {
+                snapshot.skipRender(true);
+                snapshot.skipChildrenRender(true);
+            });
         }
     }
 

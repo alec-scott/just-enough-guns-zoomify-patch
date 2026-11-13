@@ -94,6 +94,7 @@ public class BulletEntity extends Projectile {
     private static final Identifier PRIMITIVE_BOW_ID = Reference.id("primitive_bow");
     private static final Identifier VEHICLE_20MM_CANNON_ID = Reference.id("vehicle_20mm_cannon");
     private static final Identifier VEHICLE_30MM_CANNON_ID = Reference.id("vehicle_30mm_cannon");
+    private static final Identifier VEHICLE_GAU8_CANNON_ID = Reference.id("vehicle_gau8_cannon");
     private static final Identifier VEHICLE_70MM_ROCKET_ID = Reference.id("vehicle_70mm_rocket");
     private static final Identifier VEHICLE_80MM_ROCKET_ID = Reference.id("vehicle_80mm_rocket");
     private static final Predicate<BlockState> IGNORE_LEAVES = state -> state != null
@@ -131,6 +132,10 @@ public class BulletEntity extends Projectile {
     private static final float VEHICLE_30MM_EXPLOSION_DAMAGE = 4.0F;
     private static final double VEHICLE_20MM_EXPLOSION_RADIUS = 4.5D;
     private static final double VEHICLE_30MM_EXPLOSION_RADIUS = 2.0D;
+    // The GAU-8's high-explosive incendiary rounds: each one a small burst, so a strafing run carpets an area.
+    private static final float VEHICLE_GAU8_EXPLOSION_POWER = 0.9F;
+    private static final float VEHICLE_GAU8_EXPLOSION_DAMAGE = 8.0F;
+    private static final double VEHICLE_GAU8_EXPLOSION_RADIUS = 3.5D;
     private static final String TERROR_RAID_MOB_TAG = "TerrorRaidMob";
     private static final EntityDataAccessor<Integer> DATA_TICKS_LIVED = SynchedEntityData.defineId(BulletEntity.class, EntityDataSerializers.INT);
     private static final EntityDataAccessor<Boolean> DATA_HIT_SOLID_BLOCK = SynchedEntityData.defineId(BulletEntity.class, EntityDataSerializers.BOOLEAN);
@@ -1084,11 +1089,15 @@ public class BulletEntity extends Projectile {
             return true;
         }
 
-        if (id.equals(VEHICLE_20MM_CANNON_ID) || id.equals(VEHICLE_30MM_CANNON_ID)) {
+        if (id.equals(VEHICLE_20MM_CANNON_ID) || id.equals(VEHICLE_30MM_CANNON_ID) || id.equals(VEHICLE_GAU8_CANNON_ID)) {
             if (!this.level().isClientSide()) {
                 Entity owner = this.getOwner();
                 Vec3 pos = result.getLocation();
-                spawnVehicleCannonExplosionEffects((ServerLevel) this.level(), pos);
+                if (id.equals(VEHICLE_GAU8_CANNON_ID)) {
+                    this.spawnGau8ImpactEffects((ServerLevel) this.level(), pos, result);
+                } else {
+                    spawnVehicleCannonExplosionEffects((ServerLevel) this.level(), pos);
+                }
                 ExplosionInteraction interaction = Config.bulletBlockDestructionEnabled()
                         ? ExplosionInteraction.TNT
                         : ExplosionInteraction.NONE;
@@ -1099,6 +1108,10 @@ public class BulletEntity extends Projectile {
                     Entity hitEntity = entityHit.getEntity();
                     if (hitEntity.isAlive()) {
                         DamageSource source = this.damageSources().explosion(this, owner instanceof LivingEntity living ? living : null);
+                        if (id.equals(VEHICLE_GAU8_CANNON_ID)) {
+                            // Twenty rounds a second: each one must land, not just one in every half-second hurt cooldown.
+                            hitEntity.invulnerableTime = 0;
+                        }
                         if (hitEntity instanceof LivingEntity living) {
                             float directDamage = applyBallisticArmor(living, entityHit, stats.damage(), stats, false);
                             boolean hurt = living.hurtServer((ServerLevel) this.level(), source, directDamage);
@@ -1120,6 +1133,9 @@ public class BulletEntity extends Projectile {
     }
 
     private static float vehicleCannonExplosionPower(Identifier id) {
+        if (id.equals(VEHICLE_GAU8_CANNON_ID)) {
+            return VEHICLE_GAU8_EXPLOSION_POWER;
+        }
         return id.equals(VEHICLE_30MM_CANNON_ID) ? VEHICLE_30MM_EXPLOSION_POWER : VEHICLE_20MM_EXPLOSION_POWER;
     }
 
@@ -1144,10 +1160,16 @@ public class BulletEntity extends Projectile {
     }
 
     private static float vehicleCannonBlastDamage(Identifier id) {
+        if (id.equals(VEHICLE_GAU8_CANNON_ID)) {
+            return VEHICLE_GAU8_EXPLOSION_DAMAGE;
+        }
         return id.equals(VEHICLE_30MM_CANNON_ID) ? VEHICLE_30MM_EXPLOSION_DAMAGE : VEHICLE_20MM_EXPLOSION_DAMAGE;
     }
 
     private static double vehicleCannonBlastRadius(Identifier id) {
+        if (id.equals(VEHICLE_GAU8_CANNON_ID)) {
+            return VEHICLE_GAU8_EXPLOSION_RADIUS;
+        }
         return id.equals(VEHICLE_30MM_CANNON_ID) ? VEHICLE_30MM_EXPLOSION_RADIUS : VEHICLE_20MM_EXPLOSION_RADIUS;
     }
 
@@ -1163,7 +1185,11 @@ public class BulletEntity extends Projectile {
         );
         DamageSource source = this.damageSources().explosion(this, owner instanceof LivingEntity living ? living : null);
         for (Entity target : this.level().getEntities(this, area, Entity::isAlive)) {
-            double distance = target.position().distanceTo(pos);
+            // The GAU-8's burst reaches the nearest part of a body, not just its feet: a round bursting at a man's
+            // chest is right beside the one next to him.
+            double distance = id.equals(VEHICLE_GAU8_CANNON_ID)
+                    ? Math.sqrt(target.getBoundingBox().distanceToSqr(pos))
+                    : target.position().distanceTo(pos);
             if (distance > radius) {
                 continue;
             }
@@ -1171,6 +1197,9 @@ public class BulletEntity extends Projectile {
             float scale = 1.0F - (float) (distance / radius);
             float damage = vehicleCannonBlastDamage(id) * scale;
             if (damage > 0.5F) {
+                if (id.equals(VEHICLE_GAU8_CANNON_ID)) {
+                    target.invulnerableTime = 0;
+                }
                 target.hurt(source, damage);
             }
         }
@@ -1283,6 +1312,37 @@ public class BulletEntity extends Projectile {
                     && net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking.canSend(player, ttv.migami.jeg.network.MissileBlastPayload.TYPE)) {
                 net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking.send(player, blast);
             }
+        }
+    }
+
+    /**
+     * A GAU-8 round striking: a small flash and smoke, sparks and a couple of hot fragments arcing off, and the ground
+     * it hit kicked up: chunks of whatever block it is (dirt, sand, stone), a plume of dust, dust drifting down after,
+     * and now and then a haze that hangs over the strafed ground.
+     */
+    private void spawnGau8ImpactEffects(ServerLevel level, Vec3 pos, HitResult result) {
+        sendLongDistanceParticles(level, ModParticleTypes.SMALL_EXPLOSION.get(), pos.x, pos.y, pos.z, 3, 0.35D, 0.35D, 0.35D, 0.05D);
+        sendLongDistanceParticles(level, ModParticleTypes.SMOKE.get(), pos.x, pos.y + 0.3D, pos.z, 3, 0.5D, 0.4D, 0.5D, 0.02D);
+        sendLongDistanceParticles(level, ParticleTypes.CRIT, pos.x, pos.y + 0.2D, pos.z, 6, 0.2D, 0.2D, 0.2D, 0.6D);
+        sendLongDistanceParticles(level, ParticleTypes.LAVA, pos.x, pos.y + 0.1D, pos.z, 2, 0.2D, 0.1D, 0.2D, 0.0D);
+        if (!(result instanceof BlockHitResult blockHit)) {
+            return;
+        }
+        BlockState state = level.getBlockState(blockHit.getBlockPos());
+        if (state.isAir()) {
+            return;
+        }
+        var face = blockHit.getDirection();
+        double sx = pos.x + face.getStepX() * 0.15D;
+        double sy = pos.y + face.getStepY() * 0.15D;
+        double sz = pos.z + face.getStepZ() * 0.15D;
+        net.minecraft.core.particles.BlockParticleOption debris = new net.minecraft.core.particles.BlockParticleOption(ParticleTypes.BLOCK, state);
+        sendLongDistanceParticles(level, debris, sx, sy + 0.15D, sz, 22, 0.35D, 0.3D, 0.35D, 0.35D);
+        sendLongDistanceParticles(level, ParticleTypes.DUST_PLUME, sx, sy + 0.2D, sz, 4, 0.4D, 0.2D, 0.4D, 0.04D);
+        sendLongDistanceParticles(level, new net.minecraft.core.particles.BlockParticleOption(ParticleTypes.FALLING_DUST, state),
+                sx, sy + 1.4D, sz, 5, 0.8D, 0.5D, 0.8D, 0.0D);
+        if (this.random.nextFloat() < 0.3F) {
+            sendLongDistanceParticles(level, ParticleTypes.CAMPFIRE_COSY_SMOKE, sx, sy + 0.4D, sz, 1, 0.5D, 0.2D, 0.5D, 0.005D);
         }
     }
 

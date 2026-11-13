@@ -112,7 +112,8 @@ public final class ClientNetworkHandler {
                 }
                 var entity = context.client().level.getEntity(payload.vehicleId());
                 if (entity instanceof VehicleEntity vehicle) {
-                    vehicle.syncAuthoritativeState(payload.x(), payload.y(), payload.z(), payload.motionX(), payload.motionY(), payload.motionZ(), payload.yaw(), payload.pitch(), payload.forceApply());
+                    float roll = Float.isNaN(payload.roll()) ? vehicle.roll() : payload.roll();
+                    vehicle.syncAuthoritativeState(payload.x(), payload.y(), payload.z(), payload.motionX(), payload.motionY(), payload.motionZ(), payload.yaw(), payload.pitch(), roll, payload.forceApply());
                 }
             });
         });

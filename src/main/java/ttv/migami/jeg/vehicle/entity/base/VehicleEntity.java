@@ -202,6 +202,9 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     private static final EntityDataAccessor<Integer> DATA_ACTIVE_FIRE_WEAPON = SynchedEntityData.defineId(VehicleEntity.class, EntityDataSerializers.INT);
     /** The dye the vehicle is painted with (DyeColor id), or -1 for its factory finish. */
     private static final EntityDataAccessor<Integer> DATA_PAINT = SynchedEntityData.defineId(VehicleEntity.class, EntityDataSerializers.INT);
+    /** A jet's throttle lever (0..1) and landing gear (0 up, 1 down); its engine spool rides on DATA_PROPELLER_SPEED. */
+    private static final EntityDataAccessor<Float> DATA_JET_THROTTLE = SynchedEntityData.defineId(VehicleEntity.class, EntityDataSerializers.FLOAT);
+    private static final EntityDataAccessor<Float> DATA_JET_GEAR = SynchedEntityData.defineId(VehicleEntity.class, EntityDataSerializers.FLOAT);
     private static final Identifier RIFLE_AMMO = Reference.id("rifle_ammo");
     private static final Identifier FLARE_AMMO = Reference.id("flare");
     private static final int FLARE_DECOY_COOLDOWN_TICKS = 400;
@@ -238,6 +241,17 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     private static final double TAIL_CAMERA_HEIGHT = 0.45D;
     private static final double TAIL_CAMERA_INSET = 0.5D;
     private static final float TAIL_CAMERA_DOWN_TILT = 7.0F;
+    /**
+     * A jet's third view: an action camera stuck on top of the left wing near its tip, looking forward and in across the
+     * wing at the engines and cockpit, rigid on the airframe (it banks with it).
+     */
+    private static final double WING_CAMERA_X = 7.6D;
+    private static final double WING_CAMERA_Y = 3.75D;
+    private static final double WING_CAMERA_Z = -2.2D;
+    private static final double WING_CAMERA_INBOARD = 20.0D;
+    private static final double WING_CAMERA_DOWN = 6.0D;
+    /** How close to a vehicle or creature the targeting pod's crosshair has to be for a missile to lock it. */
+    private static final double DESIGNATION_RADIUS = 7.0D;
     private static final String TAG_PERSISTENT_DATA = "PersistentData";
     private static final String GECKO_CONTROLLER = "Vehicle";
     private static final Map<String, String> VEHICLE_IDLE_ANIMATIONS = Map.of(
@@ -434,6 +448,10 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     private static final double DEFAULT_SEEK_RANGE = 64.0D;
     private static final double DEFAULT_SEEK_MIN_DOT = 0.985D;
     private static final double GRAVITY = 0.08D;
+    /** Share of the gap to the jet's attitude the chase camera closes each tick. */
+    private static final double JET_CHASE_CAMERA_FOLLOW = 0.35D;
+    /** The A-10 model's wheel radius, in blocks. */
+    private static final double JET_WHEEL_RADIUS = 0.11D;
 
     private final SimpleContainer inventory = new SimpleContainer(VehicleMenu.MAX_VEHICLE_SLOT_COUNT);
     private final AnimatableInstanceCache geckoCache = GeckoLibUtil.createInstanceCache(this);
@@ -527,6 +545,32 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     // True while the pilot is rolling the hull by hand or it is still past an ordinary bank.
     private boolean manualRolling;
     private float turretHealth = PART_MAX_HEALTH;
+    private final JetFlight jetFlight = new JetFlight(this);
+    /** Client side: the jet's engine fans and gear as drawn, eased between ticks. */
+    private float jetFanRot;
+    private float jetFanRotO;
+    private float jetFanRate;
+    private float jetGearShown = 1.0F;
+    private float jetGearShownO = 1.0F;
+    /** Client side: the GAU-8's barrels (0 still, 1 firing speed) and their angle, and last tick's movement. */
+    private float jetGunSpin;
+    /** Client side: the wheels' roll angle in degrees. */
+    private float jetWheelRot;
+    private float jetWheelRotO;
+    private float jetGunAngle;
+    private float jetGunAngleO;
+    private Vec3 jetLastMove = Vec3.ZERO;
+    /** Client side: the third-person chase camera's orientation, lagging the jet's a little so it has some weight. */
+    @Nullable
+    private org.joml.Quaterniond jetChaseRotation;
+    @Nullable
+    private org.joml.Quaterniond jetChaseRotationO;
+    /** Client side, for other players' jets: where the last state packet put it, and how many ticks are left to get there. */
+    private Vec3 jetObservedTarget;
+    private org.joml.Quaterniond jetObservedRotation;
+    private int jetObservedSteps;
+    private float jetObservedRoll;
+    private boolean jetObserved;
 
     private record AimPoint(Vec3 point, int tick) {}
 
@@ -613,7 +657,8 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     }
 
     private boolean usesHullBlockCollisionBox() {
-        return this.isAh6Vehicle() || this.isMi28Vehicle();
+        // A jet's wings span eighteen blocks: its block box is the fuselage, and JetFlight checks the wingtips itself.
+        return this.isAh6Vehicle() || this.isMi28Vehicle() || this.isJet();
     }
 
     @Override
@@ -622,7 +667,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         this.updateVehicleBoundingBox();
     }
 
-    private void updateVehicleBoundingBox() {
+    void updateVehicleBoundingBox() {
         this.setBoundingBox(this.makeBoundingBox(this.position()));
     }
 
@@ -762,6 +807,8 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         builder.define(DATA_ROTARY_GUN_REQUESTED, false);
         builder.define(DATA_ACTIVE_FIRE_WEAPON, -1);
         builder.define(DATA_PAINT, -1);
+        builder.define(DATA_JET_THROTTLE, 0.0F);
+        builder.define(DATA_JET_GEAR, 1.0F);
     }
 
     /** The dye this vehicle has been painted with, or null for its original colours. */
@@ -1176,6 +1223,136 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         return this.entityData.get(DATA_PROPELLER_SPEED);
     }
 
+    /** An aircraft with a jet engine: flown by {@link JetFlight} rather than as a helicopter. */
+    public boolean isJet() {
+        var defaults = this.vehicleData().defaults();
+        return defaults.vehicleType() == VehicleType.AIRCRAFT && defaults.engine().type() == EngineType.JET;
+    }
+
+    VehicleInput jetInput() {
+        return this.input;
+    }
+
+    float syncedJetThrottle() {
+        return this.entityData.get(DATA_JET_THROTTLE);
+    }
+
+    float syncedJetSpool() {
+        return this.entityData.get(DATA_PROPELLER_SPEED);
+    }
+
+    float syncedJetGear() {
+        return this.entityData.get(DATA_JET_GEAR);
+    }
+
+    void setSyncedJetState(float throttle, float spool, float gear) {
+        if (Math.abs(this.entityData.get(DATA_JET_THROTTLE) - throttle) > 0.004F || throttle == 0.0F || throttle == 1.0F) {
+            this.entityData.set(DATA_JET_THROTTLE, throttle);
+        }
+        if (Math.abs(this.entityData.get(DATA_PROPELLER_SPEED) - spool) > 0.004F || spool == 0.0F) {
+            this.entityData.set(DATA_PROPELLER_SPEED, spool);
+        }
+        if (Math.abs(this.entityData.get(DATA_JET_GEAR) - gear) > 0.01F || gear == 0.0F || gear == 1.0F) {
+            this.entityData.set(DATA_JET_GEAR, gear);
+        }
+    }
+
+    /** True where this side runs the jet's flight model itself: the server, and the pilot's own client. */
+    private boolean simulatesJet() {
+        return !this.level().isClientSide() || this.jetFlight.predicting();
+    }
+
+    /** Throttle lever, 0..1. */
+    public float jetThrottle() {
+        return this.simulatesJet() ? (float) this.jetFlight.throttle() : this.syncedJetThrottle();
+    }
+
+    /** Engine spool, 0 (stopped) to 1 (full power); idle is about 0.08. */
+    public float jetSpool() {
+        return this.simulatesJet() ? (float) this.jetFlight.spool() : this.syncedJetSpool();
+    }
+
+    /** Landing gear, 0 up to 1 down. */
+    public float jetGear() {
+        return this.simulatesJet() ? this.jetFlight.gear() : this.syncedJetGear();
+    }
+
+    public float jetGear(float partialTick) {
+        return Mth.lerp(partialTick, this.jetGearShownO, this.jetGearShown);
+    }
+
+    /** The wheels' roll angle in degrees. */
+    public float jetWheelRotation(float partialTick) {
+        return Mth.lerp(partialTick, this.jetWheelRotO, this.jetWheelRot);
+    }
+
+    /** Sinking fast near the ground: the pilot is told to pull up (HUD and alarm). Client side. */
+    public boolean jetPullUpWarning() {
+        if (this.onGround()) {
+            return false;
+        }
+        double sink = -this.getDeltaMovement().y;
+        double altitude = this.altitudeAboveGround();
+        return sink > 0.4D && altitude < 60.0D && altitude / sink < 50.0D;
+    }
+
+    /** The GAU-8's barrel cluster rotation in degrees. */
+    public float jetGunAngle(float partialTick) {
+        return Mth.lerp(partialTick, this.jetGunAngleO, this.jetGunAngle);
+    }
+
+    /** Whether the jet's gun (not a missile) is firing this tick. */
+    public boolean isJetGunFiring() {
+        VehicleWeaponInfo weapon = this.activeFireWeapon();
+        return this.isWeaponFiring() && weapon != null && VehicleSoundHelper.isJetGun(this, weapon);
+    }
+
+    /** A jet's level top speed, blocks a tick. */
+    public double jetTopSpeed() {
+        return Math.max(0.1D, this.vehicleData().defaults().engine().maxForwardSpeed());
+    }
+
+    /** How fast the fans turn, degrees a tick. */
+    public float jetFanRate() {
+        return this.jetFanRate;
+    }
+
+    /** Fan rotation in degrees, for the engine fans. */
+    public float jetFanRotation(float partialTick) {
+        return Mth.lerp(partialTick, this.jetFanRotO, this.jetFanRot);
+    }
+
+    /** Near or past the stall (pilot's client and server only). */
+    public boolean jetStallWarning() {
+        return this.jetFlight.stallWarning();
+    }
+
+    /** Angle of attack in degrees (pilot's client and server only). */
+    public float jetAngleOfAttack() {
+        return (float) this.jetFlight.alphaDegrees();
+    }
+
+    /** Height above the ground below, up to the probe's reach. */
+    public double altitudeAboveGround() {
+        return this.helicopterAltitudeFromGround();
+    }
+
+    /**
+     * Height above whatever is below (ground, water or treetops), however high: from the terrain's height where the jet
+     * is, where that is loaded, else the 64-block probe. For the HUD's altimeter.
+     */
+    public double exactAltitudeAboveGround() {
+        BlockPos below = BlockPos.containing(this.getX(), this.getY(), this.getZ());
+        if (!this.level().hasChunkAt(below)) {
+            return this.helicopterAltitudeFromGround();
+        }
+        int surface = this.level().getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING, below.getX(), below.getZ());
+        if (surface <= this.level().getMinY()) {
+            return this.helicopterAltitudeFromGround();
+        }
+        return Math.max(0.0D, this.getY() - surface);
+    }
+
     /** Cold start lasts eight seconds on the AH-6 and twelve on the heavier MI-28. */
     public int helicopterStartupTicks() {
         return "mi28".equals(this.vehicleDataId().getPath()) ? 240 : 160;
@@ -1204,6 +1381,9 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         if (this.hasPredictedRoll && this.level().isClientSide() && this.shouldRunClientPrediction()) {
             return this.predictedRoll;
         }
+        if (this.jetObserved && this.level().isClientSide() && !this.shouldRunClientPrediction()) {
+            return this.jetObservedRoll;
+        }
         return this.entityData.get(DATA_ROLL);
     }
 
@@ -1217,6 +1397,9 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     }
 
     public float cameraRoll(float partialTick) {
+        if (this.isJet()) {
+            return jetLevelRoll((float) this.poseAngles(partialTick).z);
+        }
         float roll = this.roll(partialTick);
         if (!this.keepsCameraLevel()) {
             return roll;
@@ -1303,7 +1486,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         return null;
     }
 
-    private void setRoll(float roll) {
+    void setRoll(float roll) {
         float wrapped = Mth.wrapDegrees(roll);
         this.entityData.set(DATA_ROLL, wrapped);
         if (this.level().isClientSide()) {
@@ -1382,7 +1565,8 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
             return false;
         }
         return this.usesArticulatedSeatTransform(seat)
-                || this.vehicleData().defaults().vehicleType() == VehicleType.HELICOPTER;
+                || this.vehicleData().defaults().vehicleType() == VehicleType.HELICOPTER
+                || this.isJet();
     }
 
     public boolean guidedWeaponsUseArticulatedTurret() {
@@ -1631,7 +1815,9 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
             this.entityData.set(DATA_DECOY_COOLDOWN, this.decoyCooldown);
         } else if (this.shouldRunClientPrediction()) {
             VehicleType type = this.vehicleData().defaults().vehicleType();
-            if (type == VehicleType.BOAT) {
+            if (this.isJet()) {
+                this.jetFlight.tick(false);
+            } else if (type == VehicleType.BOAT) {
                 this.tickClientPredictedBoatMovement();
             } else if (type == VehicleType.HELICOPTER) {
                 this.tickClientPredictedHelicopterMovement();
@@ -1642,7 +1828,180 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         if (this.keepsCameraLevel()) {
             this.tickHelicopterCameraPitch();
         }
+        if (this.level().isClientSide() && this.isJet()) {
+            this.tickJetClientVisuals();
+        }
         this.tickObbEntityCollisionSupport();
+    }
+
+    /** Engine exhausts, the right wing's root and the GAU-8's muzzle, in the jet's own space. */
+    private static final double[] JET_LEFT_EXHAUST = {1.65D, 3.4D, -4.6D};
+    private static final double[] JET_RIGHT_EXHAUST = {-1.65D, 3.4D, -4.6D};
+    private static final double[] JET_WING_ROOT = {-3.2D, 2.5D, -0.6D};
+    private static final double[] JET_GUN_MUZZLE = {-0.14D, 1.7D, 8.4D};
+    private static final double[][] JET_WINGTIPS = {{8.7D, 2.5D, 0.4D}, {-8.7D, 2.5D, 0.4D}};
+    /** Points along the top of both wings where a hard bank shows vapour. */
+    private static final double[][] JET_WING_VAPOUR = {
+            {3.5D, 2.9D, 0.0D}, {5.5D, 2.9D, 0.2D}, {7.5D, 2.8D, 0.3D},
+            {-3.5D, 2.9D, 0.0D}, {-5.5D, 2.9D, 0.2D}, {-7.5D, 2.8D, 0.3D}
+    };
+
+    /** Where a point of the jet is now, in the world. */
+    private Vec3 jetPoint(double[] local) {
+        return this.position().add(this.rotateLocalOffsetWithPose(local[0], local[1], local[2], 1.0F));
+    }
+
+    /**
+     * Particles along the stretch a point of the jet covered this tick, so a fast jet leaves a continuous trail rather
+     * than puffs blocks apart.
+     */
+    private void jetTrail(net.minecraft.core.particles.ParticleOptions particle, double[] local, int count, double spread, double drift) {
+        Vec3 now = this.jetPoint(local);
+        Vec3 moved = this.position().subtract(this.xo, this.yo, this.zo);
+        for (int i = 0; i < count; i++) {
+            double along = count <= 1 ? 0.0D : i / (double) count;
+            Vec3 at = now.subtract(moved.scale(along));
+            this.level().addAlwaysVisibleParticle(particle, true,
+                    at.x + (this.random.nextDouble() - 0.5D) * spread,
+                    at.y + (this.random.nextDouble() - 0.5D) * spread,
+                    at.z + (this.random.nextDouble() - 0.5D) * spread,
+                    moved.x * drift, moved.y * drift + 0.01D, moved.z * drift);
+        }
+    }
+
+    /**
+     * Client side: the GAU-8's barrels spin up while it fires and run down after, its gas streams off the nose, the
+     * wingtips pull vapour in hard turns, and battle damage smokes, leaks and burns.
+     */
+    private void tickJetEffects() {
+        boolean gunFiring = this.isJetGunFiring();
+        this.jetGunAngleO = this.jetGunAngle;
+        this.jetGunSpin = gunFiring ? Math.min(1.0F, this.jetGunSpin + 0.25F) : Math.max(0.0F, this.jetGunSpin - 0.03F);
+        // Seven barrels (alike every 51 degrees): kept under half that a tick so they read as spinning, not strobing.
+        this.jetGunAngle += this.jetGunSpin * 24.0F;
+        if (this.jetGunAngle >= 360.0F) {
+            this.jetGunAngle -= 360.0F;
+            this.jetGunAngleO -= 360.0F;
+        }
+        Vec3 moved = this.position().subtract(this.xo, this.yo, this.zo);
+        double acceleration = moved.subtract(this.jetLastMove).length();
+        this.jetLastMove = moved;
+        if (this.isWrecked()) {
+            return;
+        }
+        if (gunFiring) {
+            // The gun's gas: a thick grey cloud off the nose. Some keeps pace with the jet for a moment and rolls back
+            // over the canopy, the rest hangs in the air behind as a trail.
+            this.jetTrail(ParticleTypes.LARGE_SMOKE, JET_GUN_MUZZLE, 4, 1.0D, 0.85D);
+            this.jetTrail(ParticleTypes.LARGE_SMOKE, JET_GUN_MUZZLE, 2, 0.8D, 0.2D);
+            this.jetTrail(ParticleTypes.CAMPFIRE_COSY_SMOKE, JET_GUN_MUZZLE, 1, 1.2D, 0.6D);
+            if (this.tickCount % 2 == 0) {
+                this.jetTrail(ParticleTypes.CAMPFIRE_COSY_SMOKE, JET_GUN_MUZZLE, 1, 1.0D, 0.1D);
+            }
+        } else if (this.jetGunSpin > 0.3F && this.tickCount % 3 == 0) {
+            this.jetTrail(ParticleTypes.SMOKE, JET_GUN_MUZZLE, 1, 0.2D, 0.5D);
+        }
+        // A hard bank at speed streams vapour over the top of the wings, heavier the steeper the bank.
+        float bank = Math.abs(Mth.wrapDegrees(this.roll()));
+        double speedScale = this.jetTopSpeed() / JetFlight.REFERENCE_TOP_SPEED;
+        if (!this.onGround() && moved.length() > 1.8D * speedScale && bank > 40.0F && bank < 140.0F) {
+            int puffs = bank > 60.0F ? 2 : 1;
+            for (double[] point : JET_WING_VAPOUR) {
+                this.jetTrail(ParticleTypes.CLOUD, point, puffs, 0.25D, 0.02D);
+            }
+        }
+        // Hard turns pull condensation off the wingtips (above about three and a half g).
+        if (!this.onGround() && moved.length() > 1.9D * speedScale && acceleration > 0.11D * speedScale) {
+            for (double[] tip : JET_WINGTIPS) {
+                this.jetTrail(ParticleTypes.CLOUD, tip, 2, 0.05D, 0.05D);
+            }
+        }
+    }
+
+    /**
+     * A jet's battle damage, drawn from its own engines and wing rather than the box around it: a grey plume from the
+     * right engine below 60%, thick smoke, sparks and a fuel leak from the wing below 35%, and the engines on fire under
+     * a black trail below 15% and while it goes down.
+     */
+    private void tickJetDamageEffects(float ratio, int wreck) {
+        if (wreck == WRECK_BURNING) {
+            for (int i = 0; i < 3; i++) {
+                double[] point = {(this.random.nextDouble() - 0.5D) * 12.0D, 2.0D + this.random.nextDouble() * 1.5D, (this.random.nextDouble() - 0.5D) * 12.0D};
+                Vec3 at = this.jetPoint(point);
+                this.level().addParticle(ParticleTypes.FLAME, at.x, at.y, at.z, 0.0D, 0.04D, 0.0D);
+            }
+            if (this.tickCount % 2 == 0) {
+                Vec3 at = this.jetPoint(JET_RIGHT_EXHAUST);
+                this.level().addAlwaysVisibleParticle(ParticleTypes.CAMPFIRE_SIGNAL_SMOKE, true, at.x, at.y, at.z, 0.0D, 0.07D, 0.0D);
+            }
+            return;
+        }
+        if (wreck == WRECK_GOING_DOWN || ratio < 0.15F) {
+            this.jetTrail(ParticleTypes.FLAME, JET_RIGHT_EXHAUST, 3, 0.5D, 0.0D);
+            this.jetTrail(ParticleTypes.FLAME, JET_WING_ROOT, 2, 0.6D, 0.0D);
+            this.jetTrail(ParticleTypes.LARGE_SMOKE, JET_RIGHT_EXHAUST, 3, 0.8D, 0.05D);
+            if (wreck == WRECK_GOING_DOWN) {
+                this.jetTrail(ParticleTypes.FLAME, JET_LEFT_EXHAUST, 2, 0.5D, 0.0D);
+            }
+            if (this.tickCount % 2 == 0) {
+                this.jetTrail(ParticleTypes.CAMPFIRE_SIGNAL_SMOKE, JET_RIGHT_EXHAUST, 1, 0.5D, 0.0D);
+            }
+            return;
+        }
+        if (ratio < 0.35F) {
+            this.jetTrail(ParticleTypes.LARGE_SMOKE, JET_RIGHT_EXHAUST, 2, 0.6D, 0.05D);
+            this.jetTrail(ParticleTypes.WHITE_SMOKE, JET_WING_ROOT, 2, 0.3D, 0.1D);
+            if (this.tickCount % 3 == 0) {
+                this.jetTrail(ParticleTypes.CAMPFIRE_COSY_SMOKE, JET_RIGHT_EXHAUST, 1, 0.5D, 0.0D);
+            }
+            if (this.random.nextInt(6) == 0) {
+                Vec3 at = this.jetPoint(JET_RIGHT_EXHAUST);
+                for (int i = 0; i < 5; i++) {
+                    this.level().addParticle(ParticleTypes.ELECTRIC_SPARK, at.x, at.y, at.z, (this.random.nextDouble() - 0.5D) * 0.5D,
+                            this.random.nextDouble() * 0.35D, (this.random.nextDouble() - 0.5D) * 0.5D);
+                }
+            }
+            return;
+        }
+        this.jetTrail(ParticleTypes.SMOKE, JET_RIGHT_EXHAUST, 2, 0.3D, 0.05D);
+        if (this.tickCount % 3 == 0) {
+            this.jetTrail(ParticleTypes.LARGE_SMOKE, JET_RIGHT_EXHAUST, 1, 0.4D, 0.05D);
+        }
+    }
+
+    /** Fans, gear and the chase camera, on every client; prediction stops when the pilot's client no longer flies it. */
+    private void tickJetClientVisuals() {
+        if (!this.shouldRunClientPrediction()) {
+            this.jetFlight.stopPredicting();
+        }
+        this.jetFanRotO = this.jetFanRot;
+        // The fans spin up with the engines and windmill faster with airspeed: flat out about 95 degrees a tick. That fast
+        // they would strobe, so VehicleFanBlurLayer smears them into a blurred disc.
+        float spool = this.jetSpool();
+        float airspeed = (float) Mth.clamp(this.getDeltaMovement().length() / this.jetTopSpeed(), 0.0D, 1.0D);
+        this.jetFanRate = spool > 0.001F ? 3.0F + 70.0F * spool * spool + 22.0F * airspeed : 6.0F * airspeed;
+        this.jetFanRot += this.jetFanRate;
+        if (this.jetFanRot >= 360.0F) {
+            this.jetFanRot -= 360.0F;
+            this.jetFanRotO -= 360.0F;
+        }
+        // The wheels roll with the ground going by, and run down once off it. Capped below where they would strobe.
+        this.jetWheelRotO = this.jetWheelRot;
+        double groundSpeed = this.onGround() ? this.getDeltaMovement().horizontalDistance() : 0.0D;
+        this.jetWheelRot += (float) Math.min(Math.toDegrees(groundSpeed / JET_WHEEL_RADIUS), 40.0D);
+        if (this.jetWheelRot >= 360.0F) {
+            this.jetWheelRot -= 360.0F;
+            this.jetWheelRotO -= 360.0F;
+        }
+        this.jetGearShownO = this.jetGearShown;
+        this.jetGearShown = Mth.approach(this.jetGearShown, this.jetGear(), 0.05F);
+        this.tickJetEffects();
+        org.joml.Quaterniond pose = JetFlight.pose(this.getYRot(), this.getXRot(), this.roll());
+        if (this.jetChaseRotation == null) {
+            this.jetChaseRotation = new org.joml.Quaterniond(pose);
+        }
+        this.jetChaseRotationO = new org.joml.Quaterniond(this.jetChaseRotation);
+        this.jetChaseRotation.slerp(pose, JET_CHASE_CAMERA_FOLLOW);
     }
 
     @Override
@@ -1682,6 +2041,10 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
             return;
         }
         VehicleType vehicleType = this.vehicleData().defaults().vehicleType();
+        if (this.isJet()) {
+            this.jetFlight.onHullImpact(requestedMovement, wasVerticallySupported);
+            return;
+        }
         if (vehicleType == VehicleType.HELICOPTER || vehicleType == VehicleType.AIRCRAFT) {
             this.applyAirVehicleImpactDamage(vehicleType, requestedMovement, wasVerticallySupported);
             return;
@@ -1981,7 +2344,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         return movement.z() < 0.0D ? Direction.SOUTH : Direction.NORTH;
     }
 
-    private DamageSource vehicleStrikeDamageSource() {
+    DamageSource vehicleStrikeDamageSource() {
         Entity attacker = this.getControllingPassenger();
         return ModDamageTypes.causeVehicleStrikeDamage(this.level().registryAccess(), this, attacker == null ? this : attacker);
     }
@@ -2052,7 +2415,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
 
     private int authoritativeVehicleStateSyncInterval(boolean serverSide) {
         VehicleType type = this.vehicleData().defaults().vehicleType();
-        if (type != VehicleType.LAND && type != VehicleType.BOAT && type != VehicleType.HELICOPTER) {
+        if (type != VehicleType.LAND && type != VehicleType.BOAT && type != VehicleType.HELICOPTER && !this.isJet()) {
             return 0;
         }
         Entity controllingPassenger = this.getControllingPassenger();
@@ -2075,7 +2438,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
                 || Math.abs(this.getY() - this.yo) > VEHICLE_IDLE_SYNC_Y_DELTA;
     }
 
-    private boolean shouldRunClientPrediction() {
+    boolean shouldRunClientPrediction() {
         return this.dismountLerpSuppressionTicks <= 0
                 && this.isLocalInstanceAuthoritative()
                 && clientVehicleStateMatches(this.getId());
@@ -2189,7 +2552,19 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     }
 
     public void syncAuthoritativeState(double x, double y, double z, double motionX, double motionY, double motionZ, float yaw, float pitch, boolean forceApply) {
-        if (!this.shouldApplyAuthoritativeState(x, y, z, motionX, motionY, motionZ, yaw, pitch, forceApply)) {
+        this.syncAuthoritativeState(x, y, z, motionX, motionY, motionZ, yaw, pitch, this.roll(), forceApply);
+    }
+
+    public void syncAuthoritativeState(double x, double y, double z, double motionX, double motionY, double motionZ, float yaw, float pitch, float roll, boolean forceApply) {
+        if (!this.shouldApplyAuthoritativeState(x, y, z, motionX, motionY, motionZ, yaw, pitch, roll, forceApply)) {
+            return;
+        }
+        if (this.level().isClientSide() && this.isJet() && !this.shouldRunClientPrediction()) {
+            // Someone else's jet: ease the position and the whole orientation (not angle by angle) to the server's.
+            this.lastSyncedStateTick = this.tickCount;
+            int steps = forceApply ? 1 : Math.max(1, this.authoritativeVehicleStateSyncInterval(false));
+            this.setJetObservationTarget(new Vec3(x, y, z), yaw, pitch, roll, steps);
+            super.lerpMotion(new Vec3(motionX, motionY, motionZ));
             return;
         }
         if (this.level().isClientSide() && !forceApply && !this.shouldRunClientPrediction()) {
@@ -2208,6 +2583,10 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         this.setDeltaMovement(motionX, motionY, motionZ);
         this.setYRot(yaw);
         this.setXRot(pitch);
+        if (this.isJet()) {
+            this.setRoll(roll);
+            this.rollO = roll;
+        }
         this.updateVehicleBoundingBox();
         this.yRotO = yaw;
         this.xRotO = pitch;
@@ -2240,7 +2619,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
             return null;
         }
         VehicleType type = this.vehicleData().defaults().vehicleType();
-        if (type != VehicleType.LAND && type != VehicleType.BOAT && type != VehicleType.HELICOPTER) {
+        if (type != VehicleType.LAND && type != VehicleType.BOAT && type != VehicleType.HELICOPTER && !this.isJet()) {
             return null;
         }
         if (this.syncedStateInterpolation == null) {
@@ -2264,7 +2643,25 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
             if (this.vehicle.tickCount - this.vehicle.lastSyncedStateTick <= VANILLA_PACKET_SUPPRESSION_TICKS) {
                 return;
             }
+            if (this.vehicle.isJet()) {
+                this.vehicle.setJetObservationTarget(position, yRot, xRot, this.vehicle.roll(), DEFAULT_INTERPOLATION_STEPS);
+                return;
+            }
             super.interpolateTo(position, yRot, xRot);
+        }
+
+        @Override
+        public void interpolate() {
+            if (this.vehicle.isJet()) {
+                this.vehicle.stepJetObservation();
+                return;
+            }
+            super.interpolate();
+        }
+
+        @Override
+        public boolean hasActiveInterpolation() {
+            return this.vehicle.isJet() ? this.vehicle.jetObservedSteps > 0 : super.hasActiveInterpolation();
         }
 
         private void interpolateToSyncedState(Vec3 position, float yRot, float xRot) {
@@ -2272,11 +2669,36 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         }
     }
 
+    private void setJetObservationTarget(Vec3 position, float yaw, float pitch, float roll, int steps) {
+        this.jetObservedTarget = position;
+        this.jetObservedRotation = JetFlight.pose(yaw, pitch, roll);
+        this.jetObservedSteps = Math.max(1, steps);
+        if (!this.jetObserved) {
+            this.jetObservedRoll = roll;
+            this.jetObserved = true;
+        }
+    }
+
+    private void stepJetObservation() {
+        if (this.jetObservedSteps <= 0 || this.jetObservedTarget == null || this.jetObservedRotation == null) {
+            return;
+        }
+        double share = 1.0D / this.jetObservedSteps;
+        Vec3 position = this.position().lerp(this.jetObservedTarget, share);
+        org.joml.Quaterniond rotation = JetFlight.pose(this.getYRot(), this.getXRot(), this.roll()).slerp(this.jetObservedRotation, share);
+        double[] angles = JetFlight.euler(rotation);
+        this.setPos(position.x, position.y, position.z);
+        this.setYRot((float) angles[0]);
+        this.setXRot((float) angles[1]);
+        this.jetObservedRoll = (float) angles[2];
+        this.jetObservedSteps--;
+    }
+
     @Override
     protected void lerpPositionAndRotationStep(int steps, double x, double y, double z, double yRot, double xRot) {
         if (this.level().isClientSide()) {
             VehicleType type = this.vehicleData().defaults().vehicleType();
-            if (type == VehicleType.LAND || type == VehicleType.BOAT || type == VehicleType.HELICOPTER) {
+            if (type == VehicleType.LAND || type == VehicleType.BOAT || type == VehicleType.HELICOPTER || this.isJet()) {
                 return;
             }
         }
@@ -2287,14 +2709,14 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     public void lerpMotion(Vec3 motion) {
         if (this.level().isClientSide()) {
             VehicleType type = this.vehicleData().defaults().vehicleType();
-            if (type == VehicleType.LAND || type == VehicleType.BOAT || type == VehicleType.HELICOPTER) {
+            if (type == VehicleType.LAND || type == VehicleType.BOAT || type == VehicleType.HELICOPTER || this.isJet()) {
                 return;
             }
         }
         super.lerpMotion(motion);
     }
 
-    private boolean shouldApplyAuthoritativeState(double x, double y, double z, double motionX, double motionY, double motionZ, float yaw, float pitch, boolean forceApply) {
+    private boolean shouldApplyAuthoritativeState(double x, double y, double z, double motionX, double motionY, double motionZ, float yaw, float pitch, float roll, boolean forceApply) {
         if (forceApply || !this.level().isClientSide() || !this.shouldRunClientPrediction()) {
             return true;
         }
@@ -2306,6 +2728,13 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         }
         if (horizontalMotionDelta.lengthSqr() >= CLIENT_RESYNC_HORIZONTAL_MOTION_DELTA_SQR) {
             return true;
+        }
+        if (this.isJet()) {
+            // Near the vertical yaw and roll swap round freely; compare the orientations themselves.
+            org.joml.Quaterniond predicted = JetFlight.pose(this.getYRot(), this.getXRot(), this.roll());
+            org.joml.Quaterniond synced = JetFlight.pose(yaw, pitch, roll);
+            double dot = Math.abs(predicted.dot(synced));
+            return Math.toDegrees(2.0D * Math.acos(Math.min(1.0D, dot))) >= CLIENT_RESYNC_YAW_DELTA;
         }
         return Math.abs(Mth.wrapDegrees(this.getYRot() - yaw)) >= CLIENT_RESYNC_YAW_DELTA
                 || Math.abs(Mth.wrapDegrees(this.getXRot() - pitch)) >= CLIENT_RESYNC_PITCH_DELTA;
@@ -2405,8 +2834,11 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
             return false;
         }
         // A pair of guns fires left, right, left: this shot comes from the mirrored barrel every other time, and aims
-        // from it, so both streams still meet on the crosshair.
-        this.mirroredShot = weapon.mirrored() && (this.twinGunShots++ & 1) == 1;
+        // from it, so both streams still meet on the crosshair. Magazine weapons go by the rounds left (an even count
+        // fires from the muzzle, an odd one from its mirror), so a client can tell which pylon still carries a missile.
+        this.mirroredShot = weapon.mirrored() && (this.usesSharedVehicleReloadSystem(shooter)
+                ? (this.selectedWeaponLoadedAmmo(shooter) & 1) == 1
+                : (this.twinGunShots++ & 1) == 1);
         Vec3 direction = this.weaponAimDirection(shooter);
         if (direction.lengthSqr() < 1.0E-4D || !this.consumeEnergy(weapon.energyCost())) {
             return false;
@@ -2419,8 +2851,9 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
             return false;
         }
         boolean helicopterGun = VehicleSoundHelper.isHelicopterGun(this, weapon);
-        // A helicopter's gun is heard through the firing loop alone (see VehicleFireSoundInstance).
-        if (!helicopterGun && (this.vehicleData().defaults().vehicleType() == VehicleType.HELICOPTER || !this.shouldLoopVehicleFireSound(shooter, weapon, fireInput))) {
+        boolean jetGun = VehicleSoundHelper.isJetGun(this, weapon);
+        // A helicopter's or jet's gun is heard through the firing loop alone (see VehicleFireSoundInstance).
+        if (!helicopterGun && !jetGun && (this.vehicleData().defaults().vehicleType() == VehicleType.HELICOPTER || !this.shouldLoopVehicleFireSound(shooter, weapon, fireInput))) {
             this.playWeaponFireSound(weapon, stats);
         }
         if (weapon.guided()) {
@@ -2432,10 +2865,16 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         this.mirroredShot = false;
         this.spawnVehicleMuzzleFlare(weapon, muzzle, direction);
         float damage = helicopterGun ? stats.damage() * HELICOPTER_GUN_DAMAGE_MULTIPLIER : stats.damage();
-        Vec3 shot = helicopterGun ? this.withGunDispersion(direction) : direction;
-        BulletEntity bullet = new BulletEntity(this.level(), shooter, stats, shot.scale(stats.projectileSpeed()), damage, false);
+        Vec3 shot = helicopterGun ? this.withGunDispersion(direction, HELICOPTER_GUN_DISPERSION_DEGREES)
+                : jetGun ? this.withGunDispersion(direction, stats.spread()) : direction;
+        Vec3 shotVelocity = shot.scale(stats.projectileSpeed());
+        if (jetGun) {
+            // The rounds leave a fast jet with its speed on top of their own.
+            shotVelocity = shotVelocity.add(this.getDeltaMovement());
+        }
+        BulletEntity bullet = new BulletEntity(this.level(), shooter, stats, shotVelocity, damage, false);
         bullet.setVehicleRound();
-        if (helicopterGun) {
+        if (helicopterGun || jetGun) {
             bullet.setHelicopterGunRound();
         }
         bullet.initialisePosition(muzzle);
@@ -2448,8 +2887,8 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     }
 
     /** A mounted gun on a vibrating airframe throws a tight cone around the crosshair rather than a single line. */
-    private Vec3 withGunDispersion(Vec3 direction) {
-        double spread = Math.toRadians(HELICOPTER_GUN_DISPERSION_DEGREES);
+    private Vec3 withGunDispersion(Vec3 direction, double degrees) {
+        double spread = Math.toRadians(degrees);
         return direction.add(
                 (this.random.nextDouble() - 0.5D) * 2.0D * spread,
                 (this.random.nextDouble() - 0.5D) * 2.0D * spread,
@@ -2491,6 +2930,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
 
     private boolean usesGunMuzzleFlash(String weaponPath) {
         return weaponPath.contains("machine_gun")
+                || weaponPath.contains("gau8")
                 || weaponPath.contains("minigun")
                 || weaponPath.equals("vehicle_coax_machine_gun")
                 || weaponPath.equals("light_machine_gun");
@@ -2504,7 +2944,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         var flash = ModParticleTypes.GUN_MUZZLE_FLASH.get();
         if ("mi28".equals(this.vehicleDataId().getPath())) {
             flash = ModParticleTypes.SMALL_GUN_MUZZLE_FLASH.get();
-        } else if (this.vehicleData().defaults().vehicleType() == VehicleType.HELICOPTER) {
+        } else if (this.vehicleData().defaults().vehicleType() == VehicleType.HELICOPTER || this.isJet()) {
             flash = ModParticleTypes.MEDIUM_GUN_MUZZLE_FLASH.get();
         }
         level.sendParticles(flash, muzzle.x, muzzle.y, muzzle.z, 0, forward.x, forward.y, forward.z, 0.12D);
@@ -2569,7 +3009,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     }
 
     private boolean shouldLoopVehicleFireSound(@Nullable LivingEntity shooter, @Nullable VehicleWeaponInfo weapon, boolean fireInput) {
-        boolean helicopterGun = weapon != null && VehicleSoundHelper.isHelicopterGun(this, weapon);
+        boolean helicopterGun = weapon != null && (VehicleSoundHelper.isHelicopterGun(this, weapon) || VehicleSoundHelper.isJetGun(this, weapon));
         if (shooter == null
                 || weapon == null
                 || (this.vehicleData().defaults().vehicleType() == VehicleType.HELICOPTER && !helicopterGun)
@@ -2700,12 +3140,12 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         );
     }
 
-    private void showVehicleWarning(String messageKey) {
+    void showVehicleWarning(String messageKey) {
         this.entityData.set(DATA_WARNING_MESSAGE, messageKey);
         this.entityData.set(DATA_WARNING_UNTIL_TICK, this.tickCount + VEHICLE_WARNING_DISPLAY_TICKS);
     }
 
-    private void playVehicleWarningSound(String messageKey, SoundEvent sound, float volume, float pitch) {
+    void playVehicleWarningSound(String messageKey, SoundEvent sound, float volume, float pitch) {
         if (messageKey.equals(this.lastVehicleWarningSoundKey)
                 && this.tickCount - this.lastVehicleWarningSoundTick < VEHICLE_WARNING_SOUND_INTERVAL_TICKS) {
             return;
@@ -2750,8 +3190,25 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         Vec3 muzzle = this.weaponMuzzlePosition(weapon, direction, 1.25D, 0.95D);
         VehicleMissileProfile profile = VehicleMissileProfile.get(weapon.weaponId());
         Vec3 velocity = direction.scale(profile.maxSpeed() * VehicleMissileEntity.LAUNCH_SPEED_SHARE).add(this.getDeltaMovement());
-        Entity target = seekInput && profile.usesLockOn() ? this.findLookTarget(shooter, direction, this.seekRange(), this.seekMinDot(), profile) : null;
-        this.level().addFreshEntity(new VehicleMissileEntity(this.level(), shooter, target, muzzle, velocity, weapon.weaponId()));
+        // A jet's missiles go where the targeting pod looks while the pilot is zoomed in (the pod's point is sent only
+        // then): onto the vehicle or creature there, else to the spot itself. Otherwise they lock on with the seek key
+        // to what the pilot looks at, or fly straight down the nose.
+        Vec3 designated = this.isJet() ? this.freshAimPoint(shooter) : null;
+        Vec3 seekDirection = this.isJet() ? shooter.getViewVector(1.0F).normalize() : direction;
+        Entity target = null;
+        if (profile.usesLockOn()) {
+            target = designated != null
+                    ? this.findDesignatedTarget(shooter, designated, profile)
+                    : seekInput ? this.findLookTarget(shooter, seekDirection, this.seekRange(), this.seekMinDot(), profile) : null;
+        }
+        VehicleMissileEntity missile = new VehicleMissileEntity(this.level(), shooter, target, muzzle, velocity, weapon.weaponId());
+        if (designated != null) {
+            missile.setPodGuided();
+            if (target == null) {
+                missile.setTargetPoint(designated);
+            }
+        }
+        this.level().addFreshEntity(missile);
         this.spawnVehicleMuzzleFlare(weapon, muzzle, direction);
     }
 
@@ -2772,6 +3229,10 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
      */
     private Vec3 weaponAimDirection(LivingEntity shooter) {
         Vec3 nominal = this.nominalWeaponAimDirection(shooter);
+        if (this.isJet()) {
+            // A jet's gun and pylons are fixed: everything leaves along the nose, where the HUD's gun marker sits.
+            return nominal;
+        }
         Vec3 aim = this.freshAimPoint(shooter);
         VehicleWeaponInfo weapon = this.selectedWeapon(shooter);
         if (aim == null || weapon == null) {
@@ -2786,6 +3247,11 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     }
 
     private Vec3 nominalWeaponAimDirection(LivingEntity shooter) {
+        if (this.isJet()) {
+            // A jet's gun and pylons point where the nose does.
+            org.joml.Vector3d nose = this.poseRotation(1.0F).transform(new org.joml.Vector3d(0.0D, 0.0D, 1.0D));
+            return new Vec3(nose.x, nose.y, nose.z);
+        }
         Vec3 articulatedAim = this.articulatedWeaponAimDirection(shooter);
         if (articulatedAim != null) {
             return articulatedAim;
@@ -2859,6 +3325,22 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         this.seekControllerId = -1;
         this.seekInput = false;
         return null;
+    }
+
+    /** What the targeting pod has on its crosshair: the nearest thing the missile can lock within a few blocks of the spot. */
+    @Nullable
+    private Entity findDesignatedTarget(LivingEntity shooter, Vec3 point, VehicleMissileProfile profile) {
+        Entity best = null;
+        double bestDistance = DESIGNATION_RADIUS * DESIGNATION_RADIUS;
+        for (Entity candidate : this.level().getEntities(this, new AABB(point, point).inflate(DESIGNATION_RADIUS),
+                candidate -> candidate.isAlive() && profile.canLock(candidate, shooter, this))) {
+            double distance = candidate.position().add(0.0D, candidate.getBbHeight() * 0.5D, 0.0D).distanceToSqr(point);
+            if (distance < bestDistance) {
+                bestDistance = distance;
+                best = candidate;
+            }
+        }
+        return best;
     }
 
     @Nullable
@@ -3315,7 +3797,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         return this.intersectsBlockCollision(sampleBox);
     }
 
-    private boolean intersectsBlockCollision(AABB box) {
+    boolean intersectsBlockCollision(AABB box) {
         VoxelShape boxShape = Shapes.create(box);
         int minX = Mth.floor(box.minX);
         int minY = Mth.floor(box.minY);
@@ -3602,7 +4084,8 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
             return 0;
         }
         float scale = VEHICLE_RELOAD_TIME_SCALE;
-        if (this.vehicleData().defaults().vehicleType() == VehicleType.HELICOPTER) {
+        if (this.vehicleData().defaults().vehicleType() == VehicleType.HELICOPTER || this.isJet()) {
+            // Jets rearm as fast as the helicopters do.
             scale *= HELICOPTER_RELOAD_TIME_SCALE;
         }
         return Math.max(0, Math.round(stats.totalReloadTime() * scale));
@@ -4082,6 +4565,9 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     }
 
     public Vec3 cameraRotationFor(Entity passenger, float partialTick) {
+        if (this.isJetPodView(passenger)) {
+            return new Vec3(passenger.getViewYRot(partialTick), passenger.getViewXRot(partialTick), 0.0D);
+        }
         int fallbackIndex = this.getPassengers().indexOf(passenger);
         if (fallbackIndex >= 0) {
             SeatInfo seat = this.seatForPassenger(passenger, fallbackIndex);
@@ -4112,7 +4598,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
 
     @Nullable
     private Vec3 helicopterZoomCameraRotation(Entity passenger, float partialTick) {
-        if (this.vehicleData().defaults().vehicleType() != VehicleType.HELICOPTER
+        if ((this.vehicleData().defaults().vehicleType() != VehicleType.HELICOPTER && !this.isJet())
                 || !this.usesFirstPersonSeatCamera(passenger)
                 || !clientZoomDown()
                 || !this.usesAircraftCamera(passenger)) {
@@ -4123,6 +4609,39 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
                 this.cameraPitch(partialTick),
                 this.cameraRoll(partialTick)
         );
+    }
+
+    /**
+     * Zoomed in a jet: a stabilised targeting-pod view. The mouse turns the view (down at the ground included) without
+     * steering the jet, the horizon stays level, and the jet's missiles lock on to what it looks at.
+     */
+    public boolean isJetPodView(Entity passenger) {
+        return this.isJet() && this.level().isClientSide() && this.hasPassenger(passenger)
+                && clientVehicleStateMatches(this.getId()) && clientZoomDown();
+    }
+
+    /** Where the jet's gun is pointing: down the nose from its muzzle, with the jet's own speed on its rounds. */
+    public Vec3 jetGunAimPoint(float partialTick, double distance) {
+        VehicleWeaponInfo gun = null;
+        for (VehicleWeaponInfo weapon : this.vehicleData().defaults().weapons()) {
+            if (VehicleSoundHelper.isJetGun(this, weapon)) {
+                gun = weapon;
+                break;
+            }
+        }
+        org.joml.Vector3d nose = this.poseRotation(partialTick).transform(new org.joml.Vector3d(0.0D, 0.0D, 1.0D));
+        Vec3 direction = new Vec3(nose.x, nose.y, nose.z);
+        Vec3 muzzle = this.interpolatedVehiclePosition(partialTick);
+        if (gun != null) {
+            if (gun.hasMuzzle()) {
+                muzzle = muzzle.add(this.rotateLocalOffsetWithPose(gun.muzzleX(), gun.muzzleY(), gun.muzzleZ(), partialTick));
+            }
+            GunStats stats = VehicleWeaponStats.get(gun.weaponId());
+            if (stats != null) {
+                direction = direction.scale(stats.projectileSpeed()).add(this.getDeltaMovement()).normalize();
+            }
+        }
+        return muzzle.add(direction.scale(distance));
     }
 
     public boolean usesAircraftCamera(Entity passenger) {
@@ -4160,6 +4679,9 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         }
         CameraPos camera = this.vehicleData().defaults().thirdPersonCamera();
         SeatInfo seat = this.seatForPassenger(passenger, fallbackIndex);
+        if (seat.zoomCamera().useAircraftCamera() && this.isJet()) {
+            return this.jetChaseCameraPosition(seat.zoomCamera(), partialTick);
+        }
         if (seat.zoomCamera().useAircraftCamera()) {
             camera = seat.zoomCamera();
             Vec3 offset = this.chaseCameraOffset(camera.aircraftX(), camera.aircraftY(), camera.aircraftZ(), partialTick);
@@ -4174,6 +4696,9 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
      * the boom at the cabin and rotor. It is rigid, so it pitches and banks with the airframe.
      */
     public Vec3 tailCameraPosition(float partialTick) {
+        if (this.isJet()) {
+            return this.interpolatedVehiclePosition(partialTick).add(this.rotateLocalOffsetWithPose(WING_CAMERA_X, WING_CAMERA_Y, WING_CAMERA_Z, partialTick));
+        }
         OBBInfo.Box tail = null;
         for (OBBInfo.Box box : this.vehicleData().defaults().obb().boxes()) {
             if (tail == null || box.z() - box.halfDepth() < tail.z() - tail.halfDepth()) {
@@ -4188,6 +4713,14 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
 
     /** Yaw, pitch and roll of the tail camera: the hull's own attitude, tipped down a little towards the cabin. */
     public Vec3 tailCameraRotation(float partialTick) {
+        if (this.isJet()) {
+            // The wing camera: turned in towards the fuselage and tipped down, in the airframe's own axes.
+            org.joml.Quaterniond view = this.poseRotation(partialTick)
+                    .rotateY(Math.toRadians(-WING_CAMERA_INBOARD))
+                    .rotateX(Math.toRadians(WING_CAMERA_DOWN));
+            double[] angles = JetFlight.euler(view);
+            return new Vec3(angles[0], angles[1], angles[2]);
+        }
         return new Vec3(
                 Mth.rotLerp(partialTick, this.yRotO, this.getYRot()),
                 Mth.lerp(partialTick, this.xRotO, this.getXRot()) + TAIL_CAMERA_DOWN_TILT,
@@ -4196,6 +4729,10 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     }
 
     public Vec3 aircraftCameraRotationFor(float partialTick) {
+        if (this.isJet()) {
+            double[] angles = this.jetChaseAngles(partialTick);
+            return new Vec3(angles[0], angles[1], angles[2]);
+        }
         return new Vec3(
                 Mth.rotLerp(partialTick, this.yRotO, this.getYRot()),
                 this.cameraPitch(partialTick),
@@ -4213,6 +4750,11 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         }
         if (seat.sensitivityY() != 0.0F || seat.sensitivityZ() != 0.0F) {
             return null;
+        }
+        if (this.isJet()) {
+            // The roll goes on the view in VehicleGameRendererMixin, from cameraRoll.
+            Vec3 angles = this.poseAngles(partialTick);
+            return new Vec3(angles.x, angles.y, 0.0D);
         }
         return new Vec3(
                 Mth.rotLerp(partialTick, this.yRotO, this.getYRot()),
@@ -4440,7 +4982,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         return Math.min(LOW_HEALTH_DECAY_THRESHOLD, this.maxVehicleHealth());
     }
 
-    private boolean isLowHealthDecayActive() {
+    boolean isLowHealthDecayActive() {
         float health = this.vehicleHealth();
         return health > 0.0F && health < this.lowHealthDecayThreshold();
     }
@@ -4456,6 +4998,10 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         EngineInfo engine = this.vehicleData().defaults().engine();
         if (this.vehicleData().defaults().vehicleType() == VehicleType.ARTILLERY) {
             this.setDeltaMovement(Vec3.ZERO);
+            return;
+        }
+        if (this.isJet()) {
+            this.jetFlight.tick(true);
             return;
         }
         if (this.vehicleData().defaults().vehicleType() == VehicleType.HELICOPTER
@@ -4710,7 +5256,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         return false;
     }
 
-    private boolean hasEngineEnergy(EngineInfo engine, boolean active) {
+    boolean hasEngineEnergy(EngineInfo engine, boolean active) {
         int cost = this.scaledEngineEnergyCost(engine, active, 1.0D);
         return cost <= 0 || this.vehicleEnergy() >= cost;
     }
@@ -4719,7 +5265,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         return this.consumeEngineEnergyCost(this.scaledEngineEnergyCost(engine, active, 1.0D));
     }
 
-    private int scaledEngineEnergyCost(EngineInfo engine, boolean active, double scale) {
+    int scaledEngineEnergyCost(EngineInfo engine, boolean active, double scale) {
         if (!active || engine.energyCostRate() <= 0 || this.maxVehicleEnergy() <= 0) {
             return 0;
         }
@@ -4727,7 +5273,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         return Math.max(1, (int) Math.ceil(scaledCost));
     }
 
-    private boolean consumeEngineEnergyCost(int cost) {
+    boolean consumeEngineEnergyCost(int cost) {
         if (cost <= 0) {
             return true;
         }
@@ -4861,7 +5407,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         return this.rotateLocalDirectionWithPose(0.0D, strength, 0.0D, 1.0F);
     }
 
-    private double helicopterAltitudeFromGround() {
+    double helicopterAltitudeFromGround() {
         Vec3 start = this.position();
         Vec3 end = start.add(0.0D, -HELICOPTER_GROUND_PROBE_DISTANCE, 0.0D);
         HitResult hit = this.level().clip(new ClipContext(start, end, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, this));
@@ -4879,7 +5425,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         return (this.input.right() ? 1 : 0) - (this.input.left() ? 1 : 0);
     }
 
-    private boolean hasPlayerPassenger() {
+    boolean hasPlayerPassenger() {
         for (Entity passenger : this.getPassengers()) {
             if (passenger instanceof Player) {
                 return true;
@@ -4894,8 +5440,8 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     }
 
     private void tickEngineSound() {
-        // Helicopters use one positional client sound per engine, including startup and Doppler pitch.
-        if (this.vehicleData().defaults().vehicleType() == VehicleType.HELICOPTER) {
+        // Helicopters and jets use one positional client sound per engine, including startup and Doppler pitch.
+        if (this.vehicleData().defaults().vehicleType() == VehicleType.HELICOPTER || this.isJet()) {
             return;
         }
         if (this.tickCount % 20 != 0) {
@@ -5377,6 +5923,9 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
 
     /** Camera pitch: steadied on helicopters, the hull's own pitch on everything else. */
     public float cameraPitch(float partialTick) {
+        if (this.isJet()) {
+            return (float) this.poseAngles(partialTick).y;
+        }
         return this.keepsCameraLevel()
                 ? Mth.lerp(partialTick, this.heliCameraPitchO, this.heliCameraPitch)
                 : Mth.lerp(partialTick, this.xRotO, this.getXRot());
@@ -5611,7 +6160,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         return "message.jeg.vehicle.helicopter_low_speed_warning";
     }
 
-    private void moveHelicopter(Vec3 velocity) {
+    void moveHelicopter(Vec3 velocity) {
         Vec3 before = this.position();
         this.setDeltaMovement(velocity);
         this.move(MoverType.SELF, velocity);
@@ -5626,7 +6175,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         this.tickBoatMovement(engine, true);
     }
 
-    private double mobilityMultiplier() {
+    double mobilityMultiplier() {
         double multiplier = this.isEngineDamaged() ? 0.35D : 1.0D;
         if (this.isLeftWheelDamaged()) {
             multiplier *= 0.75D;
@@ -5790,7 +6339,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         return new Vec3(x, world.y - this.getY(), z);
     }
 
-    private Vec3 rotateLocalOffsetWithPose(double localX, double localY, double localZ, float partialTick) {
+    Vec3 rotateLocalOffsetWithPose(double localX, double localY, double localZ, float partialTick) {
         Vec3 origin = this.interpolatedVehiclePosition(partialTick);
         Vector4d worldPosition = this.vehiclePoseTransform(partialTick).transform(new Vector4d(localX, localY, localZ, 1.0D));
         return new Vec3(worldPosition.x - origin.x, worldPosition.y - origin.y, worldPosition.z - origin.z);
@@ -5813,11 +6362,71 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         double pivotY = this.rotateOffsetHeight();
         Matrix4d transform = new Matrix4d();
         transform.translate(origin.x, origin.y + pivotY, origin.z);
-        transform.rotate(Axis.YP.rotationDegrees(-Mth.rotLerp(partialTick, this.yRotO, this.getYRot())));
-        transform.rotate(Axis.XP.rotationDegrees(Mth.lerp(partialTick, this.xRotO, this.getXRot())));
-        transform.rotate(Axis.ZP.rotationDegrees(this.roll(partialTick)));
+        transform.rotate(this.poseRotation(partialTick));
         transform.translate(0.0D, -pivotY, 0.0D);
         return transform;
+    }
+
+    /**
+     * The hull's orientation at this point between ticks. A jet's is slerped from last tick's to this tick's: through a
+     * loop's vertical, yaw and roll each jump half a turn in one tick, and easing the angles one by one swung the hull
+     * round its own axis for a frame.
+     */
+    public org.joml.Quaterniond poseRotation(float partialTick) {
+        if (this.isJet()) {
+            return JetFlight.pose(this.yRotO, this.xRotO, this.rollO)
+                    .slerp(JetFlight.pose(this.getYRot(), this.getXRot(), this.roll()), partialTick);
+        }
+        return JetFlight.pose(Mth.rotLerp(partialTick, this.yRotO, this.getYRot()), Mth.lerp(partialTick, this.xRotO, this.getXRot()), this.roll(partialTick));
+    }
+
+    /** Yaw, pitch and roll of {@link #poseRotation} at this point between ticks. */
+    public Vec3 poseAngles(float partialTick) {
+        if (!this.isJet()) {
+            return new Vec3(Mth.rotLerp(partialTick, this.yRotO, this.getYRot()), Mth.lerp(partialTick, this.xRotO, this.getXRot()), this.roll(partialTick));
+        }
+        double[] angles = JetFlight.euler(this.poseRotation(partialTick));
+        return new Vec3(angles[0], angles[1], angles[2]);
+    }
+
+    /** The yaw the hull is drawn at this frame. */
+    public float renderYaw(float partialTick) {
+        return (float) this.poseAngles(partialTick).x;
+    }
+
+    /**
+     * The roll a jet's cameras take of the airframe's: like a helicopter's, none through an ordinary bank (the jet banks
+     * on screen, the horizon stays level), blending in past 75 degrees so a roll or a loop's inverted top turns the view
+     * with it. At the top of a loop the angles swap (yaw half a turn, roll 180) and this is 1 there, so the view does not
+     * jump.
+     */
+    private static float jetLevelRoll(float roll) {
+        float wrapped = Mth.wrapDegrees(roll);
+        float blend = Mth.clamp((Math.abs(wrapped) - 75.0F) / 75.0F, 0.0F, 1.0F);
+        return wrapped * blend * blend * (3.0F - 2.0F * blend);
+    }
+
+    /** The chase camera's angles: the lagging orientation's yaw and pitch, and its roll levelled as above. */
+    private double[] jetChaseAngles(float partialTick) {
+        double[] angles = JetFlight.euler(this.jetChaseRotation(partialTick));
+        angles[2] = jetLevelRoll((float) angles[2]);
+        return angles;
+    }
+
+    /** A jet's chase camera: its own orientation, a moment behind the jet's. */
+    private org.joml.Quaterniond jetChaseRotation(float partialTick) {
+        if (this.jetChaseRotation == null || this.jetChaseRotationO == null) {
+            return this.poseRotation(partialTick);
+        }
+        return new org.joml.Quaterniond(this.jetChaseRotationO).slerp(this.jetChaseRotation, partialTick);
+    }
+
+    private Vec3 jetChaseCameraPosition(CameraPos camera, float partialTick) {
+        double pivotY = this.rotateOffsetHeight();
+        double[] angles = this.jetChaseAngles(partialTick);
+        org.joml.Vector3d offset = JetFlight.pose(angles[0], angles[1], angles[2])
+                .transform(new org.joml.Vector3d(camera.aircraftX(), camera.aircraftY() - pivotY, camera.aircraftZ()));
+        return this.interpolatedVehiclePosition(partialTick).add(offset.x, offset.y + pivotY, offset.z);
     }
 
     private Matrix4d vehiclePoseTransformNoRoll(float partialTick) {
@@ -5839,11 +6448,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     }
 
     private Matrix4d vehiclePoseRotation(float partialTick) {
-        Matrix4d transform = new Matrix4d();
-        transform.rotate(Axis.YP.rotationDegrees(-Mth.rotLerp(partialTick, this.yRotO, this.getYRot())));
-        transform.rotate(Axis.XP.rotationDegrees(Mth.lerp(partialTick, this.xRotO, this.getXRot())));
-        transform.rotate(Axis.ZP.rotationDegrees(this.roll(partialTick)));
-        return transform;
+        return new Matrix4d().rotate(this.poseRotation(partialTick));
     }
 
     private Vec3 articulatedTurretOffset(double localX, double localY, double localZ, float partialTick) {
@@ -6125,7 +6730,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         return true;
     }
 
-    private boolean hurtVehicleIgnoringArmor(DamageSource source, float amount) {
+    boolean hurtVehicleIgnoringArmor(DamageSource source, float amount) {
         if (this.level().isClientSide() || this.isRemoved() || this.isWrecked() || this.isInvulnerableToBase(source) || amount <= 0.0F) {
             return false;
         }
@@ -6143,7 +6748,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         return true;
     }
 
-    private boolean hurtVehicleStrikeWithArmor(DamageSource source, float amount) {
+    boolean hurtVehicleStrikeWithArmor(DamageSource source, float amount) {
         if (!(this.level() instanceof ServerLevel serverLevel)) {
             return false;
         }
@@ -6165,6 +6770,16 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
             this.entityData.set(DATA_WRECK, WRECK_GOING_DOWN);
             this.wreckTicks = 0;
             this.wreckStartedGrounded = this.onGround() || this.verticalCollisionBelow || this.isInWater();
+            if (this.isJet()) {
+                // A wing and fin tear away; a jet that hit the ground fast goes up at once.
+                serverLevel.sendParticles(new net.minecraft.core.particles.BlockParticleOption(ParticleTypes.BLOCK,
+                                net.minecraft.world.level.block.Blocks.IRON_BLOCK.defaultBlockState()),
+                        this.getX(), this.getY() + 2.0D, this.getZ(), 80, 4.0D, 1.0D, 4.0D, 0.4D);
+                serverLevel.sendParticles(ParticleTypes.LARGE_SMOKE, this.getX(), this.getY() + 2.0D, this.getZ(), 30, 3.0D, 1.0D, 3.0D, 0.08D);
+                if (this.wreckStartedGrounded && this.lastTickSpeed > 0.8D) {
+                    this.wreckTicks = WRECK_COOK_OFF_TICKS;
+                }
+            }
             this.enginePower = 0.0D;
             this.engineStart = false;
             this.engineStartOver = false;
@@ -6194,6 +6809,10 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         float ratio = max <= 0.0F ? 1.0F : Mth.clamp(this.vehicleHealth() / max, 0.0F, 1.0F);
         int wreck = this.wreckState();
         if (wreck == WRECK_NONE && ratio >= 0.6F) {
+            return;
+        }
+        if (this.isJet()) {
+            this.tickJetDamageEffects(ratio, wreck);
             return;
         }
         Level level = this.level();
@@ -6286,7 +6905,14 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
             if (grounded) {
                 velocity = new Vec3(velocity.x * 0.5D, Math.max(velocity.y, 0.0D), velocity.z * 0.5D);
             }
-            if (!this.wreckStartedGrounded) {
+            if (!this.wreckStartedGrounded && this.isJet()) {
+                velocity = new Vec3(this.getDeltaMovement().x * 0.995D, Math.max(this.getDeltaMovement().y - WRECK_GRAVITY * 0.6D, -2.4D), this.getDeltaMovement().z * 0.995D);
+                this.destroyRot = Math.min(12.0F, this.destroyRot + 0.4F);
+                this.xRotO = this.getXRot();
+                this.setXRot(Mth.lerp(0.04F, this.getXRot(), 50.0F));
+                // It rolls towards the wing it lost (the right one: positive roll).
+                this.setRoll(this.roll() + this.destroyRot);
+            } else if (!this.wreckStartedGrounded) {
                 this.destroyRot = Math.min(WRECK_MAX_SPIN, this.destroyRot + 0.7F);
                 this.yRotO = this.getYRot();
                 this.setYRot(this.getYRot() + this.destroyRot);
@@ -6323,6 +6949,13 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         Vec3 at = this.position().add(0.0D, this.getBbHeight() * 0.4D, 0.0D);
         var destroy = this.vehicleData().defaults().destroy();
         float power = destroy.explodes() ? destroy.explosionPower() : 0.0F;
+        if (this.isJet()) {
+            // Wreckage strewn round the fireball.
+            level.sendParticles(new net.minecraft.core.particles.BlockParticleOption(ParticleTypes.BLOCK,
+                            net.minecraft.world.level.block.Blocks.IRON_BLOCK.defaultBlockState()),
+                    at.x, at.y, at.z, 160, 6.0D, 2.0D, 6.0D, 0.7D);
+            level.sendParticles(ParticleTypes.LAVA, at.x, at.y, at.z, 40, 5.0D, 1.0D, 5.0D, 0.0D);
+        }
         // Drawn by clients like a missile's blast (fireball, smoke column, shockwave, boom as it reaches them).
         MissileBlastPayload blast = new MissileBlastPayload(at, Math.max(3.0F, power * 1.5F), Math.max(4.0F, power * 2.0F), true, true);
         for (ServerPlayer player : level.players()) {
