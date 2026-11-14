@@ -36,3 +36,5 @@ looped or cut as described. The original recordings remain the work of their aut
 - `*_cockpit.ogg` (`fire`, `gun_stop`, `engine`, `engine_start`, `runway_roll`, `gear`, `touchdown1-3`): the pilot's
   versions of the sounds above, made from them (same sources and licences): low-passed and given more low end, as heard
   through the airframe and canopy. The cockpit gun also carries a 65 Hz buzz at the GAU-8's rate of fire, synthesised.
+- `engine_distant.ogg` and `fire_distant.ogg`: the engine loop and gun above as heard from far off (same sources and
+  licences): low-passed, with the highs rolled off further and a long, soft echo, looped seamlessly.

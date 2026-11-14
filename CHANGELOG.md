@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.7.2+mc26.1.2.yftm.18 - 2026-11-14
+
+### Added
+- Jets and helicopters are heard from far off, up to 1024 blocks (before, the sound cut out at about 190 blocks, where the server stops sending the vehicle). The sound fades smoothly with distance, quickly close by and slowly further out, and past about 40 blocks gives way to a muffled, echoing distant version of the engine (and of the A-10's gun); from 240 blocks that is all that is heard. Past 190 blocks the server sends far players where each aircraft is every 4 ticks, so the distant sound carries on without a jump. Far sounds arrive late, at the speed of sound, with Doppler. At full power an A-10 is still faintly heard 950 blocks off. Helicopter guns now carry a long way too (before, within about 16 blocks).
+- Gun rounds from the A-10 and the helicopters keep flying outside the loaded area, like the helicopter rockets, out to 1200 blocks, and players up to 1024 blocks away see their tracers.
+
+### Changed
+- A-10 top speed is 200 km/h (was 120), with the rest scaled to match: it stalls below about 76 km/h, takes off at about 94 km/h and dives at up to about 250 km/h. Cruise control steps are scaled too.
+- The A-10's gun points 2 degrees below the nose, like the real GAU-8, and its aiming marker sits lower to match.
+- Firing the GAU-8 slows the A-10 much harder (a burst takes it from 200 to about 120 km/h in two seconds), but the recoil eases off before the stall, so it never falls below about 110 km/h or stalls from firing.
+- The A-10 is tougher: health 240 (was 180), armour 8 (was 7), and its engines are better protected.
+- The A-10 answers the controls a little faster: about 18% quicker in pitch and yaw and 10% quicker in roll.
+
+### Fixed
+- The back of the A-10's engines no longer looks see-through. The rear cowlings were being spun and blurred like the fans; now only the front fans spin.
+
 ## 1.7.2+mc26.1.2.yftm.17 - 2026-11-14
 
 ### Added
