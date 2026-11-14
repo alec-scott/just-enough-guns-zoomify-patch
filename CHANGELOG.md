@@ -3,6 +3,9 @@
 ## 1.7.2+mc26.1.2.yftm.19 - 2026-11-14
 
 ### Added
+- BD-40 Bulldozer: an assemblable tracked land-clearing vehicle with an articulated blade, linked hydraulics, fitted collision boxes, cargo hold, whole-tree felling, grade control, work lights, diesel audio, reversing alarm and horn.
+- A nine-slot Ripper bay feeds paving material to the lane behind the dozer. It covers the same columns the blade clears: five off the block grid and four exactly on it. The operator HUD shows material and total remaining across the bay.
+- Editable bulldozer model, texture/audio generators, offline preview, focused pack game tests, sandbox setup and a vehicle development guide.
 - Aircraft position lights, flashing beacons and strobes, ambient cockpit lighting, and night-only helicopter searchlights and A-10 taxi lighting. Searchlights reach farther ahead of the helicopters and can light terrain through optional LambDynamicLights integration.
 - Lit cockpit instruments: green displays and a head-up display for the A-10, and a turquoise panel with amber displays, backlit gauges and a green head-up display for the Mi-28.
 - A-10 speed brakes: hold S in a dive or the airbrake key in flight to open the split wingtip ailerons. They slow a strafing dive, close when released, and show their state on the HUD.
@@ -13,6 +16,10 @@
 - Helicopter gun tracers use smooth cores and glows like the A-10's, at a smaller size.
 
 ### Fixed
+- Bulldozer first-person audio stays centred while driving and looking sideways. Switching camera views preserves the same playing channels and operator mix; outside sounds retain their distance curve and distant-track handover.
+- The dozer's right mirror has a chamfered housing, clamped mount and textured glass angled toward the operator, clear of the post and support arm.
+- The dozer HUD uses sharp pixel scaling and measured text columns. The paving bay outline and tab leave stack counts clear, and a separate player-inventory heading prevents label overlap.
+- Holding Shift for a vehicle control keeps the seated operator upright, preventing the first-person camera from dropping into the seat.
 - Pressing the gun reload/cooldown key no longer also reloads Iris shaders when the bindings conflict. Shader reload still works with empty hands or a separately bound key.
 - Minigun barrels keep their final rotation after cooling instead of snapping back to zero. Either hand's cooling keeps dual miniguns spinning until it finishes, including when the main-hand gun is already cold.
 - Active minigun vent audio stops when leaving the world.

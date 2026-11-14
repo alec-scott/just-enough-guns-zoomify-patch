@@ -100,6 +100,9 @@ public final class VehicleHudOverlay {
     }
 
     private static void render(GuiGraphicsExtractor guiGraphics, Minecraft minecraft, VehicleEntity vehicle) {
+        if (vehicle instanceof ttv.migami.jeg.vehicle.entity.BulldozerEntity dozer && vehicle.getControllingPassenger() == minecraft.player) {
+            renderDozerPanel(guiGraphics, minecraft, dozer);
+        }
         boolean focusedSight = isFocusedVehicleSight(vehicle);
         renderLandVehicleStatus(guiGraphics, minecraft, vehicle);
         if (vehicle.hasVehicleWeapons() && vehicle.canPassengerUseSelectedVehicleWeapon(minecraft.player)) {
@@ -673,6 +676,9 @@ public final class VehicleHudOverlay {
     }
 
     private static void renderReticle(GuiGraphicsExtractor guiGraphics, VehicleEntity vehicle) {
+        if (vehicle instanceof ttv.migami.jeg.vehicle.entity.BulldozerEntity) {
+            return;
+        }
         int size = Math.min(guiGraphics.guiWidth(), guiGraphics.guiHeight());
         int x = (guiGraphics.guiWidth() - size) / 2;
         int y = (guiGraphics.guiHeight() - size) / 2;
@@ -732,6 +738,115 @@ public final class VehicleHudOverlay {
             guiGraphics.blit(RenderPipelines.GUI_TEXTURED, seat == 0 ? DRIVER_ICON : PASSENGER_ICON, 30, y, 0.0F, 0.0F, 8, 8, 8, 8);
             guiGraphics.text(minecraft.font, name, 42, y, passenger == null ? 0xFF4F8740 : 0xFF66FF00);
         }
+    }
+
+    private static int dozerHintId = -1;
+    private static long dozerHintStart, dozerLastSeen;
+    /** How long the key hints stay after boarding (ticks), then fade over {@link #DOZER_HINT_FADE}. */
+    private static final int DOZER_HINT_TICKS = 140, DOZER_HINT_FADE = 20;
+    private static final float DOZER_PANEL_SCALE = .75F;
+
+    /**
+     * The dozer operator's panel, drawn at three-quarter size: work status, blade height, load, grade lock and hold, and
+     * the ripper while it is down. The key hints show for a few seconds after boarding, then fade.
+     */
+    private static void renderDozerPanel(GuiGraphicsExtractor g, Minecraft mc, ttv.migami.jeg.vehicle.entity.BulldozerEntity dozer) {
+        long now = mc.level.getGameTime();
+        if (dozer.getId() != dozerHintId || now - dozerLastSeen > 20) {
+            dozerHintId = dozer.getId();
+            dozerHintStart = now;
+        }
+        dozerLastSeen = now;
+        long shown = now - dozerHintStart;
+        float hints = shown < DOZER_HINT_TICKS ? 1F : Math.max(0F, 1F - (shown - DOZER_HINT_TICKS) / (float) DOZER_HINT_FADE);
+        boolean ripperLine = dozer.ripperDown();
+        int rows = 5 + (ripperLine ? 1 : 0) + (hints > .05F ? 2 : 0);
+        var pose = g.pose();
+        pose.pushMatrix();
+        // About three-quarter size, snapped so each font pixel is a whole number of screen pixels: a plain .75 scale
+        // smears the text at GUI scale 3 (2.25 pixels per font pixel).
+        int guiScale = Math.max(1, mc.getWindow().getGuiScale());
+        float scale = Math.max(1, Math.round(guiScale * DOZER_PANEL_SCALE)) / (float) guiScale;
+        pose.scale(scale, scale);
+        int x = 10, y = 10, row = 11;
+        int status = dozer.workStatus();
+        // Two columns: names on the left, readings from one shared column, the panel as wide as its widest line.
+        boolean cutting = dozer.cutFloor() != ttv.migami.jeg.vehicle.entity.BulldozerEntity.NO_FLOOR;
+        Component bladeName = Component.translatable("hud.jeg.dozer.blade"), loadName = Component.translatable("hud.jeg.dozer.load"),
+                holdName = Component.translatable("hud.jeg.dozer.hold"), gradeName = Component.translatable("hud.jeg.dozer.grade"),
+                ripperName = Component.translatable("hud.jeg.dozer.ripper");
+        Component gradeValue = cutting ? Component.translatable("hud.jeg.dozer.cutting_to", dozer.cutFloor())
+                : Component.translatable(dozer.gradeAssist() ? "hud.jeg.dozer.on" : "hud.jeg.dozer.off");
+        Component holdValue = Component.literal(dozer.occupiedCargoSlots() + "/" + dozer.vehicleContainerSlots());
+        var paving = dozer.pavingStack();
+        Component ripperValue = paving.isEmpty() ? Component.translatable("hud.jeg.dozer.ripper_empty")
+                : Component.literal(dozer.pavingCount() + " ").append(paving.getHoverName());
+        int names = Math.max(Math.max(mc.font.width(bladeName), mc.font.width(loadName)),
+                Math.max(Math.max(mc.font.width(holdName), mc.font.width(gradeName)), ripperLine ? mc.font.width(ripperName) : 0));
+        int bx = x + names + 8, bw = 62;
+        int w = Math.max(128, bx - x + bw + 6 + Math.max(mc.font.width(holdValue), mc.font.width("+" + Math.round(ttv.migami.jeg.vehicle.util.BulldozerRig.LIFT_MAX) + "°")));
+        w = Math.max(w, bx - x + mc.font.width(gradeValue));
+        if (ripperLine) w = Math.max(w, bx - x + mc.font.width(ripperValue));
+        Component controls = Component.translatable("hud.jeg.dozer.controls", mc.options.keyJump.getTranslatedKeyMessage(),
+                mc.options.keyShift.getTranslatedKeyMessage(), KeyBindings.VEHICLE_DEPLOY_DECOY.getTranslatedKeyMessage());
+        Component controls2 = Component.translatable("hud.jeg.dozer.controls2", KeyBindings.RELOAD.getTranslatedKeyMessage(),
+                mc.options.keyAttack.getTranslatedKeyMessage());
+        if (hints > .05F) w = Math.max(w, Math.max(mc.font.width(controls), mc.font.width(controls2)));
+        boolean starting = dozer.powered() && !dozer.engineRunning();
+        int light = starting ? 0xFFE0B040 : switch (status) {
+            case ttv.migami.jeg.vehicle.terrain.BulldozerTerrainWork.WORKING, ttv.migami.jeg.vehicle.terrain.BulldozerTerrainWork.TREE -> 0xFF6BD36B;
+            case ttv.migami.jeg.vehicle.terrain.BulldozerTerrainWork.BUSY, ttv.migami.jeg.vehicle.terrain.BulldozerTerrainWork.SPOIL -> 0xFFE0B040;
+            case ttv.migami.jeg.vehicle.terrain.BulldozerTerrainWork.SOLID, ttv.migami.jeg.vehicle.terrain.BulldozerTerrainWork.PROTECTED,
+                 ttv.migami.jeg.vehicle.terrain.BulldozerTerrainWork.NO_POWER -> 0xFFE05A40;
+            default -> 0xFF8C9490;
+        };
+        g.fill(x - 4, y - 4, x + w + 4, y + row * rows - 1, 0x88101414);
+        g.fill(x - 4, y - 4, x + w + 4, y - 3, 0xFFD6A024);
+        g.fill(x, y + 2, x + 5, y + 7, light);
+        Component state = Component.translatable(starting ? "hud.jeg.dozer.starting" : "hud.jeg.dozer.status_" + status);
+        g.text(mc.font, state, x + 9, y, 0xFFECE3C4);
+        y += row;
+        float lift = dozer.bladeLift();
+        float min = ttv.migami.jeg.vehicle.util.BulldozerRig.LIFT_MIN, max = ttv.migami.jeg.vehicle.util.BulldozerRig.LIFT_MAX;
+        g.text(mc.font, bladeName, x, y, 0xFFB9B39E);
+        g.fill(bx, y + 3, bx + bw, y + 5, 0xFF3A3F3D);
+        int travel = bx + Math.round(bw * (ttv.migami.jeg.vehicle.util.BulldozerRig.TRAVEL_LIFT - min) / (max - min));
+        g.fill(travel, y + 3, bx + bw, y + 5, 0xFF5E6A78);
+        int grade = bx + Math.round(bw * (0 - min) / (max - min));
+        g.fill(grade, y + 1, grade + 1, y + 7, 0xFF8C9490);
+        int marker = bx + Math.round(bw * (lift - min) / (max - min));
+        g.fill(marker - 1, y, marker + 2, y + 8, 0xFFD6A024);
+        String label = lift > ttv.migami.jeg.vehicle.util.BulldozerRig.TRAVEL_LIFT ? Component.translatable("hud.jeg.dozer.travel").getString()
+                : (lift >= 0 ? "+" : "") + Math.round(lift) + "°";
+        g.text(mc.font, Component.literal(label), bx + bw + 5, y, 0xFFECE3C4);
+        y += row;
+        g.text(mc.font, loadName, x, y, 0xFFB9B39E);
+        g.fill(bx, y + 3, bx + bw, y + 5, 0xFF3A3F3D);
+        float load = dozer.load();
+        g.fill(bx, y + 2, bx + Math.round(bw * load), y + 6, load > .85F ? 0xFFE05A40 : 0xFFD6A024);
+        y += row;
+        boolean full = dozer.occupiedCargoSlots() >= dozer.vehicleContainerSlots();
+        g.text(mc.font, holdName, x, y, 0xFFB9B39E);
+        g.fill(bx, y + 3, bx + bw, y + 5, 0xFF3A3F3D);
+        float filled = dozer.occupiedCargoSlots() / (float) Math.max(1, dozer.vehicleContainerSlots());
+        g.fill(bx, y + 2, bx + Math.round(bw * filled), y + 6, full ? 0xFFE05A40 : 0xFF8C9490);
+        g.text(mc.font, holdValue, bx + bw + 5, y, full ? 0xFFE0B040 : 0xFFECE3C4);
+        y += row;
+        g.text(mc.font, gradeName, x, y, 0xFFB9B39E);
+        g.text(mc.font, gradeValue, bx, y, cutting ? 0xFFE0B040 : dozer.gradeAssist() ? 0xFF6BD36B : 0xFFECE3C4);
+        y += row;
+        if (ripperLine) {
+            g.text(mc.font, ripperName, x, y, 0xFFB9B39E);
+            g.text(mc.font, ripperValue, bx, y, paving.isEmpty() ? 0xFFE05A40 : 0xFFE0B040);
+            y += row;
+        }
+        if (hints > .05F) {
+            int colour = ((int) (hints * 255) << 24) | 0x8C9490;
+            g.text(mc.font, controls, x, y, colour);
+            y += row;
+            g.text(mc.font, controls2, x, y, colour);
+        }
+        pose.popMatrix();
     }
 
     private static void renderLandVehicleStatus(GuiGraphicsExtractor guiGraphics, Minecraft minecraft, VehicleEntity vehicle) {

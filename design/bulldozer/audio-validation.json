@@ -1,0 +1,187 @@
+{
+  "engine_idle": {
+    "duration_seconds": 11.05,
+    "sample_rate": 44100,
+    "channels": 1,
+    "loop": true,
+    "peak": 0.4933,
+    "rms": 0.1199,
+    "seam_step": 0.00132,
+    "sha256": "8a96e67c316706d84f5e458bfce64feb3652413e5411f5d2f4b9875ee4f2cc81"
+  },
+  "engine_load": {
+    "duration_seconds": 12.05,
+    "sample_rate": 44100,
+    "channels": 1,
+    "loop": true,
+    "peak": 0.5529,
+    "rms": 0.1392,
+    "seam_step": 0.00333,
+    "sha256": "e2c4f1e326c6eefe4dd7e4fa9409d3525b30589b75c0e53f76537f4a42b392a6"
+  },
+  "engine_distant": {
+    "duration_seconds": 9.6,
+    "sample_rate": 44100,
+    "channels": 1,
+    "loop": true,
+    "peak": 0.3752,
+    "rms": 0.0898,
+    "seam_step": 0.01808,
+    "sha256": "34925e57dedccbd2321eb05f072bdd8047967ce72e9d3446f9db949d9144d8fa"
+  },
+  "tracks": {
+    "duration_seconds": 3.2,
+    "sample_rate": 44100,
+    "channels": 1,
+    "loop": true,
+    "peak": 0.4538,
+    "rms": 0.0879,
+    "seam_step": 0.00533,
+    "sha256": "ecee6a308f7ca6efb53d5e2e7aa1485250799fb0d8b6c97e3be51147f7ce8724"
+  },
+  "blade": {
+    "duration_seconds": 3.9,
+    "sample_rate": 44100,
+    "channels": 1,
+    "loop": true,
+    "peak": 0.6089,
+    "rms": 0.1081,
+    "seam_step": 0.00452,
+    "sha256": "02f75a7f206b90555c4816ed09d28a88da8c6a8c52ae20533532af8d606c1c1a"
+  },
+  "hydraulic": {
+    "duration_seconds": 1.28,
+    "sample_rate": 44100,
+    "channels": 1,
+    "loop": true,
+    "peak": 0.3246,
+    "rms": 0.0687,
+    "seam_step": 0.00053,
+    "sha256": "c7e76f6a4a94409b3cca6d7fa44caebe3352663ea03ccc2480059566e5ddab74"
+  },
+  "engine_start": {
+    "duration_seconds": 3.217,
+    "sample_rate": 44100,
+    "channels": 1,
+    "loop": false,
+    "peak": 0.706,
+    "rms": 0.1162,
+    "seam_step": 0.00116,
+    "sha256": "59db1731b00a86add4984a70fd285c46000b36198e71cbaeafc74adcc2abd348"
+  },
+  "engine_stop": {
+    "duration_seconds": 2.6,
+    "sample_rate": 44100,
+    "channels": 1,
+    "loop": false,
+    "peak": 0.4755,
+    "rms": 0.1,
+    "seam_step": 0.00027,
+    "sha256": "c9e5985005fbc5c452cc2cf810fe30150147c478b29b63a04bd4a1e27ed3dceb"
+  },
+  "hydraulic_stop": {
+    "duration_seconds": 0.3,
+    "sample_rate": 44100,
+    "channels": 1,
+    "loop": false,
+    "peak": 0.1882,
+    "rms": 0.0492,
+    "seam_step": 3e-05,
+    "sha256": "da771aadfcd686a675f8a9c6805154231f2af29947eea9291499c33a48ec92f5"
+  },
+  "blade_impact_1": {
+    "duration_seconds": 0.55,
+    "sample_rate": 44100,
+    "channels": 1,
+    "loop": false,
+    "peak": 0.7734,
+    "rms": 0.1186,
+    "seam_step": 0.00028,
+    "sha256": "47ef92f931b0cedcbcbf314594e55b9e31640d3669ce12b162d1eaa7737f1729"
+  },
+  "blade_impact_2": {
+    "duration_seconds": 0.45,
+    "sample_rate": 44100,
+    "channels": 1,
+    "loop": false,
+    "peak": 0.9551,
+    "rms": 0.1,
+    "seam_step": 0.00495,
+    "sha256": "59b05c40e929f228eb6c3caab36244734f6466f56051af4c1a4031ab0e9eabaf"
+  },
+  "tree_fall": {
+    "duration_seconds": 7.4,
+    "sample_rate": 44100,
+    "channels": 1,
+    "loop": false,
+    "peak": 0.9162,
+    "rms": 0.0445,
+    "seam_step": 0.0,
+    "sha256": "871a9f6bf094f4be7f072c37eb3f24458c3c89c7af5f66ee9fb17d7d2f475642"
+  },
+  "reverse": {
+    "duration_seconds": 1.0,
+    "sample_rate": 44100,
+    "channels": 1,
+    "loop": false,
+    "peak": 0.101,
+    "rms": 0.0287,
+    "seam_step": 0.00066,
+    "sha256": "8eb51e82182e31f83be0be67cb6cf73ce4a7f7f44a5d9d1a6bf8b096ec8433d0"
+  },
+  "horn": {
+    "duration_seconds": 1.121,
+    "sample_rate": 44100,
+    "channels": 1,
+    "loop": true,
+    "peak": 0.5449,
+    "rms": 0.1597,
+    "seam_step": 0.01541,
+    "sha256": "65541be0a2a8e27f8368d662080d580acdc405f93a70f80913f946b70e1df043"
+  },
+  "horn_distant": {
+    "duration_seconds": 1.121,
+    "sample_rate": 44100,
+    "channels": 1,
+    "loop": true,
+    "peak": 0.4089,
+    "rms": 0.1199,
+    "seam_step": 0.00589,
+    "sha256": "2580fc2b3316665ed28ffb5b6007508a303d5c5c0914625f060018871610816d"
+  },
+  "source_segments_seconds": {
+    "engine_idle": [
+      23.7,
+      11.4
+    ],
+    "engine_load": [
+      7.2,
+      12.4
+    ],
+    "distant": 17.5,
+    "rattle": 6.75,
+    "hydraulic": 4.75,
+    "blade": [
+      0.2,
+      4.0
+    ],
+    "blade_impact": [
+      [
+        29.52,
+        0.55
+      ],
+      [
+        12.78,
+        0.45
+      ]
+    ],
+    "tree_fall": [
+      0,
+      7.4
+    ],
+    "horn": [
+      0.6,
+      1.3
+    ]
+  }
+}

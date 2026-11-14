@@ -112,7 +112,7 @@ import ttv.migami.jeg.vehicle.util.VehicleSoundHelper;
 import ttv.migami.jeg.vehicle.util.VehicleMissileProfile;
 import ttv.migami.jeg.vehicle.util.VehicleWeaponStats;
 
-public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuProvider<Integer>, GeoEntity {
+public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuProvider<VehicleMenu.OpeningData>, GeoEntity {
     private static final double CLIENT_RESYNC_DISTANCE_SQR = 4.0D;
     private static final double CLIENT_RESYNC_HORIZONTAL_MOTION_DELTA_SQR = 0.16D;
     private static final float CLIENT_RESYNC_YAW_DELTA = 12.0F;
@@ -674,7 +674,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         this.setBoundingBox(this.makeBoundingBox(this.position()));
     }
 
-    private boolean setVehicleYawIfUnblocked(float yaw) {
+    protected boolean setVehicleYawIfUnblocked(float yaw) {
         if (!this.usesObbBlockCollisionBounds()) {
             this.setYRot(yaw);
             this.updateVehicleBoundingBox();
@@ -756,7 +756,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
 
     private boolean usesCustomObbEntityCollision() {
         return switch (this.vehicleDataId().getPath()) {
-            case "lav150", "bmp2", "speedboat", "ah6", "mi28", "truck" -> true;
+            case "lav150", "bmp2", "speedboat", "ah6", "mi28", "truck", "bulldozer" -> true;
             default -> false;
         };
     }
@@ -4657,13 +4657,33 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
      * few ticks, players further off but within earshot are told where it is, how hard its engine runs and whether its
      * gun fires, and their client plays its distant sound from that (FarAircraftAudio).
      */
+    /** Whether players beyond entity range are sent this vehicle's position for its far sound (aircraft by default). */
+    protected boolean sendsFarSoundTracks() {
+        return VehicleSoundHelper.isAircraft(this);
+    }
+
+    /** Engine loudness in the far tracks, before distance (see AircraftSoundRange). */
+    protected float farSoundLoudness() {
+        return VehicleSoundHelper.aircraftEngineLoudness(this);
+    }
+
+    /** Engine pitch in the far tracks, before Doppler. */
+    protected float farSoundPitch() {
+        return VehicleSoundHelper.aircraftEnginePitch(this);
+    }
+
+    /** The far tracks' second sound: a jet's gun firing, or another vehicle's loudest signal (a horn). */
+    protected boolean farSoundSignal() {
+        return this.isJetGunFiring();
+    }
+
     private void sendFarAircraftSound() {
-        if (this.tickCount % AIRCRAFT_TRACK_INTERVAL_TICKS != 0 || this.isWrecked() || !VehicleSoundHelper.isAircraft(this)
+        if (this.tickCount % AIRCRAFT_TRACK_INTERVAL_TICKS != 0 || this.isWrecked() || !this.sendsFarSoundTracks()
                 || !(this.level() instanceof ServerLevel level)) {
             return;
         }
-        float loudness = VehicleSoundHelper.aircraftEngineLoudness(this);
-        boolean firing = this.isJetGunFiring();
+        float loudness = this.farSoundLoudness();
+        boolean firing = this.farSoundSignal();
         if (loudness <= 0.01F && !firing) {
             return;
         }
@@ -4676,7 +4696,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
             }
             if (track == null) {
                 track = new ttv.migami.jeg.network.AircraftTrackPayload(this.getId(), this.vehicleDataId().getPath(), this.position(),
-                        this.getDeltaMovement(), loudness, VehicleSoundHelper.aircraftEnginePitch(this), firing);
+                        this.getDeltaMovement(), loudness, this.farSoundPitch(), firing);
             }
             net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking.send(player, track);
         }
@@ -5062,7 +5082,19 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         this.destroyRot = 0.0F;
     }
 
+    /** Specialized construction controls reuse the normal movement/collision and state synchronization. */
+    protected boolean tickSpecialLandMovement(boolean server) {
+        return false;
+    }
+
+    protected VehicleInput landInput() {
+        return this.input;
+    }
+
     private void tickServerMovement() {
+        if (this.tickSpecialLandMovement(true)) {
+            return;
+        }
         EngineInfo engine = this.vehicleData().defaults().engine();
         if (this.vehicleData().defaults().vehicleType() == VehicleType.ARTILLERY) {
             this.setDeltaMovement(Vec3.ZERO);
@@ -5130,6 +5162,9 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     }
 
     private void tickClientPredictedLandMovement() {
+        if (this.tickSpecialLandMovement(false)) {
+            return;
+        }
         if (this.vehicleData().defaults().vehicleType() != VehicleType.LAND) {
             return;
         }
@@ -5437,7 +5472,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         }
     }
 
-    private void moveGroundVehicle(Vec3 velocity) {
+    protected void moveGroundVehicle(Vec3 velocity) {
         Vec3 before = this.position();
         this.setDeltaMovement(velocity);
         this.move(MoverType.SELF, this.getDeltaMovement());
@@ -6243,7 +6278,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         this.tickBoatMovement(engine, true);
     }
 
-    double mobilityMultiplier() {
+    protected double mobilityMultiplier() {
         double multiplier = this.isEngineDamaged() ? 0.35D : 1.0D;
         if (this.isLeftWheelDamaged()) {
             multiplier *= 0.75D;
@@ -7162,6 +7197,36 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         return false;
     }
 
+    /**
+     * Whether shots are tested against the fitted collision boxes instead of the entity's whole box. A land vehicle's
+     * entity box encloses every part at any yaw, so it registers hits in the empty space around the hull; turn this on
+     * once the vehicle's boxes are fitted to its model (see docs/vehicle-development-guide.md).
+     */
+    public boolean preciseHitbox() {
+        return false;
+    }
+
+    /** Where the segment first enters one of the fitted collision boxes (grown by {@code inflate}), or null. */
+    @Nullable
+    public Vec3 clipHitbox(Vec3 start, Vec3 end, double inflate) {
+        Vec3 localStart = this.toLocalVehiclePosition(start);
+        Vec3 localEnd = this.toLocalVehiclePosition(end);
+        double length = localEnd.subtract(localStart).length();
+        if (length < 1.0E-9D) {
+            return null;
+        }
+        double best = Double.MAX_VALUE;
+        for (OBBInfo.Box box : this.vehicleData().defaults().obb().boxes()) {
+            AABB local = new AABB(box.x() - box.halfWidth(), box.y() - box.halfHeight(), box.z() - box.halfDepth(),
+                    box.x() + box.halfWidth(), box.y() + box.halfHeight(), box.z() + box.halfDepth()).inflate(inflate);
+            Vec3 hit = local.contains(localStart) ? localStart : local.clip(localStart, localEnd).orElse(null);
+            if (hit != null) {
+                best = Math.min(best, hit.distanceTo(localStart) / length);
+            }
+        }
+        return best == Double.MAX_VALUE ? null : start.add(end.subtract(start).scale(best));
+    }
+
     private OBBInfo.Part estimateHitPart(DamageSource source) {
         Entity direct = source.getDirectEntity();
         if (direct == null) {
@@ -7338,8 +7403,18 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     }
 
     @Override
-    public Integer getScreenOpeningData(ServerPlayer player) {
-        return this.vehicleContainerSlots();
+    public VehicleMenu.OpeningData getScreenOpeningData(ServerPlayer player) {
+        return new VehicleMenu.OpeningData(this.vehicleContainerSlots(), this.toolSlotStart(), this.toolSlotCount());
+    }
+
+    /** First hold slot of a bay that feeds one of the vehicle's tools, shown and restricted in its menu; -1 for none. */
+    public int toolSlotStart() {
+        return -1;
+    }
+
+    /** How many slots that bay has. */
+    public int toolSlotCount() {
+        return 0;
     }
 
     public int vehicleContainerSlots() {

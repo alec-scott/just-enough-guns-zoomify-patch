@@ -27,6 +27,7 @@ public final class VehicleAssemblyRecipeManager {
             Reference.id("lav150"),
             Reference.id("bmp2"),
             Reference.id("truck"),
+            Reference.id("bulldozer"),
             Reference.id("speedboat"),
             Reference.id("ah6"),
             Reference.id("mi28"),

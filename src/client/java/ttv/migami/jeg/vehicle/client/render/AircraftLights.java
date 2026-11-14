@@ -81,9 +81,18 @@ public final class AircraftLights {
     public record RotorTips(List<String> blades, Vector3f tip, Vector3f hub, int colour) {
     }
 
-    public record LightSet(List<PointLight> lights, Searchlight searchlight, List<Strip> strips, RotorTips rotorTips) {
+    /**
+     * {@code openSeat}: the occupant sits in the open among the lamps (an open ROPS canopy, not a cockpit). Seen from
+     * the seat, the lamps' backs and the searchlight lens give no glare and spill would light the canopy at arm's
+     * length, so the occupant view draws only the beacon (faintly) and the beam's pool on the ground.
+     */
+    public record LightSet(List<PointLight> lights, Searchlight searchlight, List<Strip> strips, RotorTips rotorTips, boolean openSeat) {
+        LightSet(List<PointLight> lights, Searchlight searchlight, List<Strip> strips, RotorTips rotorTips) {
+            this(lights, searchlight, strips, rotorTips, false);
+        }
+
         LightSet(List<PointLight> lights, Searchlight searchlight) {
-            this(lights, searchlight, List.of(), null);
+            this(lights, searchlight, List.of(), null, false);
         }
     }
 
@@ -93,6 +102,20 @@ public final class AircraftLights {
     private static final int STROBE_WHITE = 0xEEF4FF;
     private static final int SEARCH_WHITE = 0xFFF2DC;
     private static final int FORMATION_GREEN = 0x8CFFB0;
+
+    /** Construction work lamps share the existing beam, spill and optional dynamic-ground-light implementation. */
+    /** Work lamps on the radiator guard and canopy, tail lamps, the amber beacon; the beam from the guard lamps. */
+    private static final LightSet BULLDOZER = new LightSet(List.of(
+            new PointLight(Kind.POSITION, -7.6F, 26.4F, -35.4F, SEARCH_WHITE, .16F, 1, .14F, 0),
+            new PointLight(Kind.POSITION, 7.6F, 26.4F, -35.4F, SEARCH_WHITE, .16F, 1, .14F, 0),
+            new PointLight(Kind.POSITION, -8.65F, 44.9F, -6.4F, SEARCH_WHITE, .17F, 1, .15F, 0),
+            new PointLight(Kind.POSITION, 8.65F, 44.9F, -6.4F, SEARCH_WHITE, .17F, 1, .15F, 0),
+            new PointLight(Kind.POSITION, -8.65F, 44.9F, 20.4F, SEARCH_WHITE, .14F, .9F, .12F, 0),
+            new PointLight(Kind.POSITION, 8.65F, 44.9F, 20.4F, SEARCH_WHITE, .14F, .9F, .12F, 0),
+            new PointLight(Kind.POSITION, -9.3F, 25.5F, 29F, RED, .1F, .7F, .1F, 0),
+            new PointLight(Kind.POSITION, 9.3F, 25.5F, 29F, RED, .1F, .7F, .1F, 0),
+            new PointLight(Kind.BEACON, 7.8F, 49.3F, 14.8F, 0xFFAC35, .45F, 1.3F, .3F, 0)
+    ), new Searchlight(0, 26.4F, -35.6F, 16, 26, 30, SEARCH_WHITE, false), List.of(), null, true);
 
     private static final LightSet A10 = new LightSet(List.of(
             new PointLight(Kind.POSITION, -142.7F, 39.5F, -8.0F, RED, 0.5F, 1.8F, 0.55F, 0.0F),
@@ -161,6 +184,7 @@ public final class AircraftLights {
 
     public static LightSet forVehicle(VehicleEntity vehicle) {
         return switch (vehicle.vehicleDataId().getPath()) {
+            case "bulldozer" -> BULLDOZER;
             case "a10" -> A10;
             case "ah6" -> AH6;
             case "mi28" -> MI28;
@@ -170,6 +194,7 @@ public final class AircraftLights {
 
     /** The aircraft has power: someone at the controls or the engine still turning. A wreck is dark. */
     public static boolean isPowered(VehicleEntity vehicle) {
+        if (vehicle instanceof ttv.migami.jeg.vehicle.entity.BulldozerEntity dozer) return dozer.powered();
         if (vehicle.isWrecked()) {
             return false;
         }

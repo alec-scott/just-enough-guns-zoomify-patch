@@ -66,6 +66,7 @@ final class VehicleLightsLayer<T extends VehicleEntity> extends GeoRenderLayer<T
         }
         float partialTick = Mth.clamp(passInfo.renderState().ageInTicks - vehicle.tickCount, 0.0F, 1.0F);
         boolean occupant = AircraftLights.isOccupantView(vehicle);
+        boolean openSeat = occupant && set.openSeat();
         float seconds = (vehicle.level().getGameTime() + partialTick) / 20.0F;
         float seed = AircraftLights.seed(vehicle);
         CameraRenderState camera = passInfo.cameraState();
@@ -91,15 +92,21 @@ final class VehicleLightsLayer<T extends VehicleEntity> extends GeoRenderLayer<T
             if (flash <= 0.002F) {
                 continue;
             }
+            if (openSeat && light.kind() != AircraftLights.Kind.BEACON) {
+                // Lamps around an open seat face away from the operator: no glare, and no spill on the canopy beside them.
+                continue;
+            }
             float shown = flash;
             float size = light.size() * (0.55F + 0.45F * flash);
             if (occupant) {
-                shown *= light.kind() == AircraftLights.Kind.STROBE ? 0.25F : 0.5F;
+                shown *= openSeat ? 0.3F : light.kind() == AircraftLights.Kind.STROBE ? 0.25F : 0.5F;
                 size *= 0.7F;
             }
             glows.add(new Glow(at, size, r, g, b, shown, !occupant));
-            spills.add(new float[]{at.x, at.y, at.z, r, g, b, light.spill() * SPILL_GAIN * flash,
-                    light.spillRadius() * 1.2F, 0.1F});
+            if (!openSeat) {
+                spills.add(new float[]{at.x, at.y, at.z, r, g, b, light.spill() * SPILL_GAIN * flash,
+                        light.spillRadius() * 1.2F, 0.1F});
+            }
         }
 
         // Formation strips: flat panels of soft light on the skin, and a little of it on the panels round them.
@@ -132,7 +139,9 @@ final class VehicleLightsLayer<T extends VehicleEntity> extends GeoRenderLayer<T
             float r = ((search.colour() >> 16) & 0xFF) / 255.0F;
             float g = ((search.colour() >> 8) & 0xFF) / 255.0F;
             float b = (search.colour() & 0xFF) / 255.0F;
-            spills.add(new float[]{beam.lens.x, beam.lens.y, beam.lens.z, r, g, b, 0.55F * searchLevel, 1.1F, 0.0F});
+            if (!openSeat) {
+                spills.add(new float[]{beam.lens.x, beam.lens.y, beam.lens.z, r, g, b, 0.55F * searchLevel, 1.1F, 0.0F});
+            }
         }
 
         PoseStack modelPose = new PoseStack();
@@ -186,7 +195,7 @@ final class VehicleLightsLayer<T extends VehicleEntity> extends GeoRenderLayer<T
                 for (Glow glow : glows) {
                     glow(buffer, facing, glow.at, glow.size, glow.r, glow.g, glow.b, glow.alpha, glow.pullForward);
                 }
-                if (lensBeam != null) {
+                if (lensBeam != null && !openSeat) {
                     glow(buffer, facing, lensBeam.lens, lensBeam.lensSize, lensBeam.r, lensBeam.g, lensBeam.b,
                             lensBeam.lensAlpha, !occupant);
                 }

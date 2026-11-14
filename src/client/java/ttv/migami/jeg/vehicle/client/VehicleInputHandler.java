@@ -245,6 +245,8 @@ public final class VehicleInputHandler {
         }
         boolean jetCruising = jetPilot && jetCruise >= 0.0F;
         int barrelRoll = tickBarrelRollRequest(minecraft, helicopterPilot);
+        // The bulldozer drives like the other land vehicles (Ctrl brakes); Space raises and Shift lowers its blade.
+        boolean dozerDriver = vehicle instanceof ttv.migami.jeg.vehicle.entity.BulldozerEntity && vehicle.getControllingPassenger() == player;
         VehicleInput input = new VehicleInput(
                 !jetCruising && (minecraft.options.keyUp.isDown() || (cruising && cruiseSpeed > 0.0F)),
                 !jetCruising && minecraft.options.keyDown.isDown(),
@@ -252,7 +254,7 @@ public final class VehicleInputHandler {
                 minecraft.options.keyRight.isDown(),
                 KeyBindings.VEHICLE_BRAKE_DESCEND.isDown(),
                 minecraft.options.keyJump.isDown(),
-                KeyBindings.VEHICLE_BRAKE_DESCEND.isDown(),
+                dozerDriver ? minecraft.options.keyShift.isDown() : KeyBindings.VEHICLE_BRAKE_DESCEND.isDown(),
                 minecraft.options.keyAttack.isDown(),
                 reload,
                 freeLook,
@@ -374,6 +376,11 @@ public final class VehicleInputHandler {
         player.yHeadRotO = previousYaw;
         player.yBodyRot = targetYaw;
         player.yBodyRotO = previousYaw;
+        if (vehicle instanceof ttv.migami.jeg.vehicle.entity.BulldozerEntity) {
+            // The operator looks all round from the open seat but stays seated: the body turns only so far.
+            player.yBodyRot = vehicle.getYRot() + Mth.clamp(Mth.wrapDegrees(targetYaw - vehicle.getYRot()), -50.0F, 50.0F);
+            player.yBodyRotO = vehicle.yRotO + Mth.clamp(Mth.wrapDegrees(previousYaw - vehicle.yRotO), -50.0F, 50.0F);
+        }
         player.setXRot(targetPitch);
         player.xRotO = previousPitch;
     }

@@ -18,6 +18,7 @@ import ttv.migami.jeg.client.medal.MedalManager;
 import ttv.migami.jeg.client.ScopeOverlayRenderer;
 import ttv.migami.jeg.item.GunItem;
 import ttv.migami.jeg.vehicle.client.overlay.VehicleHudOverlay;
+import ttv.migami.jeg.vehicle.entity.BulldozerEntity;
 import ttv.migami.jeg.vehicle.entity.base.VehicleEntity;
 
 @Mixin(Gui.class)
@@ -25,8 +26,10 @@ public final class GuiMixin {
     @Inject(method = "extractCrosshair", at = @At("HEAD"), cancellable = true)
     private void jeg$hideCrosshairWhenHoldingGun(GuiGraphicsExtractor guiGraphics, DeltaTracker deltaTracker, CallbackInfo ci) {
         Minecraft minecraft = Minecraft.getInstance();
-        // At the vehicle's controls the vehicle HUD draws its own reticle; a passenger with their own gun keeps theirs.
-        if (jeg$isVehicleHudActive()) {
+        // Construction uses the blade's contact area, so the bulldozer has no aiming crosshair.
+        // Armed vehicles draw their own reticle; a passenger with their own gun keeps theirs.
+        if ((minecraft.player != null && minecraft.player.getVehicle() instanceof BulldozerEntity)
+                || jeg$isVehicleHudActive()) {
             ci.cancel();
             return;
         }

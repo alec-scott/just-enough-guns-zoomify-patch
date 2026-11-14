@@ -306,6 +306,7 @@ public final class FabricClientBootstrap {
         EntityRendererRegistry.register(ModEntities.AH6.get(), Ah6Renderer::new);
         EntityRendererRegistry.register(ModEntities.A10.get(), A10Renderer::new);
         EntityRendererRegistry.register(ModEntities.BMP2.get(), Bmp2Renderer::new);
+        EntityRendererRegistry.register(ModEntities.BULLDOZER.get(), ttv.migami.jeg.vehicle.client.render.BulldozerRenderer::new);
         EntityRendererRegistry.register(ModEntities.MI28.get(), Mi28Renderer::new);
         EntityRendererRegistry.register(ModEntities.TOM6.get(), Tom6Renderer::new);
         EntityRendererRegistry.register(ModEntities.LASER_TOWER.get(), LaserTowerRenderer::new);
@@ -345,6 +346,7 @@ public final class FabricClientBootstrap {
             ttv.migami.jeg.vehicle.client.audio.JetAudio.tick(client);
             ttv.migami.jeg.vehicle.client.audio.FarAircraftAudio.tick(client);
             ttv.migami.jeg.vehicle.client.render.AircraftLights.tick(client);
+            ttv.migami.jeg.vehicle.client.audio.BulldozerAudio.tick(client);
             MedalManager.tick();
             if (NetworkHandler.shouldRenderLegacyBulletTrail()) {
                 BulletTrailRenderer.tick();
@@ -376,6 +378,7 @@ public final class FabricClientBootstrap {
             ttv.migami.jeg.vehicle.client.audio.HelicopterEngineAudio.clear(client);
             ttv.migami.jeg.vehicle.client.audio.JetAudio.clear(client);
             ttv.migami.jeg.vehicle.client.audio.FarAircraftAudio.clear(client);
+            ttv.migami.jeg.vehicle.client.audio.BulldozerAudio.clear(client);
             VehicleRotaryGunAudio.clear(client);
             Config.setSyncedMagazineFeedEnabled(null);
             Config.setSyncedHelicopterFlight(null);

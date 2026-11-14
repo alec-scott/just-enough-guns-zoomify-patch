@@ -37,7 +37,7 @@ jobs:
       - name: Build
         if: steps.tag.outputs.skip != 'true'
         run: |
-          chmod +x gradlew && ./gradlew build
+          chmod +x gradlew && ./gradlew build -Pminecraft_version=26.1.2 -Pfabric_version=0.155.3+26.1.2 -Ploader_version=0.20.1
           rm -f build/libs/*-sources.jar
       - uses: softprops/action-gh-release@v2
         if: steps.tag.outputs.skip != 'true'

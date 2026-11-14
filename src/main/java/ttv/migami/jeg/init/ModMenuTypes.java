@@ -28,8 +28,8 @@ public final class ModMenuTypes {
     public static final DeferredHolder<MenuType<?>, MenuType<VehicleMenu>> VEHICLE_MENU = REGISTER.register(
             "vehicle_menu",
             () -> new ExtendedMenuType<>(
-                    (windowId, inventory, slotCount) -> new VehicleMenu(windowId, inventory, slotCount),
-                    ByteBufCodecs.VAR_INT
+                    (windowId, inventory, data) -> new VehicleMenu(windowId, inventory, data),
+                    VehicleMenu.OpeningData.STREAM_CODEC
             )
     );
 

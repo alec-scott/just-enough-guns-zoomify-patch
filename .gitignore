@@ -5,6 +5,7 @@ build/
 
 # Local dev run directory (logs, saves, worlds)
 run/
+logs/
 
 # IDEs
 .idea/

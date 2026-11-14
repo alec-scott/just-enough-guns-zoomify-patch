@@ -101,6 +101,12 @@ tasks.matching { it.name == "runPackClient" }.configureEach {
             file.text = (lines + values.collect { key, value -> key + separator + value }).join(System.lineSeparator()) + System.lineSeparator()
         }
         setLines(new File(runDir, "config/iris.properties"), "=", [enableShaders: "true", shaderPack: shaderName])
+        // FallingTree as the server runs it (left alone once it exists, so changes made in game stay).
+        def fallingTree = new File(runDir, "config/fallingtree.json")
+        if (!fallingTree.exists()) {
+            fallingTree.parentFile.mkdirs()
+            fallingTree.text = file("src/gametest/resources/pack-config/fallingtree.json").text
+        }
         setLines(new File(runDir, "options.txt"), ":",
                 [resourcePacks: "[\"vanilla\",\"fabric\"," + packResourcePacks.keySet().collect { "\"file/" + it + "\"" }.join(",") + "]"])
     }
@@ -164,6 +170,8 @@ if (withPack) {
             "tweakeroo"            : "maven.modrinth:t5wuYk45:2xHr441V", // 0.28.10
             "malilib"              : "maven.modrinth:GcWjdA9I:FItuNokS", // 0.28.12
             "carryon"              : "maven.modrinth:joEfVgkn:ISFd6ie5", // 2.10.0
+            // Gameplay the bulldozer works with: whole trees fall when the blade fells one.
+            "fallingtree"          : "maven.modrinth:Fb4jn8m6:YpsBfAWL", // 26.1.2-25
     ]
     // MaLiLib's test.MixinSharedConstants sets vanilla's SharedConstants.IS_RUNNING_IN_IDE whenever it sees a dev launch
     // (fabric.development, Fabric's dev launch injector), which switches on Mojang's dev-only render-pass validation
@@ -194,6 +202,16 @@ if (withPack) {
             }
         }
         return output
+    }
+    if (!packExclude.contains("fallingtree")) {
+        // The server's FallingTree settings (instantaneous, whole tree, axe required, not in creative).
+        tasks.named("runClientGameTest") {
+            doFirst {
+                def config = file("build/run/clientGameTest/config/fallingtree.json")
+                config.parentFile.mkdirs()
+                config.text = file("src/gametest/resources/pack-config/fallingtree.json").text
+            }
+        }
     }
     dependencies {
         packMods.each { name, coordinate ->

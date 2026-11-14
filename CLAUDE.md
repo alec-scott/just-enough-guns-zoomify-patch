@@ -30,3 +30,12 @@
 - `java` is not on PATH: set `JAVA_HOME` to the Temurin JDK 25 at
   `C:\Users\User\Desktop\Projects\forge-to-fabric-portlab\.local\jdk\jdk-25.0.4.1+1` before running `./gradlew`.
 - Compile check without launching the game: `./gradlew compileJava compileClientJava compileGametestJava`.
+
+## New vehicles
+
+- Follow [docs/vehicle-development-guide.md](docs/vehicle-development-guide.md) and start from
+  [docs/vehicle-brief-template.md](docs/vehicle-brief-template.md) (copied to `design/<vehicle>/BRIEF.md`). The BD-40
+  bulldozer in `design/bulldozer/` is the worked example.
+- Whenever a fix on one vehicle would apply to others, add it to that guide in the same change.
+- Test the feature you changed with a small focused test class (e.g. `BulldozerBankClientGameTest`), not the full
+  vehicle test, unless the change affects the whole vehicle.

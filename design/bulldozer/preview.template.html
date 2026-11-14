@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BD-40 · Bulldozer model study</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#10181d;color:#e9ece8;font:14px system-ui,sans-serif}header{height:90px;padding:22px 32px;border-bottom:1px solid #354047;display:flex;justify-content:space-between;align-items:center}h1{font-size:26px;letter-spacing:-1px;margin:0}h1 span{color:#eab93d;font-weight:500}header p{margin:6px 0 0;color:#94a7ad;font-size:12px}.badge{border:1px solid #52616a;border-radius:4px;color:#c7d1d4;padding:7px 11px;font-size:11px;letter-spacing:1.4px}main{display:grid;grid-template-columns:1fr 290px;height:calc(100vh - 90px);min-height:530px}.stage{position:relative;overflow:hidden}canvas{width:100%;height:100%;display:block;touch-action:none;cursor:grab}.hint{position:absolute;bottom:24px;left:32px;color:#849a9f;font-size:12px}.scale{position:absolute;top:24px;left:32px;color:#bfd0d3;font-size:11px;letter-spacing:1.2px}.scale strong{display:block;color:#eab93d;font-size:16px;letter-spacing:0;margin-bottom:7px}aside{padding:25px 24px;background:#172126;border-left:1px solid #354047;overflow:auto}h2{font-size:12px;text-transform:uppercase;letter-spacing:1.4px;margin:5px 0 18px;color:#91a7ad}label{display:flex;justify-content:space-between;margin:19px 0 10px;font-size:13px}output{color:#eab93d;font-variant-numeric:tabular-nums}input[type=range]{width:100%;accent-color:#eab93d}button,select{font:inherit;color:#e4e9e8;background:#253239;border:1px solid #46565d;border-radius:5px;padding:9px 10px;cursor:pointer}button:hover{border-color:#eab93d}button.active{background:#eab93d;color:#172126;border-color:#eab93d}select{width:100%;margin:0 0 10px}.buttons{display:flex;gap:7px;margin:12px 0}.buttons button{flex:1;font-size:12px}.rule{height:1px;background:#35434a;margin:25px 0}p{line-height:1.6;color:#a4b6bb;font-size:12px}.accent{color:#eab93d}#demo{width:100%;margin:6px 0}small{display:block;color:#8fa3a9;font-size:11px;line-height:1.65;margin-top:14px}a{color:#eab93d}@media(max-width:720px){header{padding:18px;height:90px}h1{font-size:21px}.badge{display:none}main{height:auto;display:block}.stage{height:55vh;min-height:350px}aside{border-left:0;border-top:1px solid #354047}.hint,.scale{left:18px}}
+</style>
+<header><div><h1>BD-40 <span>/ Tracked bulldozer</span></h1><p>JEG vehicle concept · articulated model and animation study</p></div><div class="badge">DESIGN 01 · GAMEPLAY PLANNED</div></header>
+<main><div class="stage"><canvas id="view" aria-label="Interactive bulldozer model. Drag to orbit and scroll to zoom."></canvas><div class="scale"><strong>Heavy work. Predictable handling.</strong>4 BLOCK BLADE · INDEPENDENT TRACKS · LINKED HYDRAULICS</div><div class="hint">Drag to orbit &nbsp; / &nbsp; Scroll to zoom &nbsp; / &nbsp; Blade position is adjustable</div></div>
+<aside><h2>Articulation</h2><label for="lift">Blade lift <output id="liftValue">0°</output></label><input id="lift" type="range" min="-4" max="30" value="0" step="0.1"><div class="buttons"><button id="grade">Grade height</button><button id="raise">Transport</button></div><button id="demo">Play lift cycle</button><label for="motion">Track motion</label><select id="motion"><option value="parked">Parked</option><option value="forward">Drive forward</option><option value="reverse">Reverse</option><option value="pivot">Pivot on the spot</option></select><small>The piston rods change length and the cylinders swivel around their real attachment points. The blade stays upright as the push arms rise.</small><div class="rule"></div><h2>Inspect the model</h2><div class="buttons"><button data-view="front">Front</button><button data-view="side">Side</button><button data-view="rear">Rear</button></div><div class="buttons"><button id="reset">Reset view</button><button id="wire">Edges</button></div><p>Weathered yellow steel, semi-U blade with bolted edges, lift and tilt hydraulics, idler, rollers and toothed sprocket, open ROPS canopy with a visible operator seat, three-shank ripper and an amber beacon.</p><div class="rule"></div><p class="accent">Model preview only</p><p>Terrain cutting, vehicle physics, sound and multiplayer behavior are specified in the accompanying implementation plan. This preview does not simulate block breaking.</p><p><a href="IMPLEMENTATION_PLAN.md">Implementation plan</a> · <a href="bulldozer.bbmodel" download>Blockbench project</a></p><small id="stats"></small></aside></main>
+<script>
+const MODEL = /*__MODEL__*/null;
+const canvas=document.querySelector('#view'),ctx=canvas.getContext('2d'),atlas=new Image();atlas.src=MODEL.atlas;
+const I=()=>[1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1];
+function mul(a,b){let c=new Array(16).fill(0);for(let r=0;r<4;r++)for(let k=0;k<4;k++)for(let j=0;j<4;j++)c[r*4+j]+=a[r*4+k]*b[k*4+j];return c}
+function point(m,p){return [m[0]*p[0]+m[1]*p[1]+m[2]*p[2]+m[3],m[4]*p[0]+m[5]*p[1]+m[6]*p[2]+m[7],m[8]*p[0]+m[9]*p[1]+m[10]*p[2]+m[11]]}
+function translate(p){let m=I();m[3]=p[0];m[7]=p[1];m[11]=p[2];return m}
+function rotate(v){let [x,y,z]=v.map(n=>n*Math.PI/180),cx=Math.cos(x),sx=Math.sin(x),cy=Math.cos(y),sy=Math.sin(y),cz=Math.cos(z),sz=Math.sin(z);return mul(mul([cz,-sz,0,0,sz,cz,0,0,0,0,1,0,0,0,0,1],[cy,0,sy,0,0,1,0,0,-sy,0,cy,0,0,0,0,1]),[1,0,0,0,0,cx,-sx,0,0,sx,cx,0,0,0,0,1])}
+function about(p,r,s=[1,1,1]){let sm=I();sm[0]=s[0];sm[5]=s[1];sm[10]=s[2];return mul(mul(mul(translate(p),rotate(r)),sm),translate(p.map(n=>-n)))}
+const sub=(a,b)=>a.map((n,i)=>n-b[i]),dot=(a,b)=>a.reduce((s,n,i)=>s+n*b[i],0),cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]],unit=a=>{let n=Math.hypot(...a);return a.map(v=>v/n)};
+let yaw=.66,pitch=.36,zoom=1,lift=0,demo=false,wire=false,motion='parked',phaseLeft=0,phaseRight=0,last=0,time=0,ready=false;
+const rig=MODEL.rig,byName=Object.fromEntries(MODEL.bones.map(b=>[b.name,b]));
+function trackPoint(d){let p=rig.track_length,s=((d%p)+p)%p,r=rig.track_radius,arc=Math.PI*r;if(s<46)return[8-r,-23+s,0];if(s<46+arc){let a=(s-46)/r;return[8-r*Math.cos(a),23+r*Math.sin(a),-a*180/Math.PI]}if(s<92+arc)return[8+r,23-(s-46-arc),-180];let a=Math.PI+(s-92-arc)/r;return[8-r*Math.cos(a),-23+r*Math.sin(a),-a*180/Math.PI]}
+function rotX(q,p,deg){let a=deg*Math.PI/180,y=q[1]-p[1],z=q[2]-p[2];return[q[0],p[1]+y*Math.cos(a)-z*Math.sin(a),p[2]+y*Math.sin(a)+z*Math.cos(a)]}function bladePoint(q,deg){let p=rotX(rig.blade_pivot,rig.lift_pivot,deg);return[q[0]-rig.blade_pivot[0]+p[0],q[1]-rig.blade_pivot[1]+p[1],q[2]-rig.blade_pivot[2]+p[2]]}function strut(base,end){let dy=end[1]-base[1],dz=end[2]-base[2];return[Math.atan2(dz,dy)*180/Math.PI,Math.hypot(dy,dz)]}function cylinderPose(deg){return strut(rig.lift_base,bladePoint(rig.lift_end,deg))}function tiltPose(deg){return strut(rig.tilt_base,rotX(rig.tilt_end,rig.blade_pivot,-deg))}const baseCylinder=cylinderPose(0),baseTilt=tiltPose(0);
+function transforms(){let cache={};function get(b){if(cache[b.name])return cache[b.name];let r=[...b.rotation],s=[1,1,1],p=[0,0,0];if(b.name==='blade_lift')r[0]+=lift;if(b.name==='blade_level')r[0]-=lift;if(b.name.startsWith('lift_barrel_'))r[0]+=cylinderPose(lift)[0]-baseCylinder[0];if(b.name.startsWith('lift_rod_'))s[1]=(cylinderPose(lift)[1]-rig.lift_barrel)/(baseCylinder[1]-rig.lift_barrel);if(b.name.startsWith('tilt_barrel_'))r[0]+=tiltPose(lift)[0]-baseTilt[0];if(b.name.startsWith('tilt_rod_'))s[1]=(tiltPose(lift)[1]-rig.tilt_barrel)/(baseTilt[1]-rig.tilt_barrel);if(b.name.startsWith('shoe_')){let parts=b.name.split('_'),i=Number(parts[2]),d=i*rig.track_length/rig.links_per_track,phase=parts[1]==='left'?phaseLeft:phaseRight;let a=trackPoint(d),n=trackPoint(d+phase);p=[0,n[0]-a[0],n[1]-a[1]];r[0]=n[2]}if(b.name.startsWith('wheel_')){let index=Number(b.name.split('_')[2]),radius=rig.wheel_rolling_radii[index];r[0]-=(b.name.includes('left')?phaseLeft:phaseRight)/radius*180/Math.PI}let m=mul(translate(p),about(b.pivot,r,s));cache[b.name]=b.parent?mul(get(byName[b.parent]),m):m;return cache[b.name]}MODEL.bones.forEach(get);return cache}
+function render(){if(!ready)return;let dpr=window.devicePixelRatio||1,w=canvas.clientWidth,h=canvas.clientHeight;if(canvas.width!==Math.round(w*dpr)||canvas.height!==Math.round(h*dpr)){canvas.width=Math.round(w*dpr);canvas.height=Math.round(h*dpr)}ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,w,h);ctx.fillStyle='#10181d';ctx.fillRect(0,0,w,h);let eye=[Math.sin(yaw)*Math.cos(pitch),Math.sin(pitch),-Math.cos(yaw)*Math.cos(pitch)],right=[Math.cos(yaw),0,Math.sin(yaw)],up=cross(eye,right).map(v=>-v),scale=Math.min(w/118,h/95)*zoom,center=[0,23,-4];function project(p){let q=sub(p,center);return[w/2+dot(q,right)*scale,h*.53-dot(q,up)*scale,dot(q,eye)]}function polygon(points){ctx.beginPath();points.forEach((p,i)=>i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]));ctx.closePath()}
+ctx.strokeStyle='#26333a';ctx.lineWidth=.65;for(let i=-112;i<=112;i+=16){for(const points of [[[i,-.7,-112],[i,-.7,112]],[[-112,-.7,i],[112,-.7,i]]]){ctx.beginPath();points.map(project).forEach((p,k)=>k?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]));ctx.stroke()}}let shadow=project([0,-.5,-3]);let gradient=ctx.createRadialGradient(shadow[0],shadow[1],5,shadow[0],shadow[1],40*scale);gradient.addColorStop(0,'#00000080');gradient.addColorStop(1,'#00000000');ctx.save();ctx.translate(shadow[0],shadow[1]);ctx.scale(1,.4);ctx.fillStyle=gradient;ctx.fillStyle='#00000028';ctx.beginPath();ctx.ellipse(0,0,36*scale,29*scale,0,0,Math.PI*2);ctx.fill();ctx.restore();
+const matrices=transforms(),faces=[];for(const b of MODEL.bones){for(const c of b.cubes){let [x,y,z]=c.origin,[sx,sy,sz]=c.size,X=x+sx,Y=y+sy,Z=z+sz;let m=c.rotation?mul(matrices[b.name],about(c.pivot,c.rotation)):matrices[b.name];let vertices={north:[[x,Y,z],[X,Y,z],[X,y,z],[x,y,z]],south:[[X,Y,Z],[x,Y,Z],[x,y,Z],[X,y,Z]],west:[[x,Y,Z],[x,Y,z],[x,y,z],[x,y,Z]],east:[[X,Y,z],[X,Y,Z],[X,y,Z],[X,y,z]],up:[[x,Y,Z],[X,Y,Z],[X,Y,z],[x,Y,z]],down:[[x,y,z],[X,y,z],[X,y,Z],[x,y,Z]]};for(const [name,coords]of Object.entries(vertices)){let world=coords.map(v=>point(m,v)),normal=unit(cross(sub(world[1],world[0]),sub(world[2],world[0])));if(dot(normal,eye)<=.0001)continue;let ps=world.map(project),shade=.61+.39*Math.max(0,dot(normal,unit([-.4,1,-.5])));if(c._material==='lamp')shade=.98;if(c._material==='amber')shade=.8+.2*Math.sin(time*4);faces.push({ps,depth:ps.reduce((sum,p)=>sum+p[2],0)/4,uv:c.uv[name],material:c._material,shade})}}}
+faces.sort((a,b)=>a.depth-b.depth);ctx.imageSmoothingEnabled=false;for(const f of faces){const [a,b,,d]=f.ps,uv=f.uv;ctx.save();polygon(f.ps);ctx.clip();ctx.transform(b[0]-a[0],b[1]-a[1],d[0]-a[0],d[1]-a[1],a[0],a[1]);ctx.drawImage(atlas,uv.uv[0],uv.uv[1],uv.uv_size[0],uv.uv_size[1],0,0,1,1);ctx.globalAlpha=(1-f.shade)*(f.material==='glass'?.4:1);ctx.fillStyle='#000';ctx.fillRect(0,0,1,1);ctx.restore();if(wire){ctx.strokeStyle='#070e1480';ctx.lineWidth=.5;polygon(f.ps);ctx.stroke()}}
+document.querySelector('#liftValue').value=lift.toFixed(1)+'°';document.querySelector('#stats').textContent=rig.bones+' articulated bones · '+rig.cuboids+' cuboids · 256 × 128 texture';}
+function animate(now){let dt=Math.min(.05,(now-last)/1000||0);last=now;time+=dt;if(demo){lift=12-12*Math.cos(time*Math.PI*2/5);document.querySelector('#lift').value=lift}let rate=motion==='forward'?16:motion==='reverse'?-12:motion==='pivot'?12:0;phaseLeft+=rate*dt;phaseRight+=(motion==='pivot'?-rate:rate)*dt;render();requestAnimationFrame(animate)}
+document.querySelector('#lift').addEventListener('input',e=>{demo=false;lift=Number(e.target.value);document.querySelector('#demo').classList.remove('active')});function setLift(v){demo=false;lift=v;document.querySelector('#lift').value=v;document.querySelector('#demo').classList.remove('active');render()}document.querySelector('#grade').onclick=()=>setLift(0);document.querySelector('#raise').onclick=()=>setLift(30);document.querySelector('#demo').onclick=e=>{demo=!demo;e.target.classList.toggle('active',demo);e.target.textContent=demo?'Pause lift cycle':'Play lift cycle'};document.querySelector('#motion').onchange=e=>motion=e.target.value;document.querySelector('#wire').onclick=e=>{wire=!wire;e.target.classList.toggle('active',wire)};function reset(){yaw=.66;pitch=.36;zoom=1;render()}document.querySelector('#reset').onclick=reset;document.querySelectorAll('[data-view]').forEach(b=>b.onclick=()=>{yaw={front:0,side:Math.PI/2,rear:Math.PI}[b.dataset.view];pitch=.18;render()});let drag=null;canvas.onpointerdown=e=>{drag=[e.clientX,e.clientY];canvas.setPointerCapture(e.pointerId)};canvas.onpointermove=e=>{if(!drag)return;yaw+=(e.clientX-drag[0])*.008;pitch=Math.max(.03,Math.min(1.25,pitch+(e.clientY-drag[1])*.006));drag=[e.clientX,e.clientY]};canvas.onpointerup=()=>drag=null;canvas.onwheel=e=>{e.preventDefault();zoom=Math.max(.55,Math.min(2,zoom*Math.exp(-e.deltaY*.001)))};
+window.bulldozerPreview={get ready(){return ready},setLift,render,get lift(){return lift},setMotion(v){motion=v;document.querySelector('#motion').value=v},get transforms(){return transforms()}};
+document.querySelector('.badge').textContent='DESIGN 05 · CRAWLER DOZER';
+document.querySelector('aside').insertAdjacentHTML('afterbegin', `
+  <h2>Vehicle selection target</h2>
+  <p id="assemblyCost" style="color:#eab93d;font-size:14px;margin:0"></p>
+  <small>Only four extra iron over the truck. Planned for the vehicle assembling table's Land and All lists.</small>
+  <div class="rule"></div>`);
+document.querySelector('#assemblyCost').textContent=MODEL.assembly.ingredients.map(i=>`${i.count} ${i.item.replace('minecraft:','').replace('_ingot','')}`).join(' · ');
+document.querySelector('#stats').insertAdjacentHTML('beforebegin', `
+  <div class="rule"></div><h2>Sound audition</h2>
+  <button id="audition" style="width:100%">Enable sound</button>
+  <label for="listener">Listener</label><select id="listener"><option value="exterior">Outside</option><option value="cab">Inside cab</option><option value="distant">Distant engine</option></select>
+  <label for="load">Engine load</label><input id="load" type="range" min="0" max="1" step="0.01" value="0">
+  <small>Real diesel, tracked-machine and hydraulic recordings. Track and blade controls drive the preview mix. Audio starts only when enabled. This is an audition, not the Minecraft sound controller.</small>`);
+let audition=null,audioGeneration=0;
+async function startAudition(){
+  const context=new AudioContext();await context.resume();
+  const buffers=Object.fromEntries(await Promise.all(Object.entries(MODEL.audio).map(async([name,url])=>{
+    const raw=Uint8Array.from(atob(url.split(',')[1]),c=>c.charCodeAt(0));
+    return[name,await context.decodeAudioData(raw.buffer)];
+  })));
+  const master=context.createGain();master.gain.value=.55;master.connect(context.destination);
+  const filter=context.createBiquadFilter();filter.type='lowpass';filter.frequency.value=8000;filter.connect(master);
+  const now=context.currentTime,loopAt=now+Math.max(0,buffers.engine_start.duration-.8),voices={};
+  const state={context,buffers,filter,master,voices,loopAt,mix:[1,0,0],previousUpdate:now,previousLift:lift,lastMove:0,wasMoving:false,generation:++audioGeneration};
+  function oneShot(name,gain){const source=context.createBufferSource(),g=context.createGain();source.buffer=buffers[name];g.gain.value=gain;source.connect(g);g.connect(filter);source.start();}
+  state.oneShot=oneShot;
+  for(const name of ['engine_idle','engine_load','engine_cab','engine_distant','tracks','hydraulic','reverse']){
+    const source=context.createBufferSource(),gain=context.createGain();source.buffer=buffers[name];source.loop=true;gain.gain.value=0;source.connect(gain);gain.connect(filter);
+    source.start(name.startsWith('engine')?loopAt:now);voices[name]={source,gain};
+  }
+  oneShot('engine_start',.6);audition=state;return state;
+}
+document.querySelector('#audition').onclick=async function(){
+  if(audition){await audition.context.close();audition=null;this.textContent='Enable sound';this.classList.remove('active');return}
+  this.disabled=true;this.textContent='Loading sound…';
+  try{await startAudition();this.textContent='Mute sound';this.classList.add('active')}
+  catch(error){this.textContent='Sound unavailable';console.error(error)}
+  finally{this.disabled=false}
+};
+function updateAudition(){
+  if(audition){const a=audition,now=a.context.currentTime,load=Number(document.querySelector('#load').value),listener=document.querySelector('#listener').value;
+    const target=listener==='cab'?[0,1,0]:listener==='distant'?[0,0,1]:[1,0,0];
+    const blend=1-Math.exp(-Math.min(.2,now-a.previousUpdate)/.25);a.previousUpdate=now;
+    a.mix=a.mix.map((v,i)=>v+(target[i]-v)*blend);const norm=Math.hypot(...a.mix),weights=a.mix.map(v=>v/norm),startup=Math.max(0,Math.min(1,(now-a.loopAt)/.8));
+    a.filter.frequency.setTargetAtTime(listener==='cab'?1400:listener==='distant'?650:8000,now,.15);
+    function gain(name,v){a.voices[name].gain.gain.setTargetAtTime(v,now,.12)}
+    gain('engine_idle',weights[0]*.6*startup*(1-.3*load));gain('engine_cab',weights[1]*.65*startup);gain('engine_distant',weights[2]*.5*startup);
+    gain('engine_load',Math.sqrt(load)*.36*startup*(weights[0]+weights[1]*.3+weights[2]*.28));
+    for(const name of ['engine_idle','engine_cab','engine_distant','engine_load'])a.voices[name].source.playbackRate.setTargetAtTime(.96+.1*load,now,.2);
+    const machinery=weights[0]+weights[1]*.3+weights[2]*.08;
+    gain('tracks',motion==='parked'?0:.3*machinery*startup);gain('reverse',motion==='reverse'?.22*machinery*startup:0);
+    if(Math.abs(lift-a.previousLift)>.005)a.lastMove=now;
+    const moving=now-a.lastMove<.14&&startup>0;
+    gain('hydraulic',moving?.35*machinery*startup:0);
+    if(a.wasMoving&&!moving)a.oneShot('hydraulic_stop',.2*machinery);
+    a.wasMoving=moving;a.previousLift=lift;
+  }
+  requestAnimationFrame(updateAudition);
+}
+window.bulldozerAudio={get enabled(){return !!audition},state(){return audition?{generation:audition.generation,loops:Object.keys(audition.voices).length,listener:document.querySelector('#listener').value,status:audition.context.state}:null}};
+requestAnimationFrame(updateAudition);
+
+// Render a native transparent 256x64 selection icon directly from the geometry.
+window.renderVehicleIcon=function(){
+  const image=document.createElement('canvas');image.width=256;image.height=64;const out=image.getContext('2d'),saved=lift;lift=0;const matrices=transforms();lift=saved;
+  const eye=unit([1,.1,0]),right=[0,0,1],up=cross(eye,right).map(v=>-v),faces=[];
+  function project(p){let q=sub(p,[0,24,-5]);return[128+dot(q,right)*1.14,33-dot(q,up)*1.14,dot(q,eye)]}
+  for(const b of MODEL.bones)for(const c of b.cubes){const m=c.rotation?mul(matrices[b.name],about(c.pivot,c.rotation)):matrices[b.name];const points=Array.from({length:8},(_,i)=>point(m,c.origin.map((v,k)=>v+((i>>k)&1)*c.size[k])));
+    for(const indices of [[2,3,1,0],[7,6,4,5],[6,2,0,4],[3,7,5,1],[6,7,3,2],[0,1,5,4]]){const world=indices.map(i=>points[i]),normal=unit(cross(sub(world[1],world[0]),sub(world[2],world[0])));if(dot(normal,eye)<=0)continue;const p=world.map(project);faces.push({p,depth:p.reduce((s,v)=>s+v[2],0)/4,shade:Math.round(150+95*Math.max(0,normal[1]))})}
+  }
+  faces.sort((a,b)=>a.depth-b.depth);for(const f of faces){out.beginPath();f.p.forEach((p,i)=>i?out.lineTo(...p.slice(0,2)):out.moveTo(...p.slice(0,2)));out.closePath();out.fillStyle=`rgb(${f.shade},${f.shade},${f.shade})`;out.fill()}
+  return image.toDataURL('image/png');
+};
+atlas.onload=()=>{ready=true;render();requestAnimationFrame(animate)};if(atlas.complete)atlas.onload();
+</script>
+</html>

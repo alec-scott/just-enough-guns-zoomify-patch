@@ -349,11 +349,18 @@ public class BulletEntity extends Projectile {
                 } else {
                     // For non-legacy bullet classes, keep existing move-vector entity check.
                     Vec3 savedPos = this.position();
+                    Vec3 pathStart = searchStart;
+                    Vec3 pathEnd = entitySearchEnd;
                     this.setPos(searchStart.x, searchStart.y, searchStart.z);
                     this.setDeltaMovement(remainingMotion);
-                    HitResult entityHitResult = ProjectileUtil.getHitResultOnMoveVector(this, this::canHitEntity);
+                    // A vehicle with fitted collision boxes is hit only where the round crosses one of them.
+                    HitResult entityHitResult = ProjectileUtil.getHitResultOnMoveVector(this, entity -> this.canHitEntity(entity)
+                            && !(entity instanceof VehicleEntity vehicle && vehicle.preciseHitbox() && vehicle.clipHitbox(pathStart, pathEnd, 0.05D) == null));
                     this.setPos(savedPos.x, savedPos.y, savedPos.z);
                     this.setDeltaMovement(motion);
+                    if (entityHitResult instanceof EntityHitResult vehicleHit && vehicleHit.getEntity() instanceof VehicleEntity vehicle && vehicle.preciseHitbox()) {
+                        entityHitResult = new EntityHitResult(vehicle, vehicle.clipHitbox(pathStart, pathEnd, 0.05D));
+                    }
 
                     if (entityHitResult.getType() == HitResult.Type.ENTITY) {
                         Vec3 hitLoc = entityHitResult.getLocation();
@@ -1742,7 +1749,10 @@ public class BulletEntity extends Projectile {
             if (entity == owner) {
                 continue;
             }
-            Vec3 hitPos = entity.getBoundingBox().inflate(0.3D).clip(start, end).orElse(null);
+            // Vehicles with fitted collision boxes are hit only where their hull is, not anywhere in their entity box.
+            Vec3 hitPos = entity instanceof VehicleEntity vehicle && vehicle.preciseHitbox()
+                    ? vehicle.clipHitbox(start, end, 0.05D)
+                    : entity.getBoundingBox().inflate(0.3D).clip(start, end).orElse(null);
             if (hitPos == null) {
                 continue;
             }

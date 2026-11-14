@@ -1,0 +1,34 @@
+{
+  "entity_type": "jeg:bulldozer",
+  "vehicle_type": "land",
+  "max_health": 260.0,
+  "auto_repair_per_tick": 0.012,
+  "auto_repair_cooldown_ticks": 120,
+  "max_energy": 5000000,
+  "up_step": 1.0,
+  "allow_free_cam": true,
+  "container_type": "medium",
+  "seats": [
+    {"index": 0, "x": 0.0, "y": 1.0, "z": -0.46875, "driver": true, "enclosed": false, "hide_passenger": false, "ban_hand": true, "min_pitch": -70.0, "max_pitch": 75.0, "min_yaw": -180.0, "max_yaw": 180.0}
+  ],
+  "engine": {"type": "track", "acceleration": 0.02, "max_forward_speed": 0.27, "max_reverse_speed": 0.22, "friction": 0.82, "steering_speed": 0.1, "energy_cost_rate": 48},
+  "third_person_camera": {"x": 0.0, "y": 1.8, "z": -8.0},
+  "dismount": {"x": 2.0, "y": 0.1, "z": -0.3},
+  "collision_level": "light",
+  "obb": [
+    {"part": "wheel_left", "x": 1.1062, "y": 0.5563, "z": -0.0000, "half_width": 0.4187, "half_height": 0.5563, "half_depth": 1.9568},
+    {"part": "wheel_right", "x": -1.1062, "y": 0.5563, "z": -0.0000, "half_width": 0.4187, "half_height": 0.5563, "half_depth": 1.9568},
+    {"part": "body", "x": 0.0000, "y": 0.4313, "z": 0.0156, "half_width": 0.7750, "half_height": 0.2312, "half_depth": 1.9219},
+    {"part": "main_engine", "x": 0.0000, "y": 1.0500, "z": 1.2344, "half_width": 0.7375, "half_height": 0.6750, "half_depth": 0.9844},
+    {"part": "body", "x": 0.0000, "y": 2.0375, "z": -0.4062, "half_width": 0.8313, "half_height": 0.9375, "half_depth": 0.7750},
+    {"part": "body", "x": -0.0062, "y": 1.4625, "z": -1.4125, "half_width": 1.2938, "half_height": 0.3625, "half_depth": 0.3750},
+    {"part": "body", "x": 0.0000, "y": 0.5562, "z": -2.2656, "half_width": 0.8750, "half_height": 0.4687, "half_depth": 0.4781},
+    {"part": "body", "x": -0.0000, "y": 0.8438, "z": 2.7188, "half_width": 1.9750, "half_height": 0.8438, "half_depth": 0.3812},
+    {"part": "body", "x": 1.4688, "y": 0.5188, "z": 1.2447, "half_width": 0.1438, "half_height": 0.1688, "half_depth": 1.2553},
+    {"part": "body", "x": -1.4688, "y": 0.5188, "z": 1.2447, "half_width": 0.1438, "half_height": 0.1688, "half_depth": 1.2553}
+  ],
+  "weapons": [],
+  "has_decoy": false,
+  "destroy": {"explodes": false, "explosion_power": 0.0},
+  "armor": {"fallback": {"rating": 2.5, "undermatch_multiplier": 0.3, "overmatch_multiplier": 1.0, "passenger_leak_multiplier": 0.3, "part_damage_multiplier": 1.0}}
+}

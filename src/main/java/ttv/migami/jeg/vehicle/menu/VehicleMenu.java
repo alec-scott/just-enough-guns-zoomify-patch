@@ -1,11 +1,15 @@
 package ttv.migami.jeg.vehicle.menu;
 
+import io.netty.buffer.ByteBuf;
+import net.minecraft.network.codec.ByteBufCodecs;
+import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.world.Container;
 import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.Slot;
+import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -13,6 +17,36 @@ import ttv.migami.jeg.init.ModMenuTypes;
 import ttv.migami.jeg.vehicle.entity.base.VehicleEntity;
 
 public final class VehicleMenu extends AbstractContainerMenu {
+    /**
+     * What the client needs to build the menu: the hold's size and the bay feeding a vehicle's tool
+     * (the bulldozer's ripper paving row). The bay starts at -1 when it has none.
+     */
+    public record OpeningData(int slots, int toolStart, int toolCount) {
+        public static final StreamCodec<ByteBuf, OpeningData> STREAM_CODEC = StreamCodec.composite(
+                ByteBufCodecs.VAR_INT, OpeningData::slots, ByteBufCodecs.VAR_INT, OpeningData::toolStart,
+                ByteBufCodecs.VAR_INT, OpeningData::toolCount, OpeningData::new);
+    }
+
+    /** A hold slot that feeds a tool: it takes only full solid blocks (what the ripper can lay), so nothing else lands there. */
+    public static final class ToolSlot extends Slot {
+        public ToolSlot(Container container, int index, int x, int y) {
+            super(container, index, x, y);
+        }
+
+        @Override
+        public boolean mayPlace(@NotNull ItemStack stack) {
+            return isLayableBlock(stack);
+        }
+    }
+
+    public static boolean isLayableBlock(ItemStack stack) {
+        if (!(stack.getItem() instanceof BlockItem item)) {
+            return false;
+        }
+        var state = item.getBlock().defaultBlockState();
+        return !state.hasBlockEntity() && state.isCollisionShapeFullBlock(net.minecraft.world.level.EmptyBlockGetter.INSTANCE, net.minecraft.core.BlockPos.ZERO);
+    }
+
     public static final int MAX_VEHICLE_SLOT_COUNT = 102;
     private static final int DEFAULT_VEHICLE_SLOT_COUNT = 9;
     private static final int SLOT_SIZE = 18;
@@ -20,12 +54,14 @@ public final class VehicleMenu extends AbstractContainerMenu {
     private static final int VEHICLE_SLOT_Y = 18;
     private static final int PLAYER_SLOT_Y = 104;
     private static final int HOTBAR_SLOT_Y = 162;
+    private static final int TOOL_BAY_GAP = 18;
 
     private final Container vehicleInventory;
     private final int vehicleSlotCount;
     private final int vehicleRows;
     private final int vehicleColumns;
     private final int playerInventoryY;
+    private final int toolStart, toolCount;
     @Nullable
     private final VehicleEntity vehicle;
 
@@ -37,6 +73,10 @@ public final class VehicleMenu extends AbstractContainerMenu {
         this(containerId, playerInventory, new SimpleContainer(vehicleSlotCount), vehicleSlotCount);
     }
 
+    public VehicleMenu(int containerId, Inventory playerInventory, OpeningData data) {
+        this(containerId, playerInventory, new SimpleContainer(data.slots()), data.slots(), null, data.toolStart(), data.toolCount());
+    }
+
     public VehicleMenu(int containerId, Inventory playerInventory, Container vehicleInventory) {
         this(containerId, playerInventory, vehicleInventory, Math.min(vehicleInventory.getContainerSize(), MAX_VEHICLE_SLOT_COUNT));
     }
@@ -46,7 +86,15 @@ public final class VehicleMenu extends AbstractContainerMenu {
     }
 
     public VehicleMenu(int containerId, Inventory playerInventory, Container vehicleInventory, int vehicleSlotCount, @Nullable VehicleEntity vehicle) {
+        this(containerId, playerInventory, vehicleInventory, vehicleSlotCount, vehicle, vehicle == null ? -1 : vehicle.toolSlotStart(),
+                vehicle == null ? 0 : vehicle.toolSlotCount());
+    }
+
+    public VehicleMenu(int containerId, Inventory playerInventory, Container vehicleInventory, int vehicleSlotCount, @Nullable VehicleEntity vehicle,
+                       int toolStart, int toolCount) {
         super(ModMenuTypes.VEHICLE_MENU.get(), containerId);
+        this.toolStart = toolStart;
+        this.toolCount = Math.max(0, toolCount);
         this.vehicleSlotCount = Math.max(0, Math.min(vehicleSlotCount, MAX_VEHICLE_SLOT_COUNT));
         checkContainerSize(vehicleInventory, this.vehicleSlotCount);
         this.vehicleInventory = vehicleInventory;
@@ -55,11 +103,14 @@ public final class VehicleMenu extends AbstractContainerMenu {
         this.vehicleRows = this.vehicleColumns == 0 ? 0 : (this.vehicleSlotCount + this.vehicleColumns - 1) / this.vehicleColumns;
         this.vehicleInventory.startOpen(playerInventory.player);
         int rowOffset = (this.vehicleRows - 4) * SLOT_SIZE;
+        int bayOffset = this.toolCount() > 0 ? TOOL_BAY_GAP : 0;
         int columnOffset = this.playerInventoryXOffset();
-        this.playerInventoryY = PLAYER_SLOT_Y + rowOffset;
+        // Leave space for the tool-bay tab and the player's own inventory heading.
+        this.playerInventoryY = PLAYER_SLOT_Y + rowOffset + bayOffset;
 
         for (int slot = 0; slot < this.vehicleSlotCount; slot++) {
-            this.addSlot(new Slot(vehicleInventory, slot, VEHICLE_SLOT_X + slot % this.vehicleColumns * SLOT_SIZE, VEHICLE_SLOT_Y + slot / this.vehicleColumns * SLOT_SIZE));
+            int x = VEHICLE_SLOT_X + slot % this.vehicleColumns * SLOT_SIZE, y = VEHICLE_SLOT_Y + slot / this.vehicleColumns * SLOT_SIZE;
+            this.addSlot(this.isToolSlot(slot) ? new ToolSlot(vehicleInventory, slot, x, y) : new Slot(vehicleInventory, slot, x, y));
         }
 
         for (int row = 0; row < 3; row++) {
@@ -69,8 +120,21 @@ public final class VehicleMenu extends AbstractContainerMenu {
         }
 
         for (int col = 0; col < 9; col++) {
-            this.addSlot(new Slot(playerInventory, col, VEHICLE_SLOT_X + columnOffset + col * SLOT_SIZE, HOTBAR_SLOT_Y + rowOffset));
+            this.addSlot(new Slot(playerInventory, col, VEHICLE_SLOT_X + columnOffset + col * SLOT_SIZE, HOTBAR_SLOT_Y + rowOffset + bayOffset));
         }
+    }
+
+    /** First slot of the bay feeding a tool (the bulldozer's ripper), or -1. */
+    public int toolStart() {
+        return this.toolStart;
+    }
+
+    public int toolCount() {
+        return this.toolStart < 0 ? 0 : this.toolCount;
+    }
+
+    public boolean isToolSlot(int slot) {
+        return this.toolStart >= 0 && slot >= this.toolStart && slot < this.toolStart + this.toolCount;
     }
 
     public int vehicleRows() {
@@ -90,7 +154,7 @@ public final class VehicleMenu extends AbstractContainerMenu {
     }
 
     public int screenHeight() {
-        return 222;
+        return 222 + (this.toolCount() > 0 ? TOOL_BAY_GAP : 0);
     }
 
     @Override

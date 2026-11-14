@@ -1,0 +1,9 @@
+{
+  "replace": false,
+  "values": [
+    "minecraft:bedrock", "minecraft:obsidian", "minecraft:crying_obsidian", "minecraft:reinforced_deepslate",
+    "minecraft:end_portal_frame", "minecraft:nether_portal", "minecraft:end_portal", "minecraft:end_gateway",
+    "minecraft:barrier", "minecraft:light", "minecraft:structure_void", "#minecraft:beds", "#minecraft:doors",
+    "#minecraft:trapdoors", "#minecraft:fence_gates", "#minecraft:rails", "minecraft:farmland"
+  ]
+}

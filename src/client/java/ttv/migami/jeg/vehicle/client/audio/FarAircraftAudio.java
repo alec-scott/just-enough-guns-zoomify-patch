@@ -70,7 +70,9 @@ public final class FarAircraftAudio {
             far.heard = heard(far, listener.position());
             far.engine.ensure(minecraft, AircraftSoundRange.distantSound(far.vehicleId, "engine"));
             if (far.heard.gunFiring()) {
-                far.gun.ensure(minecraft, AircraftSoundRange.distantSound(far.vehicleId, "fire"));
+                // The second far sound is a jet's gun, or for a vehicle without one its horn.
+                SoundEvent signal = AircraftSoundRange.distantSound(far.vehicleId, "fire");
+                far.gun.ensure(minecraft, signal != null ? signal : AircraftSoundRange.distantSound(far.vehicleId, "horn"));
             } else {
                 far.gun.fadeOut();
             }

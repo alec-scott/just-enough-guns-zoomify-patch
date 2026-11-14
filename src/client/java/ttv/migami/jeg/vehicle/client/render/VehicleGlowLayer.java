@@ -20,6 +20,8 @@ final class VehicleGlowLayer<T extends VehicleEntity> extends GeoRenderLayer<T, 
     @Override
     public void preRender(RenderPassInfo<VehicleRenderState> passInfo, SubmitNodeCollector collector) {
         VehicleEntity animatable = passInfo.renderState().vehicle;
+        if (animatable instanceof ttv.migami.jeg.vehicle.entity.BulldozerEntity dozer
+                && (!dozer.powered() || AircraftLights.nightSwitch(1) <= 0)) return;
         if (!DefaultVehicleResource.hasGlowTexture(animatable)) {
             return;
         }

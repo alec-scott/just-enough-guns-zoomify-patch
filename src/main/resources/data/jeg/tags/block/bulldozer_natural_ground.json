@@ -1,0 +1,12 @@
+{
+  "replace": false,
+  "values": [
+    "#minecraft:base_stone_overworld", "#minecraft:base_stone_nether", "#minecraft:dirt", "#minecraft:sand",
+    "#minecraft:terracotta", "#minecraft:coal_ores", "#minecraft:iron_ores", "#minecraft:copper_ores",
+    "#minecraft:gold_ores", "#minecraft:redstone_ores", "#minecraft:lapis_ores", "#minecraft:diamond_ores",
+    "#minecraft:emerald_ores", "minecraft:gravel", "minecraft:clay", "minecraft:calcite", "minecraft:dripstone_block",
+    "minecraft:sandstone", "minecraft:red_sandstone", "minecraft:snow_block", "minecraft:soul_sand",
+    "minecraft:soul_soil", "minecraft:nether_quartz_ore", "minecraft:nether_gold_ore", "minecraft:magma_block",
+    "minecraft:smooth_basalt", "minecraft:amethyst_block"
+  ]
+}

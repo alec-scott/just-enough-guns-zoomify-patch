@@ -1,0 +1,265 @@
+{
+  "model": "jeg:entity/vehicle/bulldozer",
+  "units_per_block": 16,
+  "front": "-Z in the source model",
+  "lift_pivot": [
+    0.0,
+    8.0,
+    -2.0
+  ],
+  "blade_pivot": [
+    0.0,
+    9.0,
+    -39.0
+  ],
+  "cut_edge": [
+    0.0,
+    0.0,
+    -46.6
+  ],
+  "lift_min_degrees": -4.0,
+  "lift_max_degrees": 30.0,
+  "lift_base": [
+    12.5,
+    25.0,
+    -19.0
+  ],
+  "lift_end": [
+    12.5,
+    16.0,
+    -39.5
+  ],
+  "lift_barrel": 15.0,
+  "tilt_base": [
+    21.2,
+    10.0,
+    -24.0
+  ],
+  "tilt_end": [
+    21.2,
+    21.0,
+    -39.8
+  ],
+  "tilt_barrel": 13.0,
+  "track_radius": 6.5,
+  "track_straight": 46.0,
+  "track_length": 132.8407044966673,
+  "links_per_track": 30,
+  "wheel_rolling_radii": [
+    6.5,
+    2.3,
+    2.3,
+    2.3,
+    2.3,
+    2.3,
+    1.45,
+    1.45,
+    6.5
+  ],
+  "blade_width_blocks": 4,
+  "seat_point": [
+    0.0,
+    16.0,
+    7.5
+  ],
+  "driver_eye": [
+    0.0,
+    41.92,
+    7.5
+  ],
+  "exhaust_tip": [
+    8.4,
+    42.6,
+    -17.0
+  ],
+  "mirror_center": [
+    -17.2,
+    39.5,
+    0.6
+  ],
+  "mirror_rear_target": [
+    -22.0,
+    38.0,
+    64.0
+  ],
+  "ripper_upper_pivot": [
+    0.0,
+    14.6,
+    31.6
+  ],
+  "ripper_lower_pivot": [
+    0.0,
+    6.6,
+    31.6
+  ],
+  "ripper_link": 9.0,
+  "ripper_max_degrees": 45.0,
+  "ripper_base": [
+    4.0,
+    17.0,
+    29.0
+  ],
+  "ripper_end": [
+    4.0,
+    13.0,
+    40.0
+  ],
+  "ripper_barrel": 7.0,
+  "model_bounds": [
+    [
+      -31.6,
+      -0.4,
+      -49.6
+    ],
+    [
+      31.599999999999998,
+      50.8,
+      43.9
+    ]
+  ],
+  "hitbox": [
+    {
+      "part": "wheel_left",
+      "covers": "left track and fender",
+      "min": [
+        11.0,
+        0.0,
+        -31.3095
+      ],
+      "max": [
+        24.4,
+        17.8,
+        31.3095
+      ]
+    },
+    {
+      "part": "wheel_right",
+      "covers": "right track and fender",
+      "min": [
+        -24.4,
+        0.0,
+        -31.3095
+      ],
+      "max": [
+        -11.0,
+        17.8,
+        31.3095
+      ]
+    },
+    {
+      "part": "body",
+      "covers": "main frame",
+      "min": [
+        -12.4,
+        3.2,
+        -31.0
+      ],
+      "max": [
+        12.4,
+        10.6,
+        30.5
+      ]
+    },
+    {
+      "part": "main_engine",
+      "covers": "engine hood and radiator guard",
+      "min": [
+        -11.8,
+        6.0,
+        -35.5
+      ],
+      "max": [
+        11.8,
+        27.599999999999998,
+        -4.0
+      ]
+    },
+    {
+      "part": "body",
+      "covers": "operator station and canopy",
+      "min": [
+        -13.3,
+        17.6,
+        -5.9
+      ],
+      "max": [
+        13.3,
+        47.6,
+        18.9
+      ]
+    },
+    {
+      "part": "body",
+      "covers": "fuel and hydraulic tanks, toolbox",
+      "min": [
+        -20.8,
+        17.6,
+        16.6
+      ],
+      "max": [
+        20.6,
+        29.200000000000003,
+        28.6
+      ]
+    },
+    {
+      "part": "body",
+      "covers": "ripper",
+      "min": [
+        -14.0,
+        1.4,
+        28.6
+      ],
+      "max": [
+        14.0,
+        16.4,
+        43.9
+      ]
+    },
+    {
+      "part": "body",
+      "covers": "blade",
+      "min": [
+        -31.6,
+        0.0,
+        -49.6
+      ],
+      "max": [
+        31.599999999999998,
+        27.0,
+        -37.400000000000006
+      ]
+    },
+    {
+      "part": "body",
+      "covers": "left push arm",
+      "min": [
+        21.2,
+        5.6,
+        -40.0
+      ],
+      "max": [
+        25.8,
+        11.0,
+        0.16929999999999978
+      ]
+    },
+    {
+      "part": "body",
+      "covers": "right push arm",
+      "min": [
+        -25.8,
+        5.6,
+        -40.0
+      ],
+      "max": [
+        -21.2,
+        11.0,
+        0.16929999999999978
+      ]
+    }
+  ],
+  "revision": "05 - seated mirror, continuous centred operator audio",
+  "bones": 125,
+  "cuboids": 1037
+}

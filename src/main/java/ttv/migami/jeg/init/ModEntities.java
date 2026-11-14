@@ -235,6 +235,9 @@ public final class ModEntities {
     );
 
     public static final DeferredHolder<EntityType<?>, EntityType<ConfiguredVehicleEntity>> TRUCK = configuredVehicle("truck", 2.6F, 3.0F);
+    public static final DeferredHolder<EntityType<?>, EntityType<ttv.migami.jeg.vehicle.entity.BulldozerEntity>> BULLDOZER = REGISTER.register("bulldozer",
+            () -> EntityType.Builder.<ttv.migami.jeg.vehicle.entity.BulldozerEntity>of(ttv.migami.jeg.vehicle.entity.BulldozerEntity::new, MobCategory.MISC)
+                    .sized(2.9F, 3.2F).clientTrackingRange(14).updateInterval(1).build(entityKey("bulldozer")));
     public static final DeferredHolder<EntityType<?>, EntityType<ConfiguredVehicleEntity>> LAV150 = configuredVehicle("lav150", 2.8F, 3.1F);
     public static final DeferredHolder<EntityType<?>, EntityType<ConfiguredVehicleEntity>> SPEEDBOAT = configuredVehicle("speedboat", 3.0F, 2.0F);
     public static final DeferredHolder<EntityType<?>, EntityType<ConfiguredVehicleEntity>> AH6 = configuredVehicle("ah6", 2.4F, 2.9F);
