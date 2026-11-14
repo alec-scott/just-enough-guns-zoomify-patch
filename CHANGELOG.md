@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.7.2+mc26.1.2.yftm.19 - 2026-11-14
+
+### Added
+- Aircraft position lights, flashing beacons and strobes, ambient cockpit lighting, and night-only helicopter searchlights and A-10 taxi lighting. Searchlights reach farther ahead of the helicopters and can light terrain through optional LambDynamicLights integration.
+- Lit cockpit instruments: green displays and a head-up display for the A-10, and a turquoise panel with amber displays, backlit gauges and a green head-up display for the Mi-28.
+- A-10 speed brakes: hold S in a dive or the airbrake key in flight to open the split wingtip ailerons. They slow a strafing dive, close when released, and show their state on the HUD.
+- An equipped aircraft sandbox setup and a pack client Gradle task for manual testing with the configured pack mods, shaders and resource packs.
+
+### Changed
+- AH-6 rockets and Mi-28 rockets and missiles alternate launch sides. The Mi-28's Kh-39 models disappear from their pylons as they are fired.
+- Helicopter gun tracers use smooth cores and glows like the A-10's, at a smaller size.
+
+### Fixed
+- Pressing the gun reload/cooldown key no longer also reloads Iris shaders when the bindings conflict. Shader reload still works with empty hands or a separately bound key.
+- Minigun barrels keep their final rotation after cooling instead of snapping back to zero. Either hand's cooling keeps dual miniguns spinning until it finishes, including when the main-hand gun is already cold.
+- Active minigun vent audio stops when leaving the world.
+
 ## 1.7.2+mc26.1.2.yftm.18 - 2026-11-14
 
 ### Added

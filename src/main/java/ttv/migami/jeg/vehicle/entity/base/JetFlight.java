@@ -112,6 +112,19 @@ final class JetFlight {
     private static final double IDLE_HOLD_BRAKE = 0.008D;
     private static final double TYRE_GRIP = 0.55D;
     private static final double AIRBRAKE_DRAG = 1.4D;
+    /**
+     * Speed brakes (the A-10's split wingtip ailerons): out with the brake key in the air, or with reverse held in a dive
+     * steeper than this many degrees, and kept out while reverse stays held. They take this long a tick to open or close.
+     */
+    private static final double DIVE_BRAKE_NOSE_DOWN = 10.0D;
+    private static final float SPEED_BRAKE_TRAVEL = 0.1F;
+    /**
+     * With the brakes out the jet sheds this share of its speed over the braked limit each tick: a dive settles at that
+     * limit (this share of top speed, never under 1.25 times the stall speed) rather than running away to the dive speed,
+     * so it can be held on a target for a strafing run.
+     */
+    private static final double SPEED_BRAKE_SHED = 0.12D;
+    private static final double SPEED_BRAKE_LIMIT_SHARE = 0.55D;
     private static final double GEAR_DRAG = 0.18D;
     /** Gear: comes up past this height above ground and goes back down below the lower one. */
     private static final double GEAR_UP_ALTITUDE = 14.0D;
@@ -146,6 +159,8 @@ final class JetFlight {
     private double spool;
     private float gear = 1.0F;
     private boolean gearTargetDown = true;
+    /** Speed brakes, 0 closed to 1 fully open. */
+    private float speedBrake;
     private double pitchRate;
     private double yawRate;
     /** The nose wheel's steering, -1 (full left) to 1 (full right). */
@@ -206,6 +221,10 @@ final class JetFlight {
         return this.gear;
     }
 
+    float speedBrake() {
+        return this.speedBrake;
+    }
+
     boolean stallWarning() {
         return this.stallWarning;
     }
@@ -230,6 +249,7 @@ final class JetFlight {
             this.spool = this.jet.syncedJetSpool();
             this.gear = this.jet.syncedJetGear();
             this.gearTargetDown = this.gear > 0.5F;
+            this.speedBrake = this.jet.syncedJetSpeedBrake();
         }
         this.predicting = !server;
         EngineInfo engine = this.jet.vehicleData().defaults().engine();
@@ -458,10 +478,15 @@ final class JetFlight {
         velocity.add(new Vector3d(forward).mul(thrust));
         double newSpeed = velocity.length();
         boolean airbrake = controlled && input.brake() && !grounded;
+        // Reverse in a dive opens the speed brakes; they stay out while it is held, through the pull-out.
+        double noseDown = -Math.toDegrees(Math.asin(Mth.clamp(forward.y, -1.0D, 1.0D)));
+        boolean diveBrake = controlled && !grounded && input.backward()
+                && (this.speedBrake > 0.0F || noseDown > DIVE_BRAKE_NOSE_DOWN);
+        this.speedBrake = Mth.approach(this.speedBrake, airbrake || diveBrake ? 1.0F : 0.0F, SPEED_BRAKE_TRAVEL);
         double inducedDrag = INDUCED_DRAG * scale;
         double cruiseGravity = GRAVITY * scale;
         double parasiteDrag = (engine.acceleration() * (1.0D - THRUST_LAPSE) - inducedDrag * cruiseGravity * cruiseGravity / (topSpeed * topSpeed)) / (topSpeed * topSpeed);
-        double drag = Math.max(0.0D, parasiteDrag) * newSpeed * newSpeed * (1.0D + (airbrake ? AIRBRAKE_DRAG : 0.0D) + GEAR_DRAG * this.gear);
+        double drag = Math.max(0.0D, parasiteDrag) * newSpeed * newSpeed * (1.0D + AIRBRAKE_DRAG * this.speedBrake + GEAR_DRAG * this.gear);
         drag += Math.min(0.03D * scale, inducedDrag * lift * lift / Math.max(newSpeed * newSpeed, 0.36D * scale * scale));
         if (newSpeed > 1.0E-4D) {
             velocity.sub(new Vector3d(velocity).div(newSpeed).mul(Math.min(drag, newSpeed)));
@@ -479,6 +504,11 @@ final class JetFlight {
             }
         }
         newSpeed = velocity.length();
+        double brakedLimit = Math.max(stallSpeed * 1.25D, topSpeed * SPEED_BRAKE_LIMIT_SHARE);
+        if (this.speedBrake > 0.0F && !grounded && newSpeed > brakedLimit) {
+            velocity.mul((newSpeed - (newSpeed - brakedLimit) * SPEED_BRAKE_SHED * this.speedBrake) / newSpeed);
+            newSpeed = velocity.length();
+        }
         if (newSpeed > diveSpeed) {
             velocity.mul((diveSpeed + (newSpeed - diveSpeed) * 0.5D) / newSpeed);
         }
@@ -504,7 +534,7 @@ final class JetFlight {
                 && (this.alphaDegrees > Math.toDegrees(ALPHA_STALL) * 0.85D || speedNow < stallSpeed * 1.05D);
         if (server) {
             this.tickStructureStrikes(speedNow);
-            this.jet.setSyncedJetState((float) this.throttle, (float) this.spool, this.gear);
+            this.jet.setSyncedJetState((float) this.throttle, (float) this.spool, this.gear, this.speedBrake);
         }
     }
 

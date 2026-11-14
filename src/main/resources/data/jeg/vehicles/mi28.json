@@ -31,12 +31,12 @@
     {"part": "main_engine", "x": 0.0, "y": 4.625, "z": 0.5, "half_width": 0.625, "half_height": 0.8125, "half_depth": 0.625}
   ],
   "weapons": [
-    {"weapon": "jeg:vehicle_80mm_rocket", "ammo": "jeg:small_rocket", "energy_cost": 2, "guided": false, "seat": 0, "turret_mounted": false, "muzzle": {"x": -1.787, "y": 1.548, "z": -0.151}},
-    {"weapon": "jeg:vehicle_9m120_driver_missile", "ammo": "jeg:medium_anti_ground_missile", "energy_cost": 2, "guided": true, "seat": 0, "turret_mounted": false, "muzzle": {"x": -2.258, "y": 1.932, "z": 0.0}},
-    {"weapon": "jeg:vehicle_9m336_missile", "ammo": "jeg:medium_anti_air_missile", "energy_cost": 2, "guided": true, "seat": 0, "turret_mounted": false, "muzzle": {"x": -2.806, "y": 1.932, "z": 0.0}},
+    {"weapon": "jeg:vehicle_80mm_rocket", "ammo": "jeg:small_rocket", "energy_cost": 2, "guided": false, "seat": 0, "turret_mounted": false, "muzzle": {"x": -1.787, "y": 1.548, "z": -0.151, "mirror": true}},
+    {"weapon": "jeg:vehicle_9m120_driver_missile", "ammo": "jeg:medium_anti_ground_missile", "energy_cost": 2, "guided": true, "seat": 0, "turret_mounted": false, "muzzle": {"x": -2.258, "y": 1.932, "z": 0.0, "mirror": true}},
+    {"weapon": "jeg:vehicle_9m336_missile", "ammo": "jeg:medium_anti_air_missile", "energy_cost": 2, "guided": true, "seat": 0, "turret_mounted": false, "muzzle": {"x": -2.806, "y": 1.932, "z": 0.0, "mirror": true}},
     {"weapon": "jeg:light_machine_gun", "ammo": "jeg:rifle_ammo", "energy_cost": 1, "guided": false, "seat": 1, "muzzle": {"x": 0.0, "y": 0.659625, "z": 7.317575}},
-    {"weapon": "jeg:vehicle_9m120_passenger_missile", "ammo": "jeg:medium_anti_ground_missile", "energy_cost": 2, "guided": true, "seat": 1, "turret_mounted": false, "muzzle": {"x": 2.258, "y": 1.932, "z": 0.0}},
-    {"weapon": "jeg:vehicle_kh39_missile", "ammo": "jeg:large_anti_ground_missile", "energy_cost": 2, "guided": true, "seat": 1, "turret_mounted": false, "muzzle": {"x": -2.641, "y": 1.1875, "z": 0.0}}
+    {"weapon": "jeg:vehicle_9m120_passenger_missile", "ammo": "jeg:medium_anti_ground_missile", "energy_cost": 2, "guided": true, "seat": 1, "turret_mounted": false, "muzzle": {"x": 2.258, "y": 1.932, "z": 0.0, "mirror": true}},
+    {"weapon": "jeg:vehicle_kh39_missile", "ammo": "jeg:large_anti_ground_missile", "energy_cost": 2, "guided": true, "seat": 1, "turret_mounted": false, "muzzle": {"x": -2.641, "y": 1.1875, "z": 0.0, "mirror": true}}
   ],
   "destroy": {"explodes": true, "explosion_power": 3.0},
   "seek": {"range": 384.0, "angle": 20.0, "warns_target": true},

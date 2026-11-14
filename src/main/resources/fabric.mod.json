@@ -17,6 +17,9 @@
     ],
     "client": [
       "ttv.migami.jeg.FabricClientEntrypoint"
+    ],
+    "lambdynlights:initializer": [
+      "ttv.migami.jeg.client.compat.LambDynamicLightsCompat"
     ]
   },
   "mixins": [

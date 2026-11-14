@@ -15,6 +15,8 @@ repositories {
     maven { url = 'https://maven.fabricmc.net/' }
     maven { url = 'https://api.modrinth.com/maven' }
     maven { url = 'https://dl.cloudsmith.io/public/geckolib3/geckolib/maven/' }
+    // LambDynamicLights' API (its jar on Modrinth nests it, so it cannot be compiled against from there).
+    maven { url = 'https://maven.gegy.dev/releases/' }
 }
 
 dependencies {
@@ -43,6 +45,8 @@ loom {
 dependencies {
     // Not Enough Animations (in the yftm pack): compiled against for its animation API, used only when it is installed.
     clientCompileOnly "maven.modrinth:MPCX6s5C:K6FD58uq"
+    // LambDynamicLights (in the yftm pack): searchlights light the ground through its API, only when it is installed.
+    clientCompileOnly("dev.lambdaurora.lambdynamiclights:lambdynamiclights-api:4.11.2+26.1.2") { transitive = false }
 }
 
 // Client game tests boot a real client: ./gradlew runClientGameTest (screenshots land in build/run/clientGameTest/screenshots).
@@ -53,6 +57,52 @@ fabricApi {
         enableGameTests = false
         enableClientGameTests = true
         eula = true
+    }
+}
+
+// A playable client with the yftm pack's mods, shader pack and Fresh Animations (everything -PwithPack gives the game
+// tests), for trying changes by hand in build/run/packClient. Build a world first (AircraftSandboxSetup), then:
+// ./gradlew runPackClient -PwithPack -Pminecraft_version=26.1.2 -Pfabric_version=0.155.3+26.1.2 -Ploader_version=0.20.1 --args="--quickPlaySingleplayer AircraftTest"
+// It fetches the same shader pack and resource packs as the pack game tests and switches them on.
+ext.packShaderPack = ["ComplementaryReimagined_r5.9.3.zip",
+                      "https://cdn.modrinth.com/data/HVnmMxH1/versions/Bqen1mJX/ComplementaryReimagined_r5.9.3.zip"]
+ext.packResourcePacks = [
+        "FreshAnimations_v1.10.5.zip" : "https://cdn.modrinth.com/data/50dA9Sha/versions/RGIzA5em/FreshAnimations_v1.10.5.zip",
+        "FA+All_Extensions-v1.9.2.zip": "https://cdn.modrinth.com/data/YAVTU8mK/versions/R5ZGSF8A/FA%2BAll_Extensions-v1.9.2.zip",
+        "FA+Player-v1.1.zip"          : "https://cdn.modrinth.com/data/TAIMVZCL/versions/Wj7NeGjP/FA%2BPlayer-v1.1.zip"
+]
+loom {
+    runs {
+        packClient {
+            client()
+            name = "Pack Client"
+            source sourceSets.gametest
+            runDir = "build/run/packClient"
+            ideConfigGenerated = false
+        }
+    }
+}
+tasks.matching { it.name == "runPackClient" }.configureEach {
+    doFirst {
+        def runDir = file("build/run/packClient")
+        def fetch = { File target, String url ->
+            if (!target.exists()) {
+                target.parentFile.mkdirs()
+                new URL(url).withInputStream { input -> target.withOutputStream { it << input } }
+            }
+        }
+        def (shaderName, shaderUrl) = packShaderPack
+        fetch(new File(runDir, "shaderpacks/" + shaderName), shaderUrl)
+        packResourcePacks.each { name, url -> fetch(new File(runDir, "resourcepacks/" + name), url) }
+        // Shaders on with the pack's shader pack, and the resource packs on, keeping whatever else was set in game.
+        def setLines = { File file, String separator, Map<String, String> values ->
+            def lines = file.exists() ? file.readLines().findAll { line -> !values.keySet().any { line.startsWith(it + separator) } } : []
+            file.parentFile.mkdirs()
+            file.text = (lines + values.collect { key, value -> key + separator + value }).join(System.lineSeparator()) + System.lineSeparator()
+        }
+        setLines(new File(runDir, "config/iris.properties"), "=", [enableShaders: "true", shaderPack: shaderName])
+        setLines(new File(runDir, "options.txt"), ":",
+                [resourcePacks: "[\"vanilla\",\"fabric\"," + packResourcePacks.keySet().collect { "\"file/" + it + "\"" }.join(",") + "]"])
     }
 }
 
@@ -178,8 +228,7 @@ if (withSodium && !packExclude.contains("iris")) {
     dependencies {
         gametestRuntimeOnly "maven.modrinth:iris:sZbVsl2Q"
     }
-    def shaderPackName = "ComplementaryReimagined_r5.9.3.zip"
-    def shaderPackUrl = "https://cdn.modrinth.com/data/HVnmMxH1/versions/Bqen1mJX/ComplementaryReimagined_r5.9.3.zip"
+    def (shaderPackName, shaderPackUrl) = packShaderPack
     tasks.named("runClientGameTest") {
         doFirst {
             def runDir = file("build/run/clientGameTest")
@@ -213,11 +262,7 @@ if (project.hasProperty("withFreshAnimations") || (withPack && !packExclude.cont
         gametestRuntimeOnly "maven.modrinth:BVzZfTc1:2bcqPrsv" // Entity Texture Features 7.2.6
         gametestRuntimeOnly "maven.modrinth:4I1XuqiY:zh2AVI88" // Entity Model Features 3.3.12
     }
-    def packs = [
-            "FreshAnimations_v1.10.5.zip": "https://cdn.modrinth.com/data/50dA9Sha/versions/RGIzA5em/FreshAnimations_v1.10.5.zip",
-            "FA+All_Extensions-v1.9.2.zip": "https://cdn.modrinth.com/data/YAVTU8mK/versions/R5ZGSF8A/FA%2BAll_Extensions-v1.9.2.zip",
-            "FA+Player-v1.1.zip"          : "https://cdn.modrinth.com/data/TAIMVZCL/versions/Wj7NeGjP/FA%2BPlayer-v1.1.zip"
-    ]
+    def packs = packResourcePacks
     tasks.named("runClientGameTest") {
         doFirst {
             packs.each { name, url ->

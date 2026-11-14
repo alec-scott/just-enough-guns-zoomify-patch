@@ -28,6 +28,7 @@ abstract class AbstractVehicleGeoRenderer<T extends VehicleEntity> extends GeoEn
         this.withRenderLayer(new VehicleBarrelHeatLayer<>(this));
         this.withRenderLayer(new VehicleExhaustGlowLayer<>(this));
         this.withRenderLayer(new VehicleFanBlurLayer<>(this));
+        this.withRenderLayer(new VehicleLightsLayer<>(this));
         this.shadowRadius = 0.9F;
     }
 
@@ -114,7 +115,12 @@ abstract class AbstractVehicleGeoRenderer<T extends VehicleEntity> extends GeoEn
         if (bounds.hasNaN() || bounds.getSize() == 0.0D) {
             bounds = new AABB(vehicle.getX() - 8.0D, vehicle.getY() - 6.0D, vehicle.getZ() - 8.0D, vehicle.getX() + 8.0D, vehicle.getY() + 6.0D, vehicle.getZ() + 8.0D);
         }
-        return camera.isVisible(bounds);
+        if (camera.isVisible(bounds)) {
+            return true;
+        }
+        // A searchlight's pool on the ground can be in view while the helicopter overhead is not.
+        AABB spot = AircraftLights.spotBounds(vehicle);
+        return spot != null && camera.isVisible(spot);
     }
 
     private static boolean shouldHideVehicleWhileZooming(VehicleEntity vehicle) {
@@ -179,6 +185,11 @@ abstract class AbstractVehicleGeoRenderer<T extends VehicleEntity> extends GeoEn
                 updateTurret(vehicle, partialTick, snapshots, -70.0F, 30.0F);
                 updateHelicopterRotors(vehicle, partialTick, snapshots);
                 snapshots.ifPresent("barrel2", snapshot -> snapshot.setRotZ(vehicle.rotaryGunAngle(partialTick) * Mth.DEG_TO_RAD));
+                // The Kh-39s under the wingtip pylons fire one side then the other, as the A-10's missiles do: missile2
+                // hangs on the muzzle side (the right, the model's -X), fired first.
+                int kh39 = weaponSlotAmmo(vehicle, "vehicle_kh39_missile");
+                hideIf(snapshots, "missile2", kh39 < 2);
+                hideIf(snapshots, "missile1", kh39 < 1);
             }
             case "speedboat" -> updateTurret(vehicle, partialTick, snapshots, -25.0F, 50.0F);
             case "a10" -> updateA10(vehicle, partialTick, snapshots);
@@ -199,6 +210,8 @@ abstract class AbstractVehicleGeoRenderer<T extends VehicleEntity> extends GeoEn
      */
     private static final String[] A10_FRONT_FANS = {"qianwaiyuan", "qianwaiyuan2"};
     private static final float[] A10_FRONT_FAN_PIVOT_OFFSET = {0.338F, -0.338F};
+    /** How far each half of a speed brake opens, in radians. */
+    private static final float SPEED_BRAKE_ANGLE = 40.0F * Mth.DEG_TO_RAD;
     /** Rocket pods and bombs the A-10's loadout does not carry. */
     private static final String[] A10_UNUSED_STORES = {"weapon", "bomb1", "bomb2", "bomb3"};
 
@@ -259,14 +272,24 @@ abstract class AbstractVehicleGeoRenderer<T extends VehicleEntity> extends GeoEn
                 }
             });
         }
+        // Speed brakes: each wingtip aileron splits, its upper half up and its lower half down.
+        float split = vehicle.jetSpeedBrake(partialTick) * SPEED_BRAKE_ANGLE;
+        if (split > 0.0F) {
+            for (String upper : new String[]{"wingLR", "wingRR"}) {
+                snapshots.ifPresent(upper, snapshot -> snapshot.setRotX(-split));
+            }
+            for (String lower : new String[]{"wingLR2", "wingRR2"}) {
+                snapshots.ifPresent(lower, snapshot -> snapshot.setRotX(split));
+            }
+        }
         for (String bone : A10_UNUSED_STORES) {
             snapshots.ifPresent(bone, snapshot -> {
                 snapshot.skipRender(true);
                 snapshot.skipChildrenRender(true);
             });
         }
-        int medium = a10WeaponSlotAmmo(vehicle, "vehicle_agm65_missile");
-        int large = a10WeaponSlotAmmo(vehicle, "vehicle_agm65g_missile");
+        int medium = weaponSlotAmmo(vehicle, "vehicle_agm65_missile");
+        int large = weaponSlotAmmo(vehicle, "vehicle_agm65g_missile");
         // missile2 / missile1 hang under the left wing (the muzzle side), missile3 / missile4 under the right.
         hideIf(snapshots, "missile2", medium < 2);
         hideIf(snapshots, "missile3", medium < 1);
@@ -274,7 +297,7 @@ abstract class AbstractVehicleGeoRenderer<T extends VehicleEntity> extends GeoEn
         hideIf(snapshots, "missile4", large < 1);
     }
 
-    private static int a10WeaponSlotAmmo(VehicleEntity vehicle, String weaponPath) {
+    private static int weaponSlotAmmo(VehicleEntity vehicle, String weaponPath) {
         var weapons = vehicle.vehicleData().defaults().weapons();
         for (int slot = 0; slot < weapons.size(); slot++) {
             if (weapons.get(slot).weaponId().getPath().equals(weaponPath)) {

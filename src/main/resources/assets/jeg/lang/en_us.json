@@ -607,6 +607,7 @@
   "hud.jeg.vehicle.jet_gear_down": "GEAR DOWN",
   "hud.jeg.vehicle.jet_gear_up": "GEAR UP",
   "hud.jeg.vehicle.jet_gear_moving": "GEAR IN TRANSIT",
+  "hud.jeg.vehicle.jet_speed_brake": "SPD BRK",
   "hud.jeg.vehicle.jet_wheel_brake": "WHEEL BRAKE",
   "hud.jeg.vehicle.jet_airbrake": "AIRBRAKE",
   "message.jeg.vehicle.jet_stall_warning": "STALL - lower the nose and add throttle",

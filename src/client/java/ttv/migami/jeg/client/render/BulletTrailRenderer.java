@@ -40,7 +40,7 @@ import ttv.migami.jeg.network.BulletTrailPayload;
  */
 public final class BulletTrailRenderer {
     private static final Identifier TRAIL_TEXTURE = Identifier.fromNamespaceAndPath("jeg", "textures/effect/tracer.png");
-    /** The A-10's rounds: a smooth, high-resolution streak and a round glow for their heads. */
+    /** The A-10's and the helicopters' rounds: a smooth, high-resolution streak and a round glow for their heads. */
     private static final Identifier HEAVY_TRAIL_TEXTURE = Identifier.fromNamespaceAndPath("jeg", "textures/effect/tracer_heavy.png");
     private static final Identifier HEAVY_GLOW_TEXTURE = Identifier.fromNamespaceAndPath("jeg", "textures/effect/tracer_glow.png");
     /** The GAU-8's tracer colour (VehicleWeaponStats): its rounds are drawn with the heavy look. */
@@ -48,6 +48,8 @@ public final class BulletTrailRenderer {
     private static final double HEAVY_CORE_HALF_WIDTH_SCALE = 2.2D;
     private static final double HEAVY_GLOW_HALF_WIDTH_SCALE = 6.0D;
     private static final double HEAVY_HEAD_SIZE_SCALE = 2.4D;
+    /** A helicopter gun's rounds, drawn with the A-10's smooth look at this fraction of its size. */
+    private static final double HELICOPTER_ROUND_SCALE = 0.62D;
     private static final double TRACER_MAX_LENGTH = 16.0D;
     private static final double TRACER_LENGTH_TICKS = 1.6D;
     private static final double TRACER_NEAR_FADE_START = 1.0D;
@@ -105,6 +107,7 @@ public final class BulletTrailRenderer {
                 TRAILS.put(entityId, state);
                 state.origin = payload.positions()[i];
                 state.vehicleRound = payload.vehicleRound();
+                state.helicopterRound = state.vehicleRound && firedFromHelicopter(mc, payload.shooterId());
                 // A vehicle's own gun already fires from its muzzle; a hand-held gun fires from the eye and is moved onto
                 // the gun, also for passengers shooting out of a helicopter.
                 state.muzzleOffset = state.vehicleRound ? Vec3.ZERO : muzzleOffset(mc, payload.shooterId(), state.origin, payload.offhand());
@@ -268,13 +271,27 @@ public final class BulletTrailRenderer {
     }
 
     private static boolean isHeavy(TrailState trail) {
-        return trail.vehicleRound && (trail.color & 0xFFFFFF) == GAU8_TRACER_COLOUR;
+        return trail.vehicleRound && ((trail.color & 0xFFFFFF) == GAU8_TRACER_COLOUR || trail.helicopterRound);
+    }
+
+    /** A helicopter's guns are smaller than the GAU-8: the same smooth look, finer. */
+    private static double heavyScale(TrailState trail) {
+        return trail.helicopterRound && (trail.color & 0xFFFFFF) != GAU8_TRACER_COLOUR ? HELICOPTER_ROUND_SCALE : 1.0D;
+    }
+
+    /** The round came from a gun on a helicopter (its pilot's or its gunner's). */
+    private static boolean firedFromHelicopter(Minecraft mc, int shooterId) {
+        Entity shooter = mc.level != null ? mc.level.getEntity(shooterId) : null;
+        Entity vehicle = shooter != null ? shooter.getRootVehicle() : null;
+        return vehicle instanceof ttv.migami.jeg.vehicle.entity.base.VehicleEntity aircraft
+                && aircraft.vehicleData().defaults().vehicleType() == ttv.migami.jeg.vehicle.data.subdata.VehicleType.HELICOPTER;
     }
 
     /**
-     * The A-10's rounds, drawn smooth rather than from the pixel-art sprite: a wide faint glow and a narrow white-hot core
-     * along the streak (into {@code streaks}), and a soft round glow at the head (into {@code heads}). Same path and
-     * convergence onto the muzzle as {@link #renderTrail}.
+     * The A-10's and the helicopters' rounds, drawn smooth rather than from the pixel-art sprite: a wide faint glow and a
+     * narrow white-hot core along the streak (into {@code streaks}), and a soft round glow at the head (into
+     * {@code heads}); a helicopter's finer ({@link #heavyScale}). Same path and convergence onto the muzzle as
+     * {@link #renderTrail}.
      */
     private static void renderHeavyTrail(TrailState trail, PoseStack poseStack, VertexConsumer streaks, VertexConsumer heads, Vec3 view, float partialTick) {
         Vec3 headWorld = trail.ended ? trail.position : trail.position.add(trail.motion.scale(partialTick));
@@ -310,7 +327,7 @@ public final class BulletTrailRenderer {
             side = side.normalize();
             for (int layer = 0; layer < 2; layer++) {
                 boolean glow = layer == 0;
-                double scale = glow ? HEAVY_GLOW_HALF_WIDTH_SCALE : HEAVY_CORE_HALF_WIDTH_SCALE;
+                double scale = (glow ? HEAVY_GLOW_HALF_WIDTH_SCALE : HEAVY_CORE_HALF_WIDTH_SCALE) * heavyScale(trail);
                 Vec3 headSide = side.scale(tracerHalfWidth(headDistance) * scale);
                 Vec3 tailSide = side.scale(tracerHalfWidth(tail.length()) * scale);
                 int red = 255;
@@ -328,7 +345,8 @@ public final class BulletTrailRenderer {
             Vec3 right = toCamera.cross(new Vec3(0.0D, 1.0D, 0.0D));
             right = right.lengthSqr() < 1.0E-6D ? new Vec3(1.0D, 0.0D, 0.0D) : right.normalize();
             Vec3 up = right.cross(toCamera).normalize();
-            double size = Mth.clamp(headDistance * TRACER_HEAD_SIZE_PER_BLOCK, TRACER_HEAD_MIN_SIZE, TRACER_HEAD_MAX_SIZE) * HEAVY_HEAD_SIZE_SCALE;
+            double size = Mth.clamp(headDistance * TRACER_HEAD_SIZE_PER_BLOCK, TRACER_HEAD_MIN_SIZE, TRACER_HEAD_MAX_SIZE) * HEAVY_HEAD_SIZE_SCALE
+                    * heavyScale(trail);
             Vec3 r = right.scale(size);
             Vec3 u = up.scale(size);
             int alpha = (int) (230 * nearFade);
@@ -635,6 +653,8 @@ public final class BulletTrailRenderer {
         boolean ended;
         /** Fired from a vehicle's gun: drawn with a bright head and leaves a puff where it lands. */
         boolean vehicleRound;
+        /** Fired from a helicopter's gun: drawn smooth like the A-10's rounds, finer. */
+        boolean helicopterRound;
 
         TrailState(int entityId) {
             this.entityId = entityId;

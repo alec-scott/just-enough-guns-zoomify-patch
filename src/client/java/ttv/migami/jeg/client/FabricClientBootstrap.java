@@ -344,6 +344,7 @@ public final class FabricClientBootstrap {
             ttv.migami.jeg.vehicle.client.audio.HelicopterEngineAudio.tick(client);
             ttv.migami.jeg.vehicle.client.audio.JetAudio.tick(client);
             ttv.migami.jeg.vehicle.client.audio.FarAircraftAudio.tick(client);
+            ttv.migami.jeg.vehicle.client.render.AircraftLights.tick(client);
             MedalManager.tick();
             if (NetworkHandler.shouldRenderLegacyBulletTrail()) {
                 BulletTrailRenderer.tick();
@@ -964,7 +965,9 @@ public final class FabricClientBootstrap {
                 && !(offhandGun.usesOverheatMechanic() && offhandGun.getOverheatPercent(offhand) >= 100)
                 && hasShootableAmmo(player, offhand, offhandGun);
         // Rapid cooling runs the barrels without firing.
-        boolean spunUp = MinigunClient.updateLocal(player, attackDown || aiming || cooling, attackDown && (canFire || offhandCanFire));
+        boolean offhandCooling = MinigunSpin.isDualWielding(player) && GunItem.isRapidCooling(offhand);
+        boolean spunUp = MinigunClient.updateLocal(player, attackDown || aiming || cooling || offhandCooling,
+                attackDown && (canFire || offhandCanFire));
         if (!attackDown) {
             nextVisualShotTickMain = 0L;
             GunRecoilHandler.releaseTrigger();

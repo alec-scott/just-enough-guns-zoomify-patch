@@ -469,12 +469,15 @@ public final class VehicleHudOverlay {
         double altitude = jet.exactAltitudeAboveGround();
         boolean grounded = jet.onGround();
         float gear = jet.jetGear();
-        Component[] lines = {
+        java.util.List<Component> lines = new java.util.ArrayList<>(java.util.List.of(
                 Component.translatable("hud.jeg.vehicle.jet_speed", Math.round(speed)),
                 Component.translatable("hud.jeg.vehicle.jet_altitude", grounded ? "0" : String.valueOf(Math.round(altitude))),
                 Component.translatable("hud.jeg.vehicle.jet_throttle", Math.round(jet.jetThrottle() * 100.0F)),
                 Component.translatable(gear >= 0.99F ? "hud.jeg.vehicle.jet_gear_down" : gear <= 0.01F ? "hud.jeg.vehicle.jet_gear_up" : "hud.jeg.vehicle.jet_gear_moving")
-        };
+        ));
+        if (jet.jetSpeedBrake() > 0.05F) {
+            lines.add(Component.translatable("hud.jeg.vehicle.jet_speed_brake"));
+        }
         int y = 16;
         for (Component line : lines) {
             guiGraphics.text(minecraft.font, line, guiGraphics.guiWidth() - minecraft.font.width(line) - 16, y, 0xFF66FF00);

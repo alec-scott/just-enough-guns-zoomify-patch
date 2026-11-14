@@ -147,6 +147,9 @@ public final class MinigunClient {
         if (minecraft.level == null || minecraft.player == null) {
             for (Barrels barrels : BARRELS.values()) {
                 haltAll(minecraft, barrels);
+                if (barrels.vent != null) {
+                    barrels.vent.halt();
+                }
             }
             BARRELS.clear();
             return;
@@ -186,7 +189,10 @@ public final class MinigunClient {
             tickAudio(minecraft, entity, barrels);
             tickVent(minecraft, entity, barrels);
             if (!barrels.wanted && barrels.spin <= 0.0F && barrels.audio == Audio.SILENT
-                    && (barrels.oneShot == null || barrels.oneShot.isStopped() || !minecraft.getSoundManager().isActive(barrels.oneShot))) {
+                    && (barrels.oneShot == null || barrels.oneShot.isStopped() || !minecraft.getSoundManager().isActive(barrels.oneShot))
+                    && (!(entity instanceof LivingEntity living) || !MinigunSpin.isMinigun(living.getMainHandItem()))) {
+                // Keep the stopped barrel angle while the gun is held. Dropping its state here snapped the barrels
+                // back to zero after every cooling cycle, and restarted the next cycle from a different pose.
                 iterator.remove();
             }
         }

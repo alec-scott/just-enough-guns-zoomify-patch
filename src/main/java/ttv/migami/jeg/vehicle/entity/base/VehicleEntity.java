@@ -205,6 +205,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     /** A jet's throttle lever (0..1) and landing gear (0 up, 1 down); its engine spool rides on DATA_PROPELLER_SPEED. */
     private static final EntityDataAccessor<Float> DATA_JET_THROTTLE = SynchedEntityData.defineId(VehicleEntity.class, EntityDataSerializers.FLOAT);
     private static final EntityDataAccessor<Float> DATA_JET_GEAR = SynchedEntityData.defineId(VehicleEntity.class, EntityDataSerializers.FLOAT);
+    private static final EntityDataAccessor<Float> DATA_JET_SPEED_BRAKE = SynchedEntityData.defineId(VehicleEntity.class, EntityDataSerializers.FLOAT);
     private static final Identifier RIFLE_AMMO = Reference.id("rifle_ammo");
     private static final Identifier FLARE_AMMO = Reference.id("flare");
     private static final int FLARE_DECOY_COOLDOWN_TICKS = 400;
@@ -552,6 +553,8 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     private float jetFanRate;
     private float jetGearShown = 1.0F;
     private float jetGearShownO = 1.0F;
+    private float jetSpeedBrakeShown;
+    private float jetSpeedBrakeShownO;
     /** Client side: the GAU-8's barrels (0 still, 1 firing speed) and their angle, and last tick's movement. */
     private float jetGunSpin;
     /** Client side: the wheels' roll angle in degrees. */
@@ -809,6 +812,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         builder.define(DATA_PAINT, -1);
         builder.define(DATA_JET_THROTTLE, 0.0F);
         builder.define(DATA_JET_GEAR, 1.0F);
+        builder.define(DATA_JET_SPEED_BRAKE, 0.0F);
     }
 
     /** The dye this vehicle has been painted with, or null for its original colours. */
@@ -1245,7 +1249,14 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         return this.entityData.get(DATA_JET_GEAR);
     }
 
-    void setSyncedJetState(float throttle, float spool, float gear) {
+    float syncedJetSpeedBrake() {
+        return this.entityData.get(DATA_JET_SPEED_BRAKE);
+    }
+
+    void setSyncedJetState(float throttle, float spool, float gear, float speedBrake) {
+        if (Math.abs(this.entityData.get(DATA_JET_SPEED_BRAKE) - speedBrake) > 0.01F || speedBrake == 0.0F || speedBrake == 1.0F) {
+            this.entityData.set(DATA_JET_SPEED_BRAKE, speedBrake);
+        }
         if (Math.abs(this.entityData.get(DATA_JET_THROTTLE) - throttle) > 0.004F || throttle == 0.0F || throttle == 1.0F) {
             this.entityData.set(DATA_JET_THROTTLE, throttle);
         }
@@ -1279,6 +1290,15 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
 
     public float jetGear(float partialTick) {
         return Mth.lerp(partialTick, this.jetGearShownO, this.jetGearShown);
+    }
+
+    /** Speed brakes (the A-10's split wingtip ailerons), 0 closed to 1 fully open. */
+    public float jetSpeedBrake() {
+        return this.simulatesJet() ? this.jetFlight.speedBrake() : this.syncedJetSpeedBrake();
+    }
+
+    public float jetSpeedBrake(float partialTick) {
+        return Mth.lerp(partialTick, this.jetSpeedBrakeShownO, this.jetSpeedBrakeShown);
     }
 
     /** The wheels' roll angle in degrees. */
@@ -1998,6 +2018,8 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         }
         this.jetGearShownO = this.jetGearShown;
         this.jetGearShown = Mth.approach(this.jetGearShown, this.jetGear(), 0.05F);
+        this.jetSpeedBrakeShownO = this.jetSpeedBrakeShown;
+        this.jetSpeedBrakeShown = Mth.approach(this.jetSpeedBrakeShown, this.jetSpeedBrake(), 0.1F);
         this.tickJetEffects();
         org.joml.Quaterniond pose = JetFlight.pose(this.getYRot(), this.getXRot(), this.roll());
         if (this.jetChaseRotation == null) {
