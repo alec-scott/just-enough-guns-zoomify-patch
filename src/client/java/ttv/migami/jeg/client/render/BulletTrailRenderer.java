@@ -586,6 +586,11 @@ public final class BulletTrailRenderer {
         TRAILS.clear();
     }
 
+    /** Whether a tracer is being drawn for this bullet, for checks. */
+    public static boolean hasTrail(int entityId) {
+        return TRAILS.containsKey(entityId);
+    }
+
     /** How many tracers have been drawn reaching what stopped them, for checks. */
     public static int impactsShown() {
         return impactsShown;

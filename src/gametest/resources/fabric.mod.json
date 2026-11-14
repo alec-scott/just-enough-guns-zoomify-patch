@@ -61,7 +61,10 @@
       "ttv.migami.jeg.gametest.A10PodStrikeClientGameTest",
       "ttv.migami.jeg.gametest.A10RotateClientGameTest",
       "ttv.migami.jeg.gametest.A10FlaresClientGameTest",
-      "ttv.migami.jeg.gametest.A10SandboxSetupClientGameTest"
+      "ttv.migami.jeg.gametest.A10SandboxSetupClientGameTest",
+      "ttv.migami.jeg.gametest.A10GunRecoilClientGameTest",
+      "ttv.migami.jeg.gametest.AircraftLongRangeClientGameTest",
+      "ttv.migami.jeg.gametest.AircraftFarSoundClientGameTest"
     ]
   },
   "depends": {

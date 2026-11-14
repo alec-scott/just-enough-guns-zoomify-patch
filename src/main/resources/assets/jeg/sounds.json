@@ -1449,6 +1449,15 @@
       }
     ]
   },
+  "vehicle.a10.fire_distant": {
+    "subtitle": "subtitle.jeg.vehicle.fire",
+    "sounds": [
+      {
+        "name": "jeg:vehicle/a10/fire_distant",
+        "attenuation_distance": 1024
+      }
+    ]
+  },
   "vehicle.a10.fire": {
     "subtitle": "subtitle.jeg.vehicle.fire",
     "sounds": [
@@ -1463,6 +1472,15 @@
     "sounds": [
       {
         "name": "jeg:vehicle/a10/fire_cockpit"
+      }
+    ]
+  },
+  "vehicle.a10.engine_distant": {
+    "subtitle": "subtitle.jeg.vehicle.engine",
+    "sounds": [
+      {
+        "name": "jeg:vehicle/a10/engine_distant",
+        "attenuation_distance": 1024
       }
     ]
   },
@@ -1654,6 +1672,15 @@
       }
     ]
   },
+  "vehicle.ah6.engine_distant": {
+    "subtitle": "subtitle.jeg.vehicle.engine",
+    "sounds": [
+      {
+        "name": "jeg:vehicle/ah6/engine_distant",
+        "attenuation_distance": 1024
+      }
+    ]
+  },
   "vehicle.ah6.engine": {
     "subtitle": "subtitle.jeg.vehicle.engine",
     "sounds": [
@@ -1728,6 +1755,15 @@
     "sounds": [
       {
         "name": "jeg:vehicle/mi28/cannon_fire"
+      }
+    ]
+  },
+  "vehicle.mi28.engine_distant": {
+    "subtitle": "subtitle.jeg.vehicle.engine",
+    "sounds": [
+      {
+        "name": "jeg:vehicle/mi28/engine_distant",
+        "attenuation_distance": 1024
       }
     ]
   },

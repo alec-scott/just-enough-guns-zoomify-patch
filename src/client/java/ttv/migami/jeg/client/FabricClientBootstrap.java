@@ -343,6 +343,7 @@ public final class FabricClientBootstrap {
             ttv.migami.jeg.client.compat.NeaCompat.registerOnce();
             ttv.migami.jeg.vehicle.client.audio.HelicopterEngineAudio.tick(client);
             ttv.migami.jeg.vehicle.client.audio.JetAudio.tick(client);
+            ttv.migami.jeg.vehicle.client.audio.FarAircraftAudio.tick(client);
             MedalManager.tick();
             if (NetworkHandler.shouldRenderLegacyBulletTrail()) {
                 BulletTrailRenderer.tick();
@@ -373,6 +374,7 @@ public final class FabricClientBootstrap {
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
             ttv.migami.jeg.vehicle.client.audio.HelicopterEngineAudio.clear(client);
             ttv.migami.jeg.vehicle.client.audio.JetAudio.clear(client);
+            ttv.migami.jeg.vehicle.client.audio.FarAircraftAudio.clear(client);
             VehicleRotaryGunAudio.clear(client);
             Config.setSyncedMagazineFeedEnabled(null);
             Config.setSyncedHelicopterFlight(null);
@@ -425,6 +427,13 @@ public final class FabricClientBootstrap {
         return sound;
     }
 
+    /** An aircraft's gun is heard as far off as the aircraft (AircraftSoundRange); a ground vehicle's within 128 blocks. */
+    private static double fireAudioRangeSqr(VehicleEntity vehicle) {
+        double range = ttv.migami.jeg.vehicle.util.VehicleSoundHelper.isAircraft(vehicle)
+                ? ttv.migami.jeg.vehicle.client.audio.AircraftSoundRange.MAX_RANGE : 128.0D;
+        return range * range;
+    }
+
     private static void tickVehicleFireAudio(LocalPlayer player) {
         Minecraft minecraft = Minecraft.getInstance();
         VehicleRotaryGunAudio.tick(minecraft);
@@ -436,7 +445,7 @@ public final class FabricClientBootstrap {
             Entity entity = minecraft.level.getEntity(entry.getKey());
             if (!(entity instanceof VehicleEntity vehicle)
                     || !vehicle.isWeaponFiring()
-                    || vehicle.distanceToSqr(player) > 16384.0D
+                    || vehicle.distanceToSqr(player) > fireAudioRangeSqr(vehicle)
                     || (vehicle.isJet() && !ttv.migami.jeg.vehicle.client.audio.JetAudio.inCockpit(vehicle))) {
                 minecraft.getSoundManager().stop(entry.getValue());
                 // The barrels run on for a moment after the gun stops firing.
@@ -469,7 +478,7 @@ public final class FabricClientBootstrap {
         for (Entity entity : minecraft.level.entitiesForRendering()) {
             if (!(entity instanceof VehicleEntity vehicle)
                     || !vehicle.isWeaponFiring()
-                    || vehicle.distanceToSqr(player) > 16384.0D
+                    || vehicle.distanceToSqr(player) > fireAudioRangeSqr(vehicle)
                     || VEHICLE_FIRE_SOUNDS.containsKey(vehicle.getId())
                     || (vehicle.isJet() && !ttv.migami.jeg.vehicle.client.audio.JetAudio.inCockpit(vehicle))) {
                 continue;

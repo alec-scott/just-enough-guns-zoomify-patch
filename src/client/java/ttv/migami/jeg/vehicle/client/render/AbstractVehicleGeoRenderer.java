@@ -188,10 +188,10 @@ abstract class AbstractVehicleGeoRenderer<T extends VehicleEntity> extends GeoEn
     }
 
     /**
-     * The spinning parts of each engine: the rear turbine blades and the spinner, all centred on the nacelle's axis. The
-     * intake and exhaust rims around them stay still.
+     * The spinner and fan disc of each engine, centred on the nacelle's axis. The tapered rear cowling and the exhaust
+     * duct inside it (houwaiyuan, houneiyuan) are fixed: spun, their eight-sided shells blurred into a see-through haze.
      */
-    private static final String[] A10_FAN_BONES = {"houwaiyuan", "houneiyuan", "qianzhou", "houwaiyuan2", "houneiyuan2", "qianzhou2"};
+    private static final String[] A10_FAN_BONES = {"qianzhou", "qianzhou2"};
     /**
      * The front fan blades, whose pivots sit 0.338 blocks off the nacelle's axis (outboard on the left engine, which is
      * +X in the model, and on the right one -X): spun as they are they swing round in a circle. Each is moved back by

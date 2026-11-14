@@ -1,7 +1,7 @@
 {
   "entity_type": "jeg:a10",
   "vehicle_type": "aircraft",
-  "max_health": 180.0,
+  "max_health": 240.0,
   "auto_repair_per_tick": 0.01,
   "auto_repair_cooldown_ticks": 160,
   "max_energy": 8000000,
@@ -12,7 +12,7 @@
   "seats": [
     {"index": 0, "x": 0.0, "y": 2.15, "z": 6.05, "driver": true, "enclosed": true, "hide_passenger": true, "ban_hand": true, "min_pitch": -90.0, "max_pitch": 90.0, "min_yaw": -80.0, "max_yaw": 80.0, "sensitivity_x": 0.5, "sensitivity_y": 0.0, "sensitivity_z": 0.0, "zoom_camera": {"x": 0.0, "y": 3.65, "z": 3.75, "use_fixed_camera_pos": true, "use_aircraft_camera": true, "aircraft_x": 0.0, "aircraft_y": 6.5, "aircraft_z": -24.0}, "dismount": {"x": 2.6, "y": 0.0, "z": 5.5}}
   ],
-  "engine": {"type": "jet", "acceleration": 0.0075, "max_forward_speed": 1.667, "max_reverse_speed": 0.0, "friction": 0.95, "energy_cost_rate": 300, "pitch_speed": 1.0, "yaw_speed": 1.0, "roll_speed": 1.0, "engine_sound_volume": 2.5, "player_weight": 2.0, "stall_speed": 0.637, "rotate_speed": 0.784, "max_dive_speed": 2.06},
+  "engine": {"type": "jet", "acceleration": 0.0125, "max_forward_speed": 2.778, "max_reverse_speed": 0.0, "friction": 0.95, "energy_cost_rate": 300, "pitch_speed": 1.0, "yaw_speed": 1.0, "roll_speed": 1.1, "engine_sound_volume": 2.5, "player_weight": 1.7, "stall_speed": 1.062, "rotate_speed": 1.307, "max_dive_speed": 3.433},
   "third_person_camera": {"x": 0.0, "y": 6.5, "z": -24.0},
   "dismount": {"x": 2.6, "y": 0.0, "z": 5.5},
   "collision_level": "heavy",
@@ -33,9 +33,9 @@
   "destroy": {"explodes": true, "explosion_power": 4.0},
   "seek": {"range": 256.0, "angle": 14.0, "warns_target": true},
   "armor": {
-    "fallback": {"rating": 7.0, "undermatch_multiplier": 0.12, "overmatch_multiplier": 0.95, "passenger_leak_multiplier": 0.12, "part_damage_multiplier": 0.9},
+    "fallback": {"rating": 8.0, "undermatch_multiplier": 0.12, "overmatch_multiplier": 0.95, "passenger_leak_multiplier": 0.12, "part_damage_multiplier": 0.9},
     "parts": {
-      "main_engine": {"rating": 4.0, "undermatch_multiplier": 0.25, "overmatch_multiplier": 1.05, "passenger_leak_multiplier": 0.05, "part_damage_multiplier": 1.4}
+      "main_engine": {"rating": 5.0, "undermatch_multiplier": 0.25, "overmatch_multiplier": 1.05, "passenger_leak_multiplier": 0.05, "part_damage_multiplier": 1.2}
     }
   }
 }

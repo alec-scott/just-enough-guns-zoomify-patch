@@ -1,18 +1,22 @@
 package ttv.migami.jeg.vehicle.projectile;
 
+import java.util.HashMap;
+import java.util.Map;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.core.BlockPos;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.level.TicketType;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.phys.Vec3;
 import ttv.migami.jeg.network.MissileTrackPayload;
 
 /**
- * Keeps a missile or rocket flying and in sight over a long shot, well past where entities normally tick and are sent to
- * players.
+ * Keeps a missile, rocket or aircraft gun round flying and in sight over a long shot, well past where entities normally
+ * tick and are sent to players.
  * <p>
  * Entities only move in chunks within a player's simulation distance (160 blocks on yftm), and only once those chunks
  * and the ones around them have finished loading, so a long shot used to stop dead in mid-air where the loaded world
@@ -43,6 +47,16 @@ public final class FarFlight {
     private static final double[] LOAD_AHEAD_TICKS = {25.0D, 50.0D};
     private static final int LOAD_AHEAD_RADIUS = 2;
 
+    /**
+     * Tickets asked for lately, so a gun's stream of rounds down the same line asks for each chunk once rather than once
+     * a round: placed (game time) by level, chunk and radius. A ticket lasts 40 ticks; one asked for within the last
+     * {@link #SHARED_TICKET_TICKS} is left to stand.
+     */
+    private static final Map<TicketKey, Long> RECENT_TICKETS = new HashMap<>();
+    private static final int SHARED_TICKET_TICKS = 10;
+
+    private record TicketKey(ResourceKey<Level> level, long chunk, int radius) {}
+
     private long ticketChunk = ChunkPos.INVALID_CHUNK_POS;
     private int ticketRefresh;
 
@@ -55,7 +69,7 @@ public final class FarFlight {
         }
         this.ticketChunk = key;
         this.ticketRefresh = TICKET_REFRESH_TICKS;
-        level.getChunkSource().addTicketWithRadius(TicketType.ENDER_PEARL, here, TICKET_RADIUS);
+        ticket(level, here, TICKET_RADIUS);
         Vec3 motion = entity.getDeltaMovement();
         double speed = motion.length();
         if (speed < 1.0E-3D) {
@@ -68,8 +82,22 @@ public final class FarFlight {
                 break;
             }
             Vec3 point = entity.position().add(motion.scale(ahead / speed));
-            level.getChunkSource().addTicketWithRadius(TicketType.ENDER_PEARL, ChunkPos.containing(BlockPos.containing(point)), LOAD_AHEAD_RADIUS);
+            ticket(level, ChunkPos.containing(BlockPos.containing(point)), LOAD_AHEAD_RADIUS);
         }
+    }
+
+    private static void ticket(ServerLevel level, ChunkPos chunk, int radius) {
+        long now = level.getGameTime();
+        TicketKey key = new TicketKey(level.dimension(), chunk.pack(), radius);
+        Long placed = RECENT_TICKETS.get(key);
+        if (placed != null && now - placed >= 0 && now - placed < SHARED_TICKET_TICKS) {
+            return;
+        }
+        if (RECENT_TICKETS.size() > 4096) {
+            RECENT_TICKETS.values().removeIf(time -> now - time >= SHARED_TICKET_TICKS || now < time);
+        }
+        RECENT_TICKETS.put(key, now);
+        level.getChunkSource().addTicketWithRadius(TicketType.ENDER_PEARL, chunk, radius);
     }
 
     /**

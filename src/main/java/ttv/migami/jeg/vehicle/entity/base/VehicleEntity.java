@@ -1797,6 +1797,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         if (!this.level().isClientSide()) {
             this.clearStaleDriverInput();
             this.tickServerMovement();
+            this.sendFarAircraftSound();
             this.tickHelicopterRotorGroundDamage();
             this.tickRammingDamage();
             this.tickVehicleEntityCollisionResolution();
@@ -1839,6 +1840,8 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     private static final double[] JET_RIGHT_EXHAUST = {-1.65D, 3.4D, -4.6D};
     private static final double[] JET_WING_ROOT = {-3.2D, 2.5D, -0.6D};
     private static final double[] JET_GUN_MUZZLE = {-0.14D, 1.7D, 8.4D};
+    /** The A-10's gun sits low in the nose and points this many degrees below it, as the real GAU-8 does. */
+    private static final double JET_GUN_DEPRESSION_DEGREES = 2.0D;
     private static final double[][] JET_WINGTIPS = {{8.7D, 2.5D, 0.4D}, {-8.7D, 2.5D, 0.4D}};
     /** Points along the top of both wings where a hard bank shows vapour. */
     private static final double[][] JET_WING_VAPOUR = {
@@ -2866,7 +2869,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         this.spawnVehicleMuzzleFlare(weapon, muzzle, direction);
         float damage = helicopterGun ? stats.damage() * HELICOPTER_GUN_DAMAGE_MULTIPLIER : stats.damage();
         Vec3 shot = helicopterGun ? this.withGunDispersion(direction, HELICOPTER_GUN_DISPERSION_DEGREES)
-                : jetGun ? this.withGunDispersion(direction, stats.spread()) : direction;
+                : jetGun ? this.withGunDispersion(this.jetGunBore(1.0F), stats.spread()) : direction;
         Vec3 shotVelocity = shot.scale(stats.projectileSpeed());
         if (jetGun) {
             // The rounds leave a fast jet with its speed on top of their own.
@@ -3230,7 +3233,8 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     private Vec3 weaponAimDirection(LivingEntity shooter) {
         Vec3 nominal = this.nominalWeaponAimDirection(shooter);
         if (this.isJet()) {
-            // A jet's gun and pylons are fixed: everything leaves along the nose, where the HUD's gun marker sits.
+            // A jet's gun and pylons are fixed: everything leaves along the nose (the gun a little below it, see
+            // jetGunBore, where the HUD's gun marker sits).
             return nominal;
         }
         Vec3 aim = this.freshAimPoint(shooter);
@@ -4620,7 +4624,50 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
                 && clientVehicleStateMatches(this.getId()) && clientZoomDown();
     }
 
-    /** Where the jet's gun is pointing: down the nose from its muzzle, with the jet's own speed on its rounds. */
+    /** Out to here an aircraft is heard (AircraftSoundRange on the client). */
+    private static final double AIRCRAFT_AUDIBLE_RANGE = 1024.0D;
+    /** Players this close are sent the vehicle itself; one sent both ignores the track. */
+    private static final double AIRCRAFT_TRACK_MIN_RANGE = 96.0D;
+    private static final int AIRCRAFT_TRACK_INTERVAL_TICKS = 4;
+
+    /**
+     * An aircraft is heard far beyond the range the server sends the vehicle itself to players (its view distance): every
+     * few ticks, players further off but within earshot are told where it is, how hard its engine runs and whether its
+     * gun fires, and their client plays its distant sound from that (FarAircraftAudio).
+     */
+    private void sendFarAircraftSound() {
+        if (this.tickCount % AIRCRAFT_TRACK_INTERVAL_TICKS != 0 || this.isWrecked() || !VehicleSoundHelper.isAircraft(this)
+                || !(this.level() instanceof ServerLevel level)) {
+            return;
+        }
+        float loudness = VehicleSoundHelper.aircraftEngineLoudness(this);
+        boolean firing = this.isJetGunFiring();
+        if (loudness <= 0.01F && !firing) {
+            return;
+        }
+        ttv.migami.jeg.network.AircraftTrackPayload track = null;
+        for (ServerPlayer player : level.players()) {
+            double distanceSqr = player.distanceToSqr(this);
+            if (distanceSqr < AIRCRAFT_TRACK_MIN_RANGE * AIRCRAFT_TRACK_MIN_RANGE || distanceSqr > AIRCRAFT_AUDIBLE_RANGE * AIRCRAFT_AUDIBLE_RANGE
+                    || !net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking.canSend(player, ttv.migami.jeg.network.AircraftTrackPayload.TYPE)) {
+                continue;
+            }
+            if (track == null) {
+                track = new ttv.migami.jeg.network.AircraftTrackPayload(this.getId(), this.vehicleDataId().getPath(), this.position(),
+                        this.getDeltaMovement(), loudness, VehicleSoundHelper.aircraftEnginePitch(this), firing);
+            }
+            net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking.send(player, track);
+        }
+    }
+
+    /** The jet gun's barrel direction: a little below the nose (see {@link #JET_GUN_DEPRESSION_DEGREES}). */
+    public Vec3 jetGunBore(float partialTick) {
+        double depression = Math.toRadians(JET_GUN_DEPRESSION_DEGREES);
+        org.joml.Vector3d bore = this.poseRotation(partialTick).transform(new org.joml.Vector3d(0.0D, -Math.sin(depression), Math.cos(depression)));
+        return new Vec3(bore.x, bore.y, bore.z);
+    }
+
+    /** Where the jet's gun is pointing: along its bore from its muzzle, with the jet's own speed on its rounds. */
     public Vec3 jetGunAimPoint(float partialTick, double distance) {
         VehicleWeaponInfo gun = null;
         for (VehicleWeaponInfo weapon : this.vehicleData().defaults().weapons()) {
@@ -4629,8 +4676,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
                 break;
             }
         }
-        org.joml.Vector3d nose = this.poseRotation(partialTick).transform(new org.joml.Vector3d(0.0D, 0.0D, 1.0D));
-        Vec3 direction = new Vec3(nose.x, nose.y, nose.z);
+        Vec3 direction = this.jetGunBore(partialTick);
         Vec3 muzzle = this.interpolatedVehiclePosition(partialTick);
         if (gun != null) {
             if (gun.hasMuzzle()) {

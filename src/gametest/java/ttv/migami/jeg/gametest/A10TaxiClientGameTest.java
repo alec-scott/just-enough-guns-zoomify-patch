@@ -18,7 +18,7 @@ import ttv.migami.jeg.vehicle.entity.base.VehicleInput;
 
 /**
  * How tightly the A-10 turns on its wheels. A husk at the controls holds full right nose-wheel steering while the jet is
- * kept rolling at a set speed: a crawl, a brisk taxi, 36 km/h and nearly take-off speed (45 km/h). Fails if it turns faster than a
+ * kept rolling at a set speed: a crawl, a brisk taxi, 36 km/h and 45 km/h (about half its take-off speed). Fails if it turns faster than a
  * heavy jet should, if the turn snaps in rather than building up, or if it cannot be steered at all.
  */
 public class A10TaxiClientGameTest implements FabricClientGameTest {

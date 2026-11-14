@@ -13,15 +13,20 @@ import ttv.migami.jeg.vehicle.data.subdata.VehicleType;
 import ttv.migami.jeg.vehicle.entity.base.VehicleEntity;
 import ttv.migami.jeg.vehicle.util.VehicleSoundHelper;
 
-/** Startup blends into a persistent engine loop; movement changes its pitch and gain without replacing the channel. */
+/**
+ * Startup blends into a persistent engine loop; movement changes its pitch and gain without replacing the channel. From
+ * outside, the rotor carries a long way and fades with distance as AircraftSoundRange has it, giving way to a muffled
+ * distant version further off; past entity range FarAircraftAudio carries on with that.
+ */
 public final class HelicopterEngineAudio {
-    private static final double AUDIBLE_RANGE_SQR = 384.0D * 384.0D;
+    private static final double AUDIBLE_RANGE_SQR = AircraftSoundRange.MAX_RANGE * AircraftSoundRange.MAX_RANGE;
     private static final float OPERATING_ROTOR_SPEED = 0.085F;
     private static final int CROSSFADE_TICKS = 30;
     private static final long CROSSFADE_NANOS = CROSSFADE_TICKS * 50_000_000L;
     private static final long LISTENER_FADE_NANOS = 250_000_000L;
     private static final Map<Integer, EngineSound> SOUNDS = new HashMap<>();
     private static final Map<Integer, EngineSound> FADING = new HashMap<>();
+    private static final Map<Integer, DistantSound> DISTANT = new HashMap<>();
 
     private HelicopterEngineAudio() {}
 
@@ -48,9 +53,25 @@ public final class HelicopterEngineAudio {
             }
             return false;
         });
+        DISTANT.entrySet().removeIf(entry -> {
+            DistantSound sound = entry.getValue();
+            if (sound.isStopped() || sound.vehicle.level() != minecraft.level || sound.vehicle.isRemoved()) {
+                minecraft.getSoundManager().stop(sound);
+                return true;
+            }
+            return false;
+        });
         for (Entity entity : minecraft.level.entitiesForRendering()) {
             if (!(entity instanceof VehicleEntity vehicle) || !audible(minecraft, vehicle)) {
                 continue;
+            }
+            if (!isAboard(minecraft, vehicle) && !DISTANT.containsKey(vehicle.getId())) {
+                SoundEvent distant = AircraftSoundRange.distantSound(vehicle.vehicleDataId().getPath(), "engine");
+                if (distant != null) {
+                    DistantSound sound = new DistantSound(vehicle, distant);
+                    DISTANT.put(vehicle.getId(), sound);
+                    minecraft.getSoundManager().play(sound);
+                }
             }
             EngineSound current = SOUNDS.get(vehicle.getId());
             boolean starting = vehicle.helicopterStartupProgress() > 0.0F && vehicle.helicopterStartupProgress() < 1.0F;
@@ -105,6 +126,73 @@ public final class HelicopterEngineAudio {
             sound.halt();
         }
         FADING.clear();
+        for (DistantSound sound : DISTANT.values()) {
+            minecraft.getSoundManager().stop(sound);
+        }
+        DISTANT.clear();
+    }
+
+    /** For game tests: the volume of this helicopter's full and distant rotor sounds as heard now. */
+    public static String describe(int vehicleId) {
+        EngineSound engine = SOUNDS.get(vehicleId);
+        DistantSound distant = DISTANT.get(vehicleId);
+        return String.format(java.util.Locale.ROOT, "engineVol=%.3f distantVol=%.3f",
+                engine == null || engine.isStopped() ? 0.0F : engine.getVolume(),
+                distant == null || distant.isStopped() ? 0.0F : distant.getVolume());
+    }
+
+    private static double listenerDistance(VehicleEntity vehicle) {
+        Entity listener = Minecraft.getInstance().getCameraEntity();
+        return listener == null ? 0.0D : listener.position().distanceTo(vehicle.position().add(0.0D, 1.5D, 0.0D));
+    }
+
+    /** Outside: the muffled distant rotor, which takes over from the full one with distance. */
+    private static final class DistantSound extends AbstractTickableSoundInstance {
+        private final VehicleEntity vehicle;
+        private float gain;
+
+        DistantSound(VehicleEntity vehicle, SoundEvent event) {
+            super(event, SoundSource.AMBIENT, SoundInstance.createUnseededRandom());
+            this.vehicle = vehicle;
+            this.looping = true;
+            this.delay = 0;
+            this.attenuation = Attenuation.NONE;
+            this.volume = 0.001F;
+            this.update();
+        }
+
+        @Override
+        public void tick() {
+            if (this.vehicle.isRemoved()) {
+                this.stop();
+                return;
+            }
+            this.update();
+            Minecraft minecraft = Minecraft.getInstance();
+            if (this.gain <= 0.002F && (minecraft.player == null || !audible(minecraft, this.vehicle) || isAboard(minecraft, this.vehicle))) {
+                this.stop();
+            }
+        }
+
+        private void update() {
+            Minecraft minecraft = Minecraft.getInstance();
+            this.x = this.vehicle.getX();
+            this.y = this.vehicle.getY() + 1.5D;
+            this.z = this.vehicle.getZ();
+            boolean on = minecraft.player != null && audible(minecraft, this.vehicle) && !isAboard(minecraft, this.vehicle);
+            double distance = listenerDistance(this.vehicle);
+            float target = on ? AircraftSoundRange.volume(distance, VehicleSoundHelper.aircraftEngineLoudness(this.vehicle))
+                    * AircraftSoundRange.distantShare(distance) : 0.0F;
+            this.gain = Mth.lerp(0.12F, this.gain, target);
+            this.volume = Math.max(0.001F, this.gain);
+            Entity listener = minecraft.getCameraEntity();
+            float doppler = 1.0F;
+            if (listener != null) {
+                doppler = VehicleDoppler.multiplier(this.vehicle.position(), this.vehicle.getDeltaMovement(),
+                        listener.position(), listener.getRootVehicle().getDeltaMovement());
+            }
+            this.pitch = Mth.clamp(VehicleSoundHelper.aircraftEnginePitch(this.vehicle) * doppler, 0.5F, 2.0F);
+        }
     }
 
     public static String phase(int vehicleId) {
@@ -133,7 +221,8 @@ public final class HelicopterEngineAudio {
             this.delay = 0;
             this.pitch = 1.0F;
             this.relative = isAboard(Minecraft.getInstance(), vehicle);
-            this.attenuation = this.relative ? Attenuation.NONE : Attenuation.LINEAR;
+            // Outside, it sets its own fade with distance (AircraftSoundRange).
+            this.attenuation = Attenuation.NONE;
             this.update();
         }
 
@@ -196,8 +285,13 @@ public final class HelicopterEngineAudio {
             float targetGain = this.startup ? 1.0F : Math.min(rpm, 1.0F);
             this.rpmGain = this.rpmGain < 0.0F ? targetGain : Mth.lerp(0.12F, this.rpmGain, targetGain);
             float baseVolume = Math.max(0.1F, this.vehicle.vehicleData().defaults().engine().engineSoundVolume());
-            float listenerVolume = this.relative ? Math.min(0.65F, baseVolume * 0.45F) : baseVolume;
-            this.volume = listenerVolume * this.rpmGain * this.mixGain;
+            if (this.relative) {
+                this.volume = Math.min(0.65F, baseVolume * 0.45F) * this.rpmGain * this.mixGain;
+            } else {
+                double distance = listenerDistance(this.vehicle);
+                this.volume = Math.max(0.001F, AircraftSoundRange.volume(distance, baseVolume * this.rpmGain)
+                        * AircraftSoundRange.nearShare(distance) * this.mixGain);
+            }
         }
     }
 }

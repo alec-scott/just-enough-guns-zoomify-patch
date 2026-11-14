@@ -23,13 +23,16 @@ import ttv.migami.jeg.vehicle.entity.base.VehicleInput;
 public class A10RotateClientGameTest implements FabricClientGameTest {
     private static final Logger LOGGER = LoggerFactory.getLogger("jeg-gametest");
 
-    /** Ground speed (blocks a tick) held while the stick is pulled, and whether the jet should be flying by the end. */
+    /**
+     * Ground speed (blocks a tick) held while the stick is pulled, and whether the jet should be flying by the end. Rotate
+     * speed is 1.307 (94 km/h).
+     */
     private static final double[][] RUNS = {
-            {0.40D, 0},
-            {0.55D, 0},
-            {0.62D, 0},
-            {0.74D, 0},
-            {0.80D, 1}
+            {0.67D, 0},
+            {0.92D, 0},
+            {1.03D, 0},
+            {1.23D, 0},
+            {1.33D, 1}
     };
 
     @Override
@@ -89,7 +92,8 @@ public class A10RotateClientGameTest implements FabricClientGameTest {
                 report.append(String.format(Locale.ROOT, "%.0f km/h, stick back 4 s: most nose-up %.1f, highest %.1f; end %s%n",
                         speed * 72.0D, -worst[0], worst[1], end));
                 LOGGER.info("rotate {} km/h trace\n{}", Math.round(speed * 72.0D), trace);
-                if (end.equals("gone") || end.contains("wreck true") || !end.startsWith("hp 180/180")) {
+                // Undamaged: health still at its maximum, whatever that is.
+                if (end.equals("gone") || end.contains("wreck true") || !end.matches("hp (\\d+)/\\1 .*")) {
                     failures.append(String.format(Locale.ROOT, "pulling the nose up at %.0f km/h damaged the jet (%s)%n", speed * 72.0D, end));
                 }
                 if (shouldFly && worst[1] < 3.0D) {

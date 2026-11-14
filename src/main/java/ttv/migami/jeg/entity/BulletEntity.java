@@ -144,7 +144,11 @@ public class BulletEntity extends Projectile {
     private static final EntityDataAccessor<Integer> DATA_FLARE_COLOR = SynchedEntityData.defineId(BulletEntity.class, EntityDataSerializers.INT);
     private static final String DYING_TAG = "JEGDying";
     private static final int NO_FLARE_COLOR = -1;
-    private static final int HELICOPTER_GUN_LIFE_TICKS = 60;
+    /**
+     * How far a helicopter's or jet's gun round flies when it hits nothing. It flies the whole way wherever that is
+     * (see FarFlight), so it needs a range of its own rather than the bullet lifetime setting (60 seconds).
+     */
+    private static final double AIRCRAFT_GUN_RANGE = 1200.0D;
     private static final float EXPLOSIVE_MUZZLE_WOOD_BREAK_CHANCE = 0.1F;
     private static final float EXPLOSIVE_MUZZLE_STONE_BREAK_CHANCE = 0.05F;
     private static final float EXPLOSIVE_MUZZLE_ARMOR_PIERCING_MULTIPLIER = 0.75F;
@@ -200,10 +204,14 @@ public class BulletEntity extends Projectile {
         this.offhandRound = offhand;
     }
 
-    /** Fired from a helicopter's gun: flies flat and far, and tears up flimsy blocks on the way. */
+    /**
+     * Fired from a helicopter's or jet's gun: flies flat and far (its full range, past the loaded world, like a vehicle
+     * rocket), and tears up flimsy blocks on the way.
+     */
     public void setHelicopterGunRound() {
         this.helicopterGunRound = true;
-        this.entityData.set(DATA_LIFE, Math.max(this.entityData.get(DATA_LIFE), HELICOPTER_GUN_LIFE_TICKS));
+        double speed = Math.max(1.0D, this.getDeltaMovement().length());
+        this.entityData.set(DATA_LIFE, Mth.clamp((int) Math.ceil(AIRCRAFT_GUN_RANGE / speed), 20, 400));
     }
 
     public void setKillEffect(Identifier itemId) {
@@ -402,7 +410,7 @@ public class BulletEntity extends Projectile {
 
             // Move bullet to final position (if not stopped by solid block)
             this.setPos(nextPos.x, nextPos.y, nextPos.z);
-            if (isVehicleRocket(gunId) && this.level() instanceof ServerLevel serverLevel) {
+            if (this.isFarFlying() && this.level() instanceof ServerLevel serverLevel) {
                 if (this.farFlight == null) {
                     this.farFlight = new FarFlight();
                 }
@@ -1266,18 +1274,23 @@ public class BulletEntity extends Projectile {
     }
 
     /**
-     * A helicopter rocket flies and is followed past the loaded world like a missile (see FarFlight): ticked wherever it
-     * is rather than only in chunks that have finished loading as entity-ticking.
+     * A helicopter rocket, or a round from a helicopter's or jet's gun, flies its full range past the loaded world like a
+     * missile (see FarFlight): ticked wherever it is rather than only in chunks that have finished loading as
+     * entity-ticking.
      */
     @Override
     public boolean isAlwaysTicking() {
-        return this.isVehicleRocket();
+        return this.isFarFlying();
     }
 
-    /** A rocket in flight is gone within seconds; never written to disk or unloaded with a chunk. */
+    /** A rocket or aircraft gun round in flight is gone within seconds; never written to disk or unloaded with a chunk. */
     @Override
     public boolean shouldBeSaved() {
-        return !this.isVehicleRocket() && super.shouldBeSaved();
+        return !this.isFarFlying() && super.shouldBeSaved();
+    }
+
+    private boolean isFarFlying() {
+        return this.helicopterGunRound || this.isVehicleRocket();
     }
 
     private boolean isVehicleRocket() {
@@ -1789,9 +1802,11 @@ public class BulletEntity extends Projectile {
                 this.offhandRound
         );
 
-        // Send to all nearby players
+        // Send to all nearby players: an aircraft gun's tracers as far off as a missile is followed, since the round flies
+        // its whole range (the client draws the tracer from this alone).
+        double range = this.helicopterGunRound ? FarFlight.VISIBLE_RANGE : TRAIL_SYNC_RANGE;
         for (ServerPlayer player : serverLevel.getServer().getPlayerList().getPlayers()) {
-            if (player.level() == serverLevel && player.distanceToSqr(this) <= TRAIL_SYNC_RANGE * TRAIL_SYNC_RANGE) {
+            if (player.level() == serverLevel && player.distanceToSqr(this) <= range * range) {
                 ServerPlayNetworking.send(player, payload);
             }
         }

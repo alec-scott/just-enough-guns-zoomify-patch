@@ -23,9 +23,14 @@ import ttv.migami.jeg.vehicle.util.VehicleSoundHelper;
  * as the throttle goes up and falling as it comes back, with Doppler for anyone it passes. In the cockpit the rush of air
  * grows with airspeed; the tyres rumble while it rolls on the ground; anyone it races past low hears a real A-10 flyby;
  * and its pilot hears the stall warble and feels the GAU-8 shake the airframe.
+ * <p>
+ * From outside, the engines and the gun carry a long way and fade with distance as AircraftSoundRange has it, giving way
+ * to muffled distant versions further off; past entity range FarAircraftAudio carries on with those.
  */
 public final class JetAudio {
-    private static final double AUDIBLE_RANGE_SQR = 384.0D * 384.0D;
+    private static final double AUDIBLE_RANGE_SQR = AircraftSoundRange.MAX_RANGE * AircraftSoundRange.MAX_RANGE;
+    /** How loud the GAU-8 is heard from outside, before distance (AircraftSoundRange#volume): it carries further than the engines. */
+    static final float GUN_LOUDNESS = 4.0F;
     private static final double FLYBY_RANGE = 64.0D;
     /** The share of its top speed a jet needs to be doing for a flyby. */
     private static final double FLYBY_MIN_SPEED_SHARE = 0.45D;
@@ -37,9 +42,12 @@ public final class JetAudio {
     private static final Map<Integer, Layer> ROLLS = new HashMap<>();
     /** Outside the jet: its gun as heard from here, a moment after it fired. */
     private static final Map<Integer, Layer> GUNS = new HashMap<>();
+    /** Outside the jet: the muffled distant versions of its engines and gun, taking over from the full ones with distance. */
+    private static final Map<Integer, Layer> DISTANT_ENGINES = new HashMap<>();
+    private static final Map<Integer, Layer> DISTANT_GUNS = new HashMap<>();
     /** Speed of sound, blocks per tick (343 m/s). */
     private static final double SOUND_SPEED = 343.0D / 20.0D;
-    private static final int HISTORY_TICKS = 60;
+    private static final int HISTORY_TICKS = 64;
     /** What each jet was doing each of the last few seconds, newest first: sound from it reaches a listener that late. */
     private static final Map<Integer, java.util.ArrayDeque<Snapshot>> HISTORY = new HashMap<>();
     private static Layer pullUpWarning;
@@ -72,9 +80,16 @@ public final class JetAudio {
         Snapshot heard = listener == null ? null : heard(jet, listener.position());
         Layer engine = ENGINES.get(jet.getId());
         Layer gun = GUNS.get(jet.getId());
-        return String.format(java.util.Locale.ROOT, "delay=%d engine=%s pitch=%.3f gun=%s gunPitch=%.3f",
+        Layer distantEngine = DISTANT_ENGINES.get(jet.getId());
+        Layer distantGun = DISTANT_GUNS.get(jet.getId());
+        return String.format(java.util.Locale.ROOT, "delay=%d engine=%s pitch=%.3f gun=%s gunPitch=%.3f engineVol=%.3f distantEngineVol=%.3f gunVol=%.3f distantGunVol=%.3f",
                 heard == null ? -1 : heard.ticksAgo(), engine != null && !engine.isStopped(), engine == null ? 0.0F : engine.getPitch(),
-                gun != null && !gun.isStopped(), gun == null ? 0.0F : gun.getPitch());
+                gun != null && !gun.isStopped(), gun == null ? 0.0F : gun.getPitch(), playingVolume(engine), playingVolume(distantEngine),
+                playingVolume(gun), playingVolume(distantGun));
+    }
+
+    private static float playingVolume(Layer layer) {
+        return layer == null || layer.isStopped() ? 0.0F : layer.getVolume();
     }
     private static final Map<Integer, Float> LAST_SPOOL = new HashMap<>();
     private static final Map<Integer, Double> LAST_DISTANCE = new HashMap<>();
@@ -96,6 +111,8 @@ public final class JetAudio {
         prune(minecraft, COCKPITS);
         prune(minecraft, ROLLS);
         prune(minecraft, GUNS);
+        prune(minecraft, DISTANT_ENGINES);
+        prune(minecraft, DISTANT_GUNS);
         FLYBY_COOLDOWN.replaceAll((id, ticks) -> ticks - 1);
         FLYBY_COOLDOWN.values().removeIf(ticks -> ticks <= 0);
         for (Entity entity : minecraft.level.entitiesForRendering()) {
@@ -127,6 +144,10 @@ public final class JetAudio {
             // Aboard, every layer is the cockpit version: the same sound muffled through the airframe.
             ensure(minecraft, ENGINES, jet, aboard(jet) ? VehicleSoundHelper.jetCockpitSound(jet, "engine") : VehicleSoundHelper.engineSound(jet),
                     JetAudio::engineRunning, Kind.ENGINE);
+            if (!aboard(jet)) {
+                ensure(minecraft, DISTANT_ENGINES, jet, AircraftSoundRange.distantSound(jet.vehicleDataId().getPath(), "engine"),
+                        JetAudio::engineRunning, Kind.DISTANT_ENGINE);
+            }
             if (aboard(jet)) {
                 ensure(minecraft, COCKPITS, jet, VehicleSoundHelper.jetSound(jet, "cockpit_flight"), JetAudio::flying, Kind.COCKPIT);
             }
@@ -186,13 +207,29 @@ public final class JetAudio {
                 GUNS.put(jet.getId(), gun);
                 minecraft.getSoundManager().play(gun);
             }
+            SoundEvent distant = AircraftSoundRange.distantSound(jet.vehicleDataId().getPath(), "fire");
+            if (distant != null) {
+                Layer gun = new Layer(jet, distant, Kind.DISTANT_GUN, ignored -> true);
+                Layer previous = DISTANT_GUNS.put(jet.getId(), gun);
+                if (previous != null) {
+                    minecraft.getSoundManager().stop(previous);
+                }
+                minecraft.getSoundManager().play(gun);
+            }
         } else if (!heard.firing() && sounding) {
             minecraft.getSoundManager().stop(playing);
             GUNS.remove(jet.getId());
+            Layer distant = DISTANT_GUNS.remove(jet.getId());
+            if (distant != null) {
+                minecraft.getSoundManager().stop(distant);
+            }
             SoundEvent tail = VehicleSoundHelper.jetSound(jet, "gun_stop");
-            if (tail != null) {
-                Vec3 at = heard.position();
-                minecraft.getSoundManager().play(new SimpleSoundInstance(tail, SoundSource.PLAYERS, 8.0F, 1.0F, RandomSource.create(), at.x, at.y, at.z));
+            Vec3 at = heard.position();
+            double distance = at.distanceTo(listener.position());
+            float volume = AircraftSoundRange.volume(distance, GUN_LOUDNESS) * AircraftSoundRange.nearShare(distance);
+            if (tail != null && volume > 0.005F) {
+                minecraft.getSoundManager().play(new SimpleSoundInstance(tail.location(), SoundSource.PLAYERS, volume, 1.0F, RandomSource.create(),
+                        false, 0, SoundInstance.Attenuation.NONE, at.x, at.y, at.z, false));
             }
         }
     }
@@ -229,7 +266,7 @@ public final class JetAudio {
     }
 
     public static void clear(Minecraft minecraft) {
-        for (Map<Integer, Layer> layers : java.util.List.of(ENGINES, COCKPITS, ROLLS, GUNS)) {
+        for (Map<Integer, Layer> layers : java.util.List.of(ENGINES, COCKPITS, ROLLS, GUNS, DISTANT_ENGINES, DISTANT_GUNS)) {
             layers.values().forEach(layer -> minecraft.getSoundManager().stop(layer));
             layers.clear();
         }
@@ -334,7 +371,11 @@ public final class JetAudio {
     }
 
     private enum Kind {
-        ENGINE, COCKPIT, ROLL, STALL, GUN
+        ENGINE, COCKPIT, ROLL, STALL, GUN, DISTANT_ENGINE, DISTANT_GUN;
+
+        boolean gun() {
+            return this == GUN || this == DISTANT_GUN;
+        }
     }
 
     private static final class Layer extends AbstractTickableSoundInstance {
@@ -344,14 +385,15 @@ public final class JetAudio {
         private float gain = 0.001F;
 
         Layer(VehicleEntity jet, SoundEvent sound, Kind kind, Predicate<VehicleEntity> active) {
-            super(sound, kind == Kind.STALL || kind == Kind.GUN ? SoundSource.PLAYERS : SoundSource.AMBIENT, SoundInstance.createUnseededRandom());
+            super(sound, kind == Kind.STALL || kind.gun() ? SoundSource.PLAYERS : SoundSource.AMBIENT, SoundInstance.createUnseededRandom());
             this.jet = jet;
             this.kind = kind;
             this.active = active;
             this.looping = true;
             this.delay = 0;
-            this.relative = kind == Kind.STALL || kind == Kind.COCKPIT || (kind != Kind.GUN && aboard(jet));
-            this.attenuation = this.relative ? Attenuation.NONE : Attenuation.LINEAR;
+            this.relative = kind == Kind.STALL || kind == Kind.COCKPIT || (kind == Kind.ENGINE || kind == Kind.ROLL) && aboard(jet);
+            // The engines and gun outside set their own fade with distance (AircraftSoundRange); the tyres fade as usual.
+            this.attenuation = this.relative || kind != Kind.ROLL ? Attenuation.NONE : Attenuation.LINEAR;
             // SoundEngine discards a sound that opens silent; start barely audible and fade in.
             this.volume = 0.001F;
             this.update();
@@ -383,22 +425,26 @@ public final class JetAudio {
             this.x = this.relative ? 0.0D : source.x;
             this.y = this.relative ? 0.0D : source.y + 2.5D;
             this.z = this.relative ? 0.0D : source.z;
-            float spool = Mth.clamp(this.jet.jetSpool(), 0.0F, 1.0F);
             float doppler = 1.0F;
             if (heard != null && listener.getRootVehicle() != this.jet) {
                 doppler = VehicleDoppler.multiplier(source, sourceVelocity, listener.position(), listener.getRootVehicle().getDeltaMovement());
             }
-            float engineVolume = Math.max(0.1F, this.jet.vehicleData().defaults().engine().engineSoundVolume());
             double speed = this.jet.getDeltaMovement().length();
+            double distance = listener == null ? 0.0D : listener.position().distanceTo(new Vec3(this.x, this.y, this.z));
+            float loudness = VehicleSoundHelper.aircraftEngineLoudness(this.jet);
             float target;
             float pitch;
             switch (this.kind) {
                 case ENGINE -> {
                     // The recording is the TF34s at full power: idle plays it at 0.62 and full power at 1.0. While the
                     // engines wind up to idle the loop fades in under the start-up sound.
-                    float lit = Mth.clamp(spool / 0.08F, 0.0F, 1.0F);
-                    target = engineVolume * lit * lit * (0.35F + 0.65F * spool) * (this.relative ? 0.42F : 1.0F);
-                    pitch = 0.62F + 0.38F * spool;
+                    target = this.relative ? loudness * 0.42F
+                            : AircraftSoundRange.volume(distance, loudness) * AircraftSoundRange.nearShare(distance);
+                    pitch = VehicleSoundHelper.aircraftEnginePitch(this.jet);
+                }
+                case DISTANT_ENGINE -> {
+                    target = AircraftSoundRange.volume(distance, loudness) * AircraftSoundRange.distantShare(distance);
+                    pitch = VehicleSoundHelper.aircraftEnginePitch(this.jet);
                 }
                 case COCKPIT -> {
                     float airspeed = (float) Mth.clamp(speed / this.jet.jetTopSpeed(), 0.0D, 1.3D);
@@ -413,8 +459,11 @@ public final class JetAudio {
                     pitch = 0.7F + 0.6F * rolling;
                 }
                 case GUN -> {
-                    // Heard a long way off: the volume sets its reach (16 blocks a unit).
-                    target = 12.0F;
+                    target = AircraftSoundRange.volume(distance, GUN_LOUDNESS) * AircraftSoundRange.nearShare(distance);
+                    pitch = 1.0F;
+                }
+                case DISTANT_GUN -> {
+                    target = AircraftSoundRange.volume(distance, GUN_LOUDNESS) * AircraftSoundRange.distantShare(distance);
                     pitch = 1.0F;
                 }
                 default -> {
@@ -425,7 +474,7 @@ public final class JetAudio {
             if (!this.active.test(this.jet)) {
                 target = 0.0F;
             }
-            this.gain = this.kind == Kind.GUN ? target : Mth.lerp(this.kind == Kind.ROLL ? 0.3F : 0.12F, this.gain, target);
+            this.gain = this.kind.gun() ? target : Mth.lerp(this.kind == Kind.ROLL ? 0.3F : 0.12F, this.gain, target);
             this.volume = Math.max(0.001F, this.gain);
             this.pitch = Mth.clamp(pitch * (this.kind == Kind.STALL || this.kind == Kind.COCKPIT ? 1.0F : doppler), 0.5F, 2.0F);
         }

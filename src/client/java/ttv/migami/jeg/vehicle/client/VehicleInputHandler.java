@@ -35,8 +35,11 @@ public final class VehicleInputHandler {
     private static float cruiseSpeed;
     /** A jet's cruise control: the airspeed (blocks a tick) its autothrottle holds, or below zero when off. */
     private static float jetCruise = -1.0F;
-    /** How fast W and S move a jet's cruise speed while it is on: about 11 km/h a second. */
-    private static final float JET_CRUISE_STEP = 0.008F;
+    /**
+     * How fast W and S move a jet's cruise speed while it is on, as a share of its top speed each tick: the whole range
+     * in about 10 seconds (about 19 km/h a second on the A-10).
+     */
+    private static final float JET_CRUISE_STEP = 0.0048F;
 
     /** The airspeed a jet's cruise control holds (blocks a tick), or below zero when it is off. */
     public static float jetCruiseTarget() {
@@ -234,10 +237,10 @@ public final class VehicleInputHandler {
         } else if (jetCruise >= 0.0F) {
             float top = (float) vehicle.jetTopSpeed();
             if (minecraft.options.keyUp.isDown()) {
-                jetCruise = Math.min(top, jetCruise + JET_CRUISE_STEP);
+                jetCruise = Math.min(top, jetCruise + JET_CRUISE_STEP * top);
             }
             if (minecraft.options.keyDown.isDown()) {
-                jetCruise = Math.max(0.0F, jetCruise - JET_CRUISE_STEP);
+                jetCruise = Math.max(0.0F, jetCruise - JET_CRUISE_STEP * top);
             }
         }
         boolean jetCruising = jetPilot && jetCruise >= 0.0F;

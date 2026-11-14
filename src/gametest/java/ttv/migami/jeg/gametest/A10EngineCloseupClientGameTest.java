@@ -69,6 +69,14 @@ public class A10EngineCloseupClientGameTest implements FabricClientGameTest {
             context.takeScreenshot("a10_engines_full_side");
             this.lookIntoExhausts(context, server, "^ ^3 ^-22");
             context.takeScreenshot("a10_engines_full_far");
+            // From above and behind, as the chase camera and a wingman see them: the rear cowlings stay solid at full
+            // power (they are fixed, not blades, so no blur may haze them).
+            this.lookIntoExhausts(context, server, "^-6 ^6 ^-11");
+            context.takeScreenshot("a10_engines_full_rear_quarter_a");
+            this.hold(context, server, jetId, true, 2);
+            context.takeScreenshot("a10_engines_full_rear_quarter_b");
+            this.lookIntoExhausts(context, server, "^ ^6.5 ^-24");
+            context.takeScreenshot("a10_engines_full_chase");
             // The intake fan, from in front of the left engine: a blurred disc, not blades turning backwards.
             this.lookAt(context, server, "^4 ^3.6 ^7", "^1.65 ^3.2 ^2.2");
             context.takeScreenshot("a10_engines_full_intake_a");

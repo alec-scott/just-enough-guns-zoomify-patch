@@ -72,11 +72,13 @@ final class JetFlight {
     /** Share of the mouse's turn the rudder gives straight away, before the bank has built up. */
     private static final double RUDDER_LEAD = 0.15D;
     /**
-     * The GAU-8 pushes back hard: firing it takes away about as much as the engines give at full power, so the jet
-     * slows substantially through a long burst. Blocks per tick squared, along the nose.
+     * The GAU-8 pushes back hard: its recoil, as a share of the engines' full thrust, is well over what they give flat
+     * out, so a burst slows the jet a lot. It eases off as the airspeed comes down towards the stall (from this many
+     * times the stall speed, over the next fade), so the gun alone never slows the jet below flying speed.
      */
-    /** The GAU-8's recoil, as a share of the engines' full thrust: firing it slows the jet hard. */
-    private static final double GUN_RECOIL_SHARE = 1.05D;
+    private static final double GUN_RECOIL_SHARE = 2.5D;
+    private static final double GUN_RECOIL_FLOOR = 1.35D;
+    private static final double GUN_RECOIL_FADE = 0.4D;
     /** From cold an engine takes about six seconds to wind up to idle (the start-up sound's length). */
     private static final double START_SPOOL_PER_TICK = IDLE_SPOOL / 120.0D;
     /**
@@ -449,7 +451,8 @@ final class JetFlight {
         }
         velocity.y -= gravity;
         if (this.jet.isJetGunFiring()) {
-            velocity.sub(new Vector3d(forward).mul(GUN_RECOIL_SHARE * engine.acceleration()));
+            double margin = Mth.clamp((speed / stallSpeed - GUN_RECOIL_FLOOR) / GUN_RECOIL_FADE, 0.0D, 1.0D);
+            velocity.sub(new Vector3d(forward).mul(GUN_RECOIL_SHARE * engine.acceleration() * margin));
         }
         double thrust = this.spool * engine.acceleration() * (1.0D - THRUST_LAPSE * Math.min(speed, diveSpeed) / topSpeed) * mobility * ceilingFactor;
         velocity.add(new Vector3d(forward).mul(thrust));

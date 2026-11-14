@@ -104,7 +104,7 @@ public final class VehicleHudOverlay {
         renderLandVehicleStatus(guiGraphics, minecraft, vehicle);
         if (vehicle.hasVehicleWeapons() && vehicle.canPassengerUseSelectedVehicleWeapon(minecraft.player)) {
             boolean jetPilot = vehicle.isJet() && vehicle.getControllingPassenger() == minecraft.player;
-            // A jet's guns are fixed: its marker sits where the nose points and banks with the jet. Zoomed (the targeting
+            // A jet's guns are fixed: its marker sits where the gun points, just below the nose, and banks with the jet. Zoomed (the targeting
             // pod) only the pod's reticle shows: where the missiles go.
             boolean pod = vehicle.isJetPodView(minecraft.player);
             if (jetPilot && pod) {
@@ -418,7 +418,8 @@ public final class VehicleHudOverlay {
     }
 
     /**
-     * The jet's gun marker: where its rounds go, 250 blocks down the nose (with the jet's own speed on them), drawn where
+     * The jet's gun marker: where its rounds go, 250 blocks down the gun's bore, which points a little below the nose
+     * (with the jet's own speed on them), drawn where
      * that point is on screen and turned with the jet's bank against the view. The chase camera lags the jet a little, so
      * in a turn the marker swings ahead of the screen's centre with the nose.
      */

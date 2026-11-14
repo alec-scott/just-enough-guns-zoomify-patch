@@ -23,9 +23,12 @@ import ttv.migami.jeg.vehicle.entity.base.VehicleEntity;
  * the spinning fan reads as a blurred disc, like a real one at full power, rather than a wheel turning backwards.
  */
 final class VehicleFanBlurLayer<T extends VehicleEntity> extends GeoRenderLayer<T, Void, VehicleRenderState> {
-    /** The A-10's spinning parts, with how far each one's pivot sits from its engine's axis (see AbstractVehicleGeoRenderer). */
-    private static final String[] FAN_BONES = {"qianwaiyuan", "qianwaiyuan2", "houwaiyuan", "houneiyuan", "houwaiyuan2", "houneiyuan2"};
-    private static final float[] FAN_AXIS_OFFSET = {0.338F, -0.338F, 0.0F, 0.0F, 0.0F, 0.0F};
+    /**
+     * The A-10's front fan blades, with how far each one's pivot sits from its engine's axis (see
+     * AbstractVehicleGeoRenderer). The rear of each engine is fixed cowling, not blades, and is never blurred.
+     */
+    private static final String[] FAN_BONES = {"qianwaiyuan", "qianwaiyuan2"};
+    private static final float[] FAN_AXIS_OFFSET = {0.338F, -0.338F};
     private static final float BLUR_FROM = 25.0F;
     private static final int GHOSTS = 3;
 

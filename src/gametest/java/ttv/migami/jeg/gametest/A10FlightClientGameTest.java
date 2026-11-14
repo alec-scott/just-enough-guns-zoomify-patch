@@ -136,7 +136,7 @@ public class A10FlightClientGameTest implements FabricClientGameTest {
         Vec3 liftOff = null;
         for (int tick = 1; tick <= 700 && liftOff == null; tick++) {
             State state = this.state(context);
-            double dy = state.speed > 0.76D && state.pitch > -8.0F ? -14.0D : 0.0D;
+            double dy = state.speed > 1.27D && state.pitch > -8.0F ? -14.0D : 0.0D;
             context.getInput().moveCursor(0.0D, dy);
             context.waitTick();
             this.sample(context, "takeoff", tick);
@@ -154,8 +154,8 @@ public class A10FlightClientGameTest implements FabricClientGameTest {
         }
         double run = Math.sqrt(Math.pow(liftOff.x - start.x, 2) + Math.pow(liftOff.z - start.z, 2));
         this.report.append(String.format("take-off run %.0f blocks%n", run));
-        if (run < 25.0D || run > 130.0D) {
-            this.fail(String.format("take-off run %.0f blocks, expected 25-130", run));
+        if (run < 40.0D || run > 220.0D) {
+            this.fail(String.format("take-off run %.0f blocks, expected 40-220", run));
         }
         this.record(context, "climb-out", 40, 0.0D, 0.0D);
         context.takeScreenshot("a10_climb_out");
@@ -205,7 +205,7 @@ public class A10FlightClientGameTest implements FabricClientGameTest {
 
         // Loop: build speed, then hold the stick back until the jet comes round to level again.
         context.getInput().holdKey(options -> options.keyUp);
-        for (int tick = 1; tick <= 320 && this.state(context).speed < 1.57D; tick++) {
+        for (int tick = 1; tick <= 320 && this.state(context).speed < 2.62D; tick++) {
             this.holdPitch(context, "loop-entry", tick, 4.0F);
         }
         context.getInput().releaseKey(options -> options.keyUp);
@@ -281,9 +281,9 @@ public class A10FlightClientGameTest implements FabricClientGameTest {
         boolean recovered = false;
         for (int tick = 1; tick <= 400 && !recovered; tick++) {
             State state = this.state(context);
-            State after = state.speed < 0.98D ? this.holdPitch(context, "recover", tick, 25.0F) : this.holdPitch(context, "pull-out", tick, -3.0F);
+            State after = state.speed < 1.63D ? this.holdPitch(context, "recover", tick, 25.0F) : this.holdPitch(context, "pull-out", tick, -3.0F);
             lowest = Math.min(lowest, after.altitude);
-            recovered = after.speed > 0.98D && after.vy > -0.05D;
+            recovered = after.speed > 1.63D && after.vy > -0.05D;
         }
         context.getInput().releaseKey(options -> options.keyUp);
         this.report.append(String.format("stall: warned %s, stalled %s, recovered %s, lowest %.0f blocks%n", stallWarned, stalled, recovered, lowest));
@@ -373,14 +373,14 @@ public class A10FlightClientGameTest implements FabricClientGameTest {
                 jet.reloadAiVehicleWeapons();
             }
         });
-        // A range 60 blocks down the nose: a two-block platform with five iron golems on it, at the gun's height, and a
+        // A range 30 blocks down the nose: a two-block platform with five iron golems on it, at the gun's height, and a
         // wall behind.
         String[] range = server.computeOnServer(minecraftServer -> {
             var player = minecraftServer.getPlayerList().getPlayers().getFirst();
             VehicleEntity jet = (VehicleEntity) player.getVehicle();
             Vec3 ahead = Vec3.directionFromRotation(0.0F, jet.getYRot());
             Vec3 side = new Vec3(ahead.z, 0.0D, -ahead.x);
-            Vec3 centre = jet.position().add(ahead.scale(60.0D));
+            Vec3 centre = jet.position().add(ahead.scale(30.0D));
             int y = (int) Math.floor(jet.getY());
             String[] commands = new String[2];
             Vec3 wall = centre.add(ahead.scale(2.5D));
@@ -390,14 +390,15 @@ public class A10FlightClientGameTest implements FabricClientGameTest {
                     (int) Math.floor(wall.x + 12), y + 12, (int) Math.floor(wall.z + 1));
             return commands;
         });
-        // The gun fires down the nose (1.7 blocks up when parked), so the targets stand on the ground; only the wall is built.
+        // The gun fires 2 degrees below the nose from 1.7 blocks up when parked, reaching the ground about 49 blocks out, so
+        // the targets stand on the ground 30 blocks ahead; only the wall is built.
         server.runCommand(range[1]);
         this.targets.addAll(server.computeOnServer(minecraftServer -> {
             var player = minecraftServer.getPlayerList().getPlayers().getFirst();
             VehicleEntity jet = (VehicleEntity) player.getVehicle();
             Vec3 ahead = Vec3.directionFromRotation(0.0F, jet.getYRot());
             Vec3 side = new Vec3(ahead.z, 0.0D, -ahead.x);
-            Vec3 centre = jet.position().add(ahead.scale(60.0D));
+            Vec3 centre = jet.position().add(ahead.scale(30.0D));
             java.util.List<java.util.UUID> spawned = new java.util.ArrayList<>();
             for (int i = 0; i < 5; i++) {
                 // A group two blocks apart, like mobs bunched together.

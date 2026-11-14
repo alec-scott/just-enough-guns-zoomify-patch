@@ -12,6 +12,8 @@ import ttv.migami.jeg.vehicle.entity.base.VehicleEntity;
 public final class VehicleFireSoundInstance extends AbstractTickableSoundInstance {
     private static final float MIN_VOLUME = 0.65F;
     private static final float MAX_VOLUME = 0.85F;
+    /** How loud a helicopter's gun is heard from outside, before distance (AircraftSoundRange#volume). */
+    private static final float HELICOPTER_GUN_LOUDNESS = 2.5F;
     private final VehicleEntity vehicle;
     private final SoundEvent sound;
     private final boolean helicopter;
@@ -30,7 +32,8 @@ public final class VehicleFireSoundInstance extends AbstractTickableSoundInstanc
         this.volume = this.helicopter ? MIN_VOLUME : 3.5F;
         this.pitch = 1.0F;
         this.relative = this.listensFromInside();
-        this.attenuation = this.relative ? Attenuation.NONE : Attenuation.LINEAR;
+        // A helicopter's gun outside fades with distance as the helicopter does (AircraftSoundRange), heard far off.
+        this.attenuation = this.relative || this.helicopter ? Attenuation.NONE : Attenuation.LINEAR;
         this.updatePosition();
     }
 
@@ -66,9 +69,15 @@ public final class VehicleFireSoundInstance extends AbstractTickableSoundInstanc
             this.pitch = 1.0F;
             return;
         }
-        this.volume = this.helicopter
-                ? Mth.clamp(MIN_VOLUME + (float) speed * 0.1F, MIN_VOLUME, MAX_VOLUME)
-                : Mth.clamp(3.5F + (float) speed * 4.0F, 3.5F, 6.5F);
+        if (this.helicopter && !this.relative) {
+            var listener = Minecraft.getInstance().getCameraEntity();
+            double distance = listener == null ? 0.0D : listener.position().distanceTo(this.vehicle.position());
+            this.volume = Math.max(0.001F, AircraftSoundRange.volume(distance, HELICOPTER_GUN_LOUDNESS));
+        } else {
+            this.volume = this.helicopter
+                    ? Mth.clamp(MIN_VOLUME + (float) speed * 0.1F, MIN_VOLUME, MAX_VOLUME)
+                    : Mth.clamp(3.5F + (float) speed * 4.0F, 3.5F, 6.5F);
+        }
         this.pitch = Mth.clamp(0.96F + (float) speed * 0.08F, 0.96F, 1.08F);
     }
 

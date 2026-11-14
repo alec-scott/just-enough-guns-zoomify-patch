@@ -136,6 +136,41 @@ public final class VehicleSoundHelper {
         return sound == null ? null : sound.get();
     }
 
+    /** A helicopter rotor's speed at full operating RPM (see HelicopterEngineAudio). */
+    public static final float HELICOPTER_OPERATING_ROTOR_SPEED = 0.085F;
+
+    /** Whether this is a flying vehicle whose engine is heard from far off (a jet or a helicopter). */
+    public static boolean isAircraft(VehicleEntity vehicle) {
+        return vehicle.isJet() || vehicle.vehicleData().defaults().vehicleType() == VehicleType.HELICOPTER;
+    }
+
+    /**
+     * How loud an aircraft's engine is heard from outside, before distance: the engine's sound volume scaled by how hard
+     * it runs (a jet's spool, a helicopter's rotor speed). Louder engines carry further (see AircraftSoundRange).
+     */
+    public static float aircraftEngineLoudness(VehicleEntity vehicle) {
+        float engineVolume = Math.max(0.1F, vehicle.vehicleData().defaults().engine().engineSoundVolume());
+        if (vehicle.isJet()) {
+            // The recording is the engines at full power; while they wind up to idle the loop fades in.
+            float spool = net.minecraft.util.Mth.clamp(vehicle.jetSpool(), 0.0F, 1.0F);
+            float lit = net.minecraft.util.Mth.clamp(spool / 0.08F, 0.0F, 1.0F);
+            return engineVolume * lit * lit * (0.35F + 0.65F * spool);
+        }
+        return engineVolume * Math.min(1.0F, helicopterRpm(vehicle));
+    }
+
+    /** The engine loop's pitch before Doppler: idle low, full power at the recording's own pitch. */
+    public static float aircraftEnginePitch(VehicleEntity vehicle) {
+        if (vehicle.isJet()) {
+            return 0.62F + 0.38F * net.minecraft.util.Mth.clamp(vehicle.jetSpool(), 0.0F, 1.0F);
+        }
+        return net.minecraft.util.Mth.clamp(0.35F + helicopterRpm(vehicle) * 0.65F, 0.35F, 1.12F);
+    }
+
+    private static float helicopterRpm(VehicleEntity vehicle) {
+        return net.minecraft.util.Mth.clamp(vehicle.propellerSpeed() / HELICOPTER_OPERATING_ROTOR_SPEED, 0.0F, 1.25F);
+    }
+
     public static SoundEvent engineStartSound(VehicleEntity vehicle) {
         Identifier configured = vehicle.vehicleData().defaults().engine().engineStartSound();
         DeferredHolder<SoundEvent, SoundEvent> sound = configured == null ? null : ModSounds.ALL.get(configured);
