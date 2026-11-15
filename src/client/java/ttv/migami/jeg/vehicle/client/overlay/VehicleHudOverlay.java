@@ -1147,10 +1147,12 @@ public final class VehicleHudOverlay {
      * the FSV-6's dashboard in its cab, and the dozer's blade from the seat (in F5, the machine itself).
      */
     private static boolean vehicleInfoInCorner(Minecraft minecraft, VehicleEntity vehicle) {
-        // Both have their own panel at the top left (which the top middle would run into) and no weapon list in the
-        // bottom right corner, so they use that corner in every view.
+        // These have their own panel at the top left (which the top middle would run into) and no weapon list in the
+        // bottom right corner, so they use that corner in every view. The mortar's gunner looks down past the
+        // baseplate, where the middle placement covered the view (MortarClientGameTest screenshot).
         return vehicle instanceof ttv.migami.jeg.vehicle.entity.SupportVehicleEntity
-                || vehicle instanceof ttv.migami.jeg.vehicle.entity.BulldozerEntity;
+                || vehicle instanceof ttv.migami.jeg.vehicle.entity.BulldozerEntity
+                || vehicle instanceof ttv.migami.jeg.vehicle.entity.MortarEntity;
     }
 
     /** Top line of the vehicle info when it is drawn at the top middle (its title sits 12 above). */

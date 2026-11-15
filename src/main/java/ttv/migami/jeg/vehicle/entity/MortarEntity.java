@@ -140,6 +140,7 @@ public final class MortarEntity extends VehicleEntity {
     public void tick() {
         this.elevationO = this.elevation();
         super.tick();
+        this.tickTraverse();
         if (!(this.level() instanceof ServerLevel level)) {
             return;
         }
@@ -156,9 +157,6 @@ public final class MortarEntity extends VehicleEntity {
             if (input.forwardAxis() != 0 && !this.isTurretDamaged()) {
                 this.setElevation(this.elevation() + input.forwardAxis() * ELEVATION_RATE);
             }
-            if (input.strafeAxis() != 0) {
-                this.setYRot(Mth.wrapDegrees(this.getYRot() - input.strafeAxis() * TRAVERSE_RATE));
-            }
         }
         if (this.loadRequest != null) {
             ServerPlayer player = this.loadRequest;
@@ -173,6 +171,23 @@ public final class MortarEntity extends VehicleEntity {
             if (drill == 1) {
                 this.fire(level);
             }
+        }
+    }
+
+    /**
+     * A/D traverse. A player gunner's client is authoritative for the vehicle's position and yaw (vanilla sends them up
+     * in its vehicle-move packet), so the mortar turns there, and the server takes the new bearing from that packet;
+     * turning it on the server would be overwritten by the client's yaw every tick (found by MortarClientGameTest).
+     */
+    private void tickTraverse() {
+        Entity gunner = this.getControllingPassenger();
+        VehicleInput input = this.landInput();
+        if (!(gunner instanceof Player) || input == null || input.strafeAxis() == 0 || this.isWrecked()) {
+            return;
+        }
+        boolean authoritative = this.level().isClientSide() ? this.isLocalInstanceAuthoritative() : !(gunner instanceof ServerPlayer);
+        if (authoritative) {
+            this.setYRot(Mth.wrapDegrees(this.getYRot() - input.strafeAxis() * TRAVERSE_RATE));
         }
     }
 

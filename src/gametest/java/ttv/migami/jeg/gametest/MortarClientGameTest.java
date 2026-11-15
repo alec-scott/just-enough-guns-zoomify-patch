@@ -37,8 +37,12 @@ public class MortarClientGameTest implements FabricClientGameTest {
 
     @Override
     public void runTest(ClientGameTestContext context) {
+        // The server's view distance (12 chunks on yftm), set before joining: C2ME agrees the client's view distance
+        // with the server at join, and a later change only reached the server's own setting (chunks stayed at 5).
+        context.runOnClient(mc -> mc.options.renderDistance().set(12));
         try (TestSingleplayerContext world = context.worldBuilder().create()) {
-            world.getClientLevel().waitForChunksRender();
+            // A fixed settle, not waitForChunksRender: at 12 chunks with Voxy every chunk never finishes rendering.
+            context.waitTicks(100);
             TestServerContext server = world.getServer();
             server.runCommand("gamemode survival @a");
             server.runCommand("time set noon");
@@ -94,12 +98,17 @@ public class MortarClientGameTest implements FabricClientGameTest {
             this.hold(context, options -> options.keyDown, 220);
             check(server.computeOnServer(s -> mortar(s).elevation()) == MortarRig.ELEVATION_MIN, "elevation must stop at 45 degrees");
             context.takeScreenshot("mortar_elevation_45");
-            float yaw0 = server.computeOnServer(s -> mortar(s).getYRot());
+            // The gunner's client turns the mortar (it is authoritative for the vehicle's yaw) and the server follows from
+            // its vehicle-move packets, so the rate is read on the client and the server is checked to catch up.
+            float yaw0 = context.computeOnClient(mc -> mc.level.getEntity(this.mortarId).getYRot());
             this.hold(context, options -> options.keyLeft, 20);
-            float yaw1 = server.computeOnServer(s -> mortar(s).getYRot());
+            float yaw1 = context.computeOnClient(mc -> mc.level.getEntity(this.mortarId).getYRot());
             float turned = net.minecraft.util.Mth.wrapDegrees(yaw1 - yaw0);
-            LOGGER.info("[mortar] traverse {} -> {} ({} deg) after holding A for 20 ticks", yaw0, yaw1, turned);
+            context.waitTicks(10);
+            float serverYaw = server.computeOnServer(s -> mortar(s).getYRot());
+            LOGGER.info("[mortar] traverse {} -> {} ({} deg) after holding A for 20 ticks; server {}", yaw0, yaw1, turned, serverYaw);
             check(Math.abs(Math.abs(turned) - 20 * MortarEntity.TRAVERSE_RATE) < 1.5F, "A must traverse at " + MortarEntity.TRAVERSE_RATE + " deg/tick, turned " + turned);
+            check(Math.abs(net.minecraft.util.Mth.wrapDegrees(serverYaw - yaw1)) < 0.5F, "the server must take the gunner's bearing: client " + yaw1 + ", server " + serverYaw);
             this.hold(context, options -> options.keyRight, 20);
 
             // 3. Full range at 45 degrees: the target area is far outside the loaded world.
@@ -122,9 +131,18 @@ public class MortarClientGameTest implements FabricClientGameTest {
             check(MortarAudio.played() > 0 && MortarAudio.lastNear() > 0.3F, "the gunner must hear the report, played "
                     + MortarAudio.played() + " near " + MortarAudio.lastNear());
 
-            // 4. Short range at 85 degrees, landing on loaded terrain where the HUD's marker is.
+            // 4. Short range at 85 degrees, landing on loaded terrain where the HUD's marker is. The client sees as far as
+            // the server sends (12 chunks on yftm, set at the top), so the 130-block impact is in its loaded world.
             this.hold(context, options -> options.keyUp, 180);
             context.waitTicks(MortarEntity.RELOAD_TICKS);
+            // Wait for the chunk where the round will land, not for every chunk (with Voxy that never settles).
+            context.waitFor(mc -> {
+                var mortar = (MortarEntity) mc.level.getEntity(this.mortarId);
+                Vec3 muzzle = MortarRig.muzzleWorld(mortar.position(), mortar.getYRot(), mortar.elevation());
+                Vec3 impact = MortarRig.predictToHeight(muzzle, MortarRig.launchVelocity(mortar.getYRot(), mortar.elevation()), GROUND).position();
+                return !(mc.level.getChunk(net.minecraft.core.SectionPos.blockToSectionCoord(impact.x),
+                        net.minecraft.core.SectionPos.blockToSectionCoord(impact.z)) instanceof net.minecraft.world.level.chunk.EmptyLevelChunk);
+            }, 1200);
             var hud85 = context.computeOnClient(mc -> MortarAim.predict((MortarEntity) mc.level.getEntity(this.mortarId), 1.0F));
             context.takeScreenshot("mortar_hud_85_marker");
             Shot near = this.fire(context, server);
@@ -133,7 +151,9 @@ public class MortarClientGameTest implements FabricClientGameTest {
                     near.range, near.ticks, markerError, hud85.assumedLevel()));
             check(!hud85.assumedLevel(), "at 85 degrees the target area is loaded and the HUD must say where on the terrain");
             check(near.range > 100.0D && near.range < 170.0D, "an 85 degree round must land 130-ish blocks out, landed " + near.range);
-            check(markerError < 6.0D, "the round must land on the HUD's marker, " + markerError + " blocks off");
+            // SBW's spread (0.5) is mostly an elevation error at 85 degrees, where range changes fastest with elevation
+            // (about 1500 blocks per radian): up to about 13 blocks at this range.
+            check(markerError < 15.0D, "the round must land near the HUD's marker (within the spread), " + markerError + " blocks off");
 
             // 5. The blast: SBW's damage, no vanilla entity damage on top, blocks broken like a rocket's.
             server.runOnServer(s -> s.getPlayerList().getPlayers().get(0).stopRiding());

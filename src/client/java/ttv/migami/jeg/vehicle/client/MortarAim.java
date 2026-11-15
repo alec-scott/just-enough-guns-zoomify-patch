@@ -1,8 +1,9 @@
 package ttv.migami.jeg.vehicle.client;
 
 import net.minecraft.client.Minecraft;
-import net.minecraft.core.BlockPos;
+import net.minecraft.core.SectionPos;
 import net.minecraft.core.particles.ParticleTypes;
+import net.minecraft.world.level.chunk.EmptyLevelChunk;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.HitResult;
@@ -32,18 +33,21 @@ public final class MortarAim {
         for (int tick = 1; tick <= MortarRig.MAX_FLIGHT_TICKS; tick++) {
             Vec3 stepped = MortarRig.stepVelocity(motion);
             Vec3 next = position.add(stepped);
-            if (!level.hasChunkAt(BlockPos.containing(next))) {
+            // The client has only the chunks within render distance; any other is an empty stand-in that a ray passes
+            // through (hasChunkAt is true for it, and false above the build limit, where a high round flies).
+            if (level.getChunk(SectionPos.blockToSectionCoord(next.x), SectionPos.blockToSectionCoord(next.z)) instanceof EmptyLevelChunk) {
                 MortarRig.Impact rest = MortarRig.predictToHeight(position, motion, origin.y);
                 int ticks = tick - 1 + rest.ticks();
                 return new Prediction(rest.position(), ticks, rest.horizontalDistance(origin), true);
             }
-            if (next.y < level.getMinY()) {
-                break;
-            }
+            // Ground first: a steep round falls ~10 blocks a step and can pass the ground and the world's floor in one.
             HitResult hit = level.clip(new ClipContext(position, next, ClipContext.Block.COLLIDER, ClipContext.Fluid.ANY, mortar));
             if (hit.getType() != HitResult.Type.MISS) {
                 Vec3 at = hit.getLocation();
                 return new Prediction(at, tick, horizontal(origin, at), false);
+            }
+            if (next.y < level.getMinY()) {
+                break;
             }
             position = next;
             motion = stepped;
