@@ -1,0 +1,30 @@
+{
+  "entity_type": "jeg:mortar",
+  "vehicle_type": "artillery",
+  "max_health": 40.0,
+  "auto_repair_per_tick": 0.0,
+  "auto_repair_cooldown_ticks": 200,
+  "max_energy": 0,
+  "allow_free_cam": true,
+  "container_type": "none",
+  "seats": [
+    {"index": 0, "x": 0.0, "y": -0.05, "z": -0.95, "driver": true, "enclosed": false, "hide_passenger": false}
+  ],
+  "engine": {"type": "static", "acceleration": 0.0, "max_forward_speed": 0.0, "max_reverse_speed": 0.0, "friction": 1.0},
+  "third_person_camera": {"x": 0.0, "y": 1.8, "z": -3.2},
+  "dismount": {"x": 0.9, "y": 0.0, "z": -0.8},
+  "collision_level": "light",
+  "obb": [
+    {"part": "body", "x": 0.0, "y": 0.075, "z": 0.0001, "half_width": 0.2546, "half_height": 0.075, "half_depth": 0.2546},
+    {"part": "turret", "x": -0.0094, "y": 0.6746, "z": 0.6568, "half_width": 0.3403, "half_height": 0.6746, "half_depth": 0.7537}
+  ],
+  "weapons": [],
+  "has_decoy": false,
+  "destroy": {"explodes": false, "explosion_power": 0.0},
+  "armor": {
+    "fallback": {"rating": 2.0, "undermatch_multiplier": 0.3, "overmatch_multiplier": 0.9, "passenger_leak_multiplier": 0.6, "part_damage_multiplier": 1.0},
+    "parts": {
+      "turret": {"rating": 2.0, "undermatch_multiplier": 0.3, "overmatch_multiplier": 0.9, "passenger_leak_multiplier": 0.6, "part_damage_multiplier": 1.2}
+    }
+  }
+}

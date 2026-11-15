@@ -250,6 +250,13 @@ public final class ModEntities {
     public static final DeferredHolder<EntityType<?>, EntityType<ConfiguredVehicleEntity>> TOM6 = configuredVehicle("tom6", 2.2F, 1.5F);
     public static final DeferredHolder<EntityType<?>, EntityType<ConfiguredVehicleEntity>> LASER_TOWER = configuredVehicle("laser_tower", 1.0F, 1.9F);
     public static final DeferredHolder<EntityType<?>, EntityType<ConfiguredVehicleEntity>> HPJ11 = configuredVehicle("hpj11", 1.5F, 1.8F);
+    /** The 81 mm mortar: the baseplate plus the tube at 45 degrees (design/mortar/rig.json). */
+    public static final DeferredHolder<EntityType<?>, EntityType<ttv.migami.jeg.vehicle.entity.MortarEntity>> MORTAR = REGISTER.register("mortar",
+            () -> EntityType.Builder.<ttv.migami.jeg.vehicle.entity.MortarEntity>of(ttv.migami.jeg.vehicle.entity.MortarEntity::new, MobCategory.MISC)
+                    .sized(0.8F, 1.4F).clientTrackingRange(14).updateInterval(1).build(entityKey("mortar")));
+    public static final DeferredHolder<EntityType<?>, EntityType<ttv.migami.jeg.vehicle.projectile.MortarRoundEntity>> MORTAR_ROUND = REGISTER.register("mortar_round",
+            () -> EntityType.Builder.<ttv.migami.jeg.vehicle.projectile.MortarRoundEntity>of(ttv.migami.jeg.vehicle.projectile.MortarRoundEntity::new, MobCategory.MISC)
+                    .sized(0.25F, 0.25F).clientTrackingRange(16).updateInterval(1).build(entityKey("mortar_round")));
     public static final DeferredHolder<EntityType<?>, EntityType<ConfiguredVehicleEntity>> WAVEFORCE_TOWER = configuredVehicle("waveforce_tower", 1.5F, 2.1F);
 
     public static final DeferredHolder<EntityType<?>, EntityType<VehicleDecoyEntity>> VEHICLE_DECOY = REGISTER.register(

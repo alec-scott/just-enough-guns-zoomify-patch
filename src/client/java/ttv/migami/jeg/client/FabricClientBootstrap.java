@@ -310,6 +310,9 @@ public final class FabricClientBootstrap {
         EntityRendererRegistry.register(ModEntities.TOM6.get(), Tom6Renderer::new);
         EntityRendererRegistry.register(ModEntities.LASER_TOWER.get(), LaserTowerRenderer::new);
         EntityRendererRegistry.register(ModEntities.HPJ11.get(), Hpj11Renderer::new);
+        EntityRendererRegistry.register(ModEntities.MORTAR.get(), ttv.migami.jeg.vehicle.client.render.MortarRenderer::new);
+        // A round at 200 m/s is a blur nobody sees: it is heard and its blast is drawn (MissileBlastPayload).
+        EntityRendererRegistry.register(ModEntities.MORTAR_ROUND.get(), net.minecraft.client.renderer.entity.NoopRenderer::new);
         EntityRendererRegistry.register(ModEntities.WAVEFORCE_TOWER.get(), WaveforceTowerRenderer::new);
         EntityRendererRegistry.register(ModEntities.VEHICLE_DECOY.get(), VehicleDecoyRenderer::new);
         EntityRendererRegistry.register(ModEntities.VEHICLE_MISSILE.get(), VehicleMissileRenderer::new);
@@ -350,6 +353,8 @@ public final class FabricClientBootstrap {
             ttv.migami.jeg.vehicle.client.audio.BulldozerAudio.tick(client);
             ttv.migami.jeg.vehicle.client.audio.SupportAudio.tick(client);
             ttv.migami.jeg.vehicle.client.SupportHints.tick(client);
+            ttv.migami.jeg.vehicle.client.audio.MortarAudio.tick(client);
+            ttv.migami.jeg.vehicle.client.MortarAim.tick(client);
             MedalManager.tick();
             if (NetworkHandler.shouldRenderLegacyBulletTrail()) {
                 BulletTrailRenderer.tick();

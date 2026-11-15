@@ -74,6 +74,16 @@ public final class ModItems {
             "crowbar",
             () -> new Item(baseProperties(Reference.id("crowbar")).stacksTo(1).durability(128))
     );
+    /** The 81 mm mortar, carried; set up by right-clicking the ground (MortarItem). */
+    public static final DeferredHolder<Item, ttv.migami.jeg.item.MortarItem> MORTAR = REGISTER.register(
+            "mortar",
+            () -> new ttv.migami.jeg.item.MortarItem(baseProperties(Reference.id("mortar")).stacksTo(1))
+    );
+    /** An 81 mm high-explosive round for the mortar. */
+    public static final DeferredHolder<Item, Item> MORTAR_ROUND = REGISTER.register(
+            "mortar_round",
+            () -> new Item(baseProperties(Reference.id("mortar_round")).stacksTo(16))
+    );
     public static final DeferredHolder<Item, Item> REPAIR_KIT = REGISTER.register(
             "repair_kit",
             () -> new RepairKitItem(baseProperties(Reference.id("repair_kit")).stacksTo(16))
@@ -684,6 +694,8 @@ public final class ModItems {
                 }
             });
             AMMO.values().forEach(holder -> event.accept(holder.get()));
+            event.accept(MORTAR.get());
+            event.accept(MORTAR_ROUND.get());
             event.accept(PISTOL_MAGAZINE.get());
             event.accept(SMG_MAGAZINE.get());
             event.accept(SMG_EXTENDED_MAGAZINE.get());

@@ -1726,6 +1726,30 @@
       }
     ]
   },
+  "vehicle.mortar.fire": {
+    "subtitle": "subtitle.jeg.vehicle.fire",
+    "sounds": [
+      {
+        "name": "jeg:vehicle/mortar/fire"
+      }
+    ]
+  },
+  "vehicle.mortar.fire_distant": {
+    "subtitle": "subtitle.jeg.vehicle.fire",
+    "sounds": [
+      {
+        "name": "jeg:vehicle/mortar/fire_distant"
+      }
+    ]
+  },
+  "vehicle.mortar.load": {
+    "subtitle": "subtitle.jeg.mortar.load",
+    "sounds": [
+      {
+        "name": "jeg:vehicle/mortar/load"
+      }
+    ]
+  },
   "vehicle.laser_tower.fire": {
     "subtitle": "subtitle.jeg.vehicle.fire",
     "sounds": [

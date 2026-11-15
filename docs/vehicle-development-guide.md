@@ -190,6 +190,10 @@ clears, and grows the entity box at every angle that isn't square on.
   brief, then measure it in a test: drive at full lock for 2 s and work out the radius from the distance travelled
   and the heading change (`SupportInteriorClientGameTest`).
 - **Other entries.** Give it no `weapons`, `seek` or decoys unless it is armed.
+- **An unarmed vehicle still needs code.** A missing or empty `"weapons"` list falls back to the test wheel vehicle's
+  assault rifle and pistol (`VehicleDataManager.parseWeapons`), so the entity class overrides
+  `hasVehicleWeapons()` to return false (the bulldozer, FSV-6 and mortar do). A weapon that isn't a vehicle gun
+  (the mortar's load-and-drop drill) is handled the same way, in its own class.
 
 ## 5. Model
 

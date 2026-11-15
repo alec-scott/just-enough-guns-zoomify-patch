@@ -44,4 +44,32 @@ public final class WarheadBlockDamage {
             }
         };
     }
+
+    /**
+     * {@link #calculator}, but the explosion leaves entities alone: for warheads that deal their own blast damage (the
+     * mortar round uses Superb Warfare's numbers), so vanilla's entity damage, which reaches twice the power in blocks,
+     * is not added on top. Knockback still applies.
+     */
+    public static ExplosionDamageCalculator blocksOnly(Entity source, float scale) {
+        return new EntityBasedExplosionDamageCalculator(source) {
+            @Override
+            public Optional<Float> getBlockExplosionResistance(Explosion explosion, BlockGetter level, BlockPos pos, BlockState state, FluidState fluid) {
+                Optional<Float> resistance = super.getBlockExplosionResistance(explosion, level, pos, state, fluid);
+                if (!fluid.isEmpty()) {
+                    return resistance;
+                }
+                return resistance.map(value -> value >= ARMOUR_RESISTANCE ? value : Math.min(value, DENSE_RESISTANCE) * scale);
+            }
+
+            @Override
+            public boolean shouldDamageEntity(Explosion explosion, Entity entity) {
+                return false;
+            }
+
+            @Override
+            public float getEntityDamageAmount(Explosion explosion, Entity entity, float exposure) {
+                return 0.0F;
+            }
+        };
+    }
 }

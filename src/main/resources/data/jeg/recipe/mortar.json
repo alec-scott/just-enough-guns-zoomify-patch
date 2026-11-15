@@ -1,0 +1,18 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "equipment",
+  "key": {
+    "T": "minecraft:iron_ingot",
+    "B": "minecraft:iron_block",
+    "S": "minecraft:stick"
+  },
+  "pattern": [
+    " T ",
+    " T ",
+    "SBS"
+  ],
+  "result": {
+    "id": "jeg:mortar",
+    "count": 1
+  }
+}

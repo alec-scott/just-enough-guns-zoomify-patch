@@ -1,6 +1,7 @@
 """Refit of Superb Warfare's mortar to the vehicle guide. The imported model's generator: rerun it after any change.
 
-python -I design/superbwarfare-port/fetch_sbw.py <sbw_dir> mortar
+python -I design/superbwarfare-port/fetch_sbw.py <sbw_dir> mortar --extra sounds/mortar_fire.ogg \
+    sounds/mortar_distant.ogg sounds/mortar_load.ogg textures/item/mortar_deployer.png textures/item/mortar_shell.png
 python -I design/mortar/refit.py <sbw_dir>
 
 Writes the GeckoLib geometry, LOD, texture and clips into the mod, design/mortar/rig.json, and review renders. The
@@ -150,6 +151,19 @@ def main():
     L.write_json(assets / f"geckolib/models/entity/vehicle/lod/{ID}_lod1.geo.json", lod)
     L.write_json(assets / f"geckolib/animations/entity/vehicle/{ID}.animation.json", clips)
     shutil.copyfile(src / "textures/entity/mortar.png", assets / f"textures/entity/vehicle/{ID}.png")
+    # Item icons and sounds (fetched with --extra; see the usage line at the top).
+    for source, target in (("textures/item/mortar_deployer.png", "textures/item/mortar.png"),
+                           ("textures/item/mortar_shell.png", "textures/item/mortar_round.png"),
+                           ("sounds/mortar_fire.ogg", "sounds/vehicle/mortar/fire.ogg"),
+                           ("sounds/mortar_distant.ogg", "sounds/vehicle/mortar/fire_distant.ogg"),
+                           ("sounds/mortar_load.ogg", "sounds/vehicle/mortar/load.ogg")):
+        (assets / target).parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(src / source, assets / target)
+    (assets / "sounds/vehicle/mortar/CREDITS.md").write_text(
+        "# Mortar sounds\n\n"
+        "`fire.ogg`, `fire_distant.ogg` and `load.ogg` are Superb Warfare's `mortar_fire`, `mortar_distant` and\n"
+        "`mortar_load` (mono, 44.1 kHz), by the SBW development team, used with their permission\n"
+        "(`design/superbwarfare-port/PERMISSION.md`). Copied unchanged by `design/mortar/refit.py`.\n", encoding="utf-8")
     L.write_json(HERE / "rig.json", rig)
 
     for e in (ELEVATION_MIN, ELEVATION_MAX):

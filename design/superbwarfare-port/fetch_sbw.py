@@ -1,11 +1,12 @@
 """Download Superb Warfare source assets for a refit, from one pinned commit.
 
-python -I design/superbwarfare-port/fetch_sbw.py <out_dir> <sbw_id> [<sbw_id> ...]
+python -I design/superbwarfare-port/fetch_sbw.py <out_dir> <sbw_id> [<sbw_id> ...] [--extra <asset path> ...]
 
 Fetches, for each id, whatever exists of: geo/<id>.geo.json, geo/vehicle_lod/<id>_lod{1,2,3}.geo.json,
 animations/<id>.animation.json, textures/entity/<id>.png, textures/vehicle_icon/<id>_icon.png and
-sbw/vehicles/<id>.json (the SBW vehicle data). The assets are the SBW team's (used with their permission, see
-PLAN.md) and are not committed: refit scripts read them from <out_dir>.
+sbw/vehicles/<id>.json (the SBW vehicle data). --extra adds paths under assets/superbwarfare/ (sounds, item icons).
+The assets are the SBW team's (used with their permission, see PLAN.md) and are not committed: refit scripts read
+them from <out_dir>.
 """
 import pathlib
 import sys
@@ -29,8 +30,15 @@ def candidates(sbw_id):
 
 def main():
     out = pathlib.Path(sys.argv[1])
-    for sbw_id in sys.argv[2:]:
-        for rel in candidates(sbw_id):
+    args = sys.argv[2:]
+    extra = []
+    if "--extra" in args:
+        at = args.index("--extra")
+        args, extra = args[:at], args[at + 1:]
+    jobs = [(sbw_id, list(candidates(sbw_id))) for sbw_id in args]
+    jobs.append(("extra", ["assets/superbwarfare/" + path for path in extra]))
+    for sbw_id, paths in jobs:
+        for rel in paths:
             target = out / rel.split("superbwarfare/", 1)[1]
             try:
                 with urllib.request.urlopen(BASE + rel, timeout=30) as response:

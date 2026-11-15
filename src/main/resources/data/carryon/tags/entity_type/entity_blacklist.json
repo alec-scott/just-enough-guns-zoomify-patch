@@ -46,6 +46,10 @@
       "required": false
     },
     {
+      "id": "jeg:mortar",
+      "required": false
+    },
+    {
       "id": "jeg:waveforce_tower",
       "required": false
     },

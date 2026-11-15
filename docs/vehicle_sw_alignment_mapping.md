@@ -17,6 +17,7 @@ This file is the Phase 0 mapping for aligning the NeoForge 1.21.1 vehicle system
 | `tom6` | `jeg:tom6` | `tom_6` | aircraft | small | `geo/entity/vehicle/tom6.geo.json` | `textures/entity/vehicle/tom6.png` | generic fallback | `data/jeg/vehicle_assembly/tom6.json` | aircraft / gun + missile |
 | `truck` | `jeg:truck` | `truck` | land | small | `geo/entity/vehicle/truck.geo.json` | `textures/entity/vehicle/truck.png` | generic fallback | `data/jeg/vehicle_assembly/truck.json` | land utility / pistol |
 | `waveforce_tower` | `jeg:waveforce_tower` | `waveforce_tower` | artillery | mini | `geo/entity/vehicle/waveforce_tower.geo.json` | `textures/entity/vehicle/waveforce_tower.png`, `waveforce_tower_glow.png` | `animations/entity/vehicle/waveforce_tower.animation.json` | `data/jeg/vehicle_assembly/waveforce_tower.json` | fixed weapon / cannon |
+| `mortar` | `jeg:mortar` | `mortar` | artillery (carried) | none | `geckolib/models/entity/vehicle/mortar.geo.json`, `lod/mortar_lod1.geo.json` (refit, scale 0.815) | `textures/entity/vehicle/mortar.png` | `geckolib/animations/entity/vehicle/mortar.animation.json` (`rest`, `fire`) | crafting table: `data/jeg/recipe/mortar.json` | `MortarEntity` HUD panel |
 
 ## JEG-Only Compatibility Vehicles
 

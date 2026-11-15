@@ -8,7 +8,7 @@ Status, 2026-11-15:
   tracks), so it is tested when written; the mortar needs only `barrel` and the bipod table.
 
 Create Big Cannons: checked. It builds fixed multi-block guns, including a drop mortar, so the carried mortar, the
-towed Type-63 and the self-propelled PLZ-05 fill different roles. Still open: the permission's coverage (see the end).
+towed Type-63 and the self-propelled PLZ-05 fill different roles.
 
 Source: [CrawKatt/SuperbWarfareReFabricated @ 0.8.8-1.21-Fabric](https://github.com/CrawKatt/SuperbWarfareReFabricated/tree/0.8.8-1.21-Fabric),
 a Fabric 1.21 port of [Mercurows/SuperbWarfare](https://github.com/Mercurows/SuperbWarfare) (NeoForge 1.21.1).
@@ -16,14 +16,9 @@ a Fabric 1.21 port of [Mercurows/SuperbWarfare](https://github.com/Mercurows/Sup
 ## Licensing
 
 - **Code** is GPL-3.0, the same as jegn. Ported files keep their notice, and a `NOTICE` entry credits the SBW team.
-- **Assets** (models, textures, animations, sounds, icons) are All Rights Reserved upstream. The SBW team gave the
-  user permission to use them (reported 2026-11-15). Before the first release that ships new SBW assets:
-  - Keep a copy of the permission (who granted it, the date, and what it covers) in `design/superbwarfare-port/PERMISSION.md`.
-  - Confirm it covers redistribution: this repo is public, and every `yftm_build` is a public GitHub release that
-    reaches the server through the pack manager.
-  - Rewrite the README credit line to match. It currently says SBW assets are CC BY-NC-SA 3.0, which conflicts with
-    the ARR notice upstream.
-  - Use the attribution wording the SBW team asked for, if they asked for any.
+- **Assets** (models, textures, animations, sounds, icons) are All Rights Reserved upstream. The SBW team gave
+  permission to use them, **covering public releases** (confirmed by the user 2026-11-15; recorded in
+  [PERMISSION.md](PERMISSION.md)). The README credit now says so, in place of the old CC BY-NC-SA 3.0 claim.
 
 ## Scope (decided 2026-11-15)
 
@@ -137,5 +132,4 @@ chassis), so schedule both plans together rather than running them separately.
 
 ## Open questions
 
-1. Does the SBW permission cover public redistribution (GitHub releases, the server pack), and what attribution do
-   they want?
+None open at plan level. Per-vehicle questions live in each brief.

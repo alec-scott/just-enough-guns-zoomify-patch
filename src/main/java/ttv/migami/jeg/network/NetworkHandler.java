@@ -78,6 +78,7 @@ public final class NetworkHandler {
         PayloadTypeRegistry.serverboundPlay().register(VehicleAimPayload.TYPE, VehicleAimPayload.STREAM_CODEC);
         PayloadTypeRegistry.clientboundPlay().register(CameraShakePayload.TYPE, CameraShakePayload.STREAM_CODEC);
         PayloadTypeRegistry.clientboundPlay().register(MissileBlastPayload.TYPE, MissileBlastPayload.STREAM_CODEC);
+        PayloadTypeRegistry.clientboundPlay().register(MortarFirePayload.TYPE, MortarFirePayload.STREAM_CODEC);
         PayloadTypeRegistry.clientboundPlay().register(MissileTrackPayload.TYPE, MissileTrackPayload.STREAM_CODEC);
         PayloadTypeRegistry.clientboundPlay().register(AircraftTrackPayload.TYPE, AircraftTrackPayload.STREAM_CODEC);
         PayloadTypeRegistry.serverboundPlay().register(VehicleChangeSeatPayload.TYPE, VehicleChangeSeatPayload.STREAM_CODEC);

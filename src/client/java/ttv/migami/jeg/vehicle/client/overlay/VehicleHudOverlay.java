@@ -124,6 +124,9 @@ public final class VehicleHudOverlay {
         if (vehicle instanceof ttv.migami.jeg.vehicle.entity.SupportVehicleEntity support && vehicle.getControllingPassenger() == minecraft.player) {
             renderSupportPanel(guiGraphics, minecraft, support);
         }
+        if (vehicle instanceof ttv.migami.jeg.vehicle.entity.MortarEntity mortar && vehicle.getControllingPassenger() == minecraft.player) {
+            renderMortarPanel(guiGraphics, minecraft, mortar);
+        }
         boolean focusedSight = isFocusedVehicleSight(vehicle);
         renderLandVehicleStatus(guiGraphics, minecraft, vehicle);
         if (vehicle.hasVehicleWeapons() && vehicle.canPassengerUseSelectedVehicleWeapon(minecraft.player)) {
@@ -881,6 +884,106 @@ public final class VehicleHudOverlay {
             y += row;
             g.text(mc.font, controls2, x, y, colour);
         }
+        pose.popMatrix();
+    }
+
+    /**
+     * The mortar gunner's fire-control panel, in the dozer panel's style: the drill state, elevation (on its 45-85
+     * degree scale), bearing, the predicted range and time of flight (MortarAim, against terrain while it is loaded),
+     * rounds carried, and the keys.
+     */
+    private static void renderMortarPanel(GuiGraphicsExtractor g, Minecraft mc, ttv.migami.jeg.vehicle.entity.MortarEntity mortar) {
+        float partial = mc.getDeltaTracker().getGameTimeDeltaPartialTick(true);
+        var prediction = ttv.migami.jeg.vehicle.client.MortarAim.predict(mortar, partial);
+        int rounds = 0;
+        for (int slot = 0; slot < mc.player.getInventory().getContainerSize(); slot++) {
+            var stack = mc.player.getInventory().getItem(slot);
+            if (stack.is(ttv.migami.jeg.init.ModItems.MORTAR_ROUND.get())) {
+                rounds += stack.getCount();
+            }
+        }
+        boolean creative = mc.player.getAbilities().instabuild;
+        var pose = g.pose();
+        pose.pushMatrix();
+        int guiScale = Math.max(1, mc.getWindow().getGuiScale());
+        float scale = Math.max(1, Math.round(guiScale * DOZER_PANEL_SCALE)) / (float) guiScale;
+        pose.scale(scale, scale);
+        int x = 10, y = 10, row = 11;
+        Component status;
+        int light;
+        if (mortar.settingUp()) {
+            status = Component.translatable("hud.jeg.mortar.status_setup");
+            light = 0xFFE0B040;
+        } else if (mortar.roundInTube()) {
+            status = Component.translatable("hud.jeg.mortar.status_away");
+            light = 0xFFE05A40;
+        } else if (mortar.readyInTicks() > 0) {
+            status = Component.translatable("hud.jeg.mortar.status_reload", String.format(java.util.Locale.ROOT, "%.1f", mortar.readyInTicks() / 20.0F));
+            light = 0xFFE0B040;
+        } else if (rounds == 0 && !creative) {
+            status = Component.translatable("message.jeg.mortar.no_rounds");
+            light = 0xFFE05A40;
+        } else {
+            status = Component.translatable("hud.jeg.mortar.status_ready");
+            light = 0xFF6BD36B;
+        }
+        if (mortar.isTurretDamaged()) {
+            status = Component.translatable("hud.jeg.mortar.status_jammed");
+            light = 0xFFE05A40;
+        }
+        Component elevationName = Component.translatable("hud.jeg.mortar.elevation");
+        Component bearingName = Component.translatable("hud.jeg.mortar.bearing");
+        Component rangeName = Component.translatable("hud.jeg.mortar.range");
+        Component roundsName = Component.translatable("hud.jeg.mortar.rounds");
+        int bearing = Math.floorMod(Math.round(mortar.getYRot() + 180.0F), 360);
+        Component rangeValue = Component.translatable("hud.jeg.mortar.range_value", Math.round(prediction.range()),
+                String.format(java.util.Locale.ROOT, "%.1f", prediction.ticks() / 20.0F));
+        Component controls = Component.translatable("hud.jeg.mortar.controls", mc.options.keyUp.getTranslatedKeyMessage(),
+                mc.options.keyDown.getTranslatedKeyMessage(), mc.options.keyLeft.getTranslatedKeyMessage(), mc.options.keyRight.getTranslatedKeyMessage());
+        Component controls2 = Component.translatable("hud.jeg.mortar.controls2", KeyBindings.RELOAD.getTranslatedKeyMessage(),
+                mc.options.keyAttack.getTranslatedKeyMessage());
+        Component assumed = Component.translatable("hud.jeg.mortar.assumed");
+        int names = Math.max(Math.max(mc.font.width(elevationName), mc.font.width(bearingName)), Math.max(mc.font.width(rangeName), mc.font.width(roundsName)));
+        int bx = x + names + 8, bw = 62;
+        int w = Math.max(150, bx - x + bw + 6 + mc.font.width("85.0°"));
+        w = Math.max(w, Math.max(mc.font.width(controls), mc.font.width(controls2)));
+        w = Math.max(w, bx - x + mc.font.width(rangeValue));
+        w = Math.max(w, mc.font.width(Component.translatable("hud.jeg.mortar.title")) + 9 + 8 + mc.font.width(status));
+        if (prediction.assumedLevel()) {
+            w = Math.max(w, mc.font.width(assumed));
+        }
+        int rows = 7 + (prediction.assumedLevel() ? 1 : 0);
+        g.fill(x - 4, y - 4, x + w + 4, y + row * rows - 1, 0x88101414);
+        g.fill(x - 4, y - 4, x + w + 4, y - 3, 0xFFD6A024);
+        g.fill(x, y + 2, x + 5, y + 7, light);
+        Component title = Component.translatable("hud.jeg.mortar.title");
+        g.text(mc.font, title, x + 9, y, 0xFFECE3C4);
+        g.text(mc.font, status, x + 9 + mc.font.width(title) + 8, y, 0xFFB9B39E);
+        y += row;
+        float elevation = mortar.elevation(partial);
+        float min = ttv.migami.jeg.vehicle.util.MortarRig.ELEVATION_MIN, max = ttv.migami.jeg.vehicle.util.MortarRig.ELEVATION_MAX;
+        g.text(mc.font, elevationName, x, y, 0xFFB9B39E);
+        g.fill(bx, y + 3, bx + bw, y + 5, 0xFF3A3F3D);
+        int marker = bx + Math.round(bw * (elevation - min) / (max - min));
+        g.fill(marker - 1, y, marker + 2, y + 8, 0xFFD6A024);
+        g.text(mc.font, Component.literal(String.format(java.util.Locale.ROOT, "%.1f°", elevation)), bx + bw + 5, y, 0xFFECE3C4);
+        y += row;
+        g.text(mc.font, bearingName, x, y, 0xFFB9B39E);
+        g.text(mc.font, Component.literal(bearing + "°"), bx, y, 0xFFECE3C4);
+        y += row;
+        g.text(mc.font, rangeName, x, y, 0xFFB9B39E);
+        g.text(mc.font, rangeValue, bx, y, prediction.assumedLevel() ? 0xFFE0B040 : 0xFFECE3C4);
+        y += row;
+        if (prediction.assumedLevel()) {
+            g.text(mc.font, assumed, x, y, 0xFFE0B040);
+            y += row;
+        }
+        g.text(mc.font, roundsName, x, y, 0xFFB9B39E);
+        g.text(mc.font, Component.literal(creative ? "∞" : Integer.toString(rounds)), bx, y, rounds == 0 && !creative ? 0xFFE05A40 : 0xFFECE3C4);
+        y += row;
+        g.text(mc.font, controls, x, y, 0xFF8C9490);
+        y += row;
+        g.text(mc.font, controls2, x, y, 0xFF8C9490);
         pose.popMatrix();
     }
 

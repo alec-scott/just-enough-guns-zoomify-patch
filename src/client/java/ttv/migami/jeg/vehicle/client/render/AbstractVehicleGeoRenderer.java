@@ -193,9 +193,25 @@ abstract class AbstractVehicleGeoRenderer<T extends VehicleEntity> extends GeoEn
             }
             case "speedboat" -> updateTurret(vehicle, partialTick, snapshots, -25.0F, 50.0F);
             case "a10" -> updateA10(vehicle, partialTick, snapshots);
+            case "mortar" -> {
+                if (vehicle instanceof ttv.migami.jeg.vehicle.entity.MortarEntity mortar) {
+                    updateMortar(mortar, partialTick, snapshots);
+                }
+            }
             default -> {
             }
         }
+    }
+
+    /**
+     * The mortar's tube rises to the laid elevation about its joint, and the bipod hinge takes the angle the refit
+     * solved for it (MortarRig), so the feet stay on the ground at every elevation.
+     */
+    private static void updateMortar(ttv.migami.jeg.vehicle.entity.MortarEntity mortar, float partialTick, com.geckolib.renderer.base.BoneSnapshots snapshots) {
+        float elevation = mortar.elevation(partialTick);
+        snapshots.ifPresent("barrel", snapshot -> snapshot.setRotX(elevation * Mth.DEG_TO_RAD));
+        float bipod = ttv.migami.jeg.vehicle.util.MortarRig.bipodAngle(elevation);
+        snapshots.ifPresent("bipod_pivot", snapshot -> snapshot.setRotX(-bipod * Mth.DEG_TO_RAD));
     }
 
     /**

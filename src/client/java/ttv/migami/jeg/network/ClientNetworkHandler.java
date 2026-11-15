@@ -53,6 +53,9 @@ public final class ClientNetworkHandler {
         ClientPlayNetworking.registerGlobalReceiver(ttv.migami.jeg.network.MissileBlastPayload.TYPE, (payload, context) -> {
             context.client().execute(() -> ttv.migami.jeg.client.render.MissileBlastRenderer.add(payload));
         });
+        ClientPlayNetworking.registerGlobalReceiver(ttv.migami.jeg.network.MortarFirePayload.TYPE, (payload, context) -> {
+            context.client().execute(() -> ttv.migami.jeg.vehicle.client.audio.MortarAudio.report(payload));
+        });
         ClientPlayNetworking.registerGlobalReceiver(ttv.migami.jeg.network.MissileTrackPayload.TYPE, (payload, context) -> {
             context.client().execute(() -> ttv.migami.jeg.client.render.MissileTrailRenderer.track(payload));
         });
