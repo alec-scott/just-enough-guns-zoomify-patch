@@ -67,8 +67,21 @@ fabricApi {
 // tests), for trying changes by hand in build/run/packClient. Build a world first (AircraftSandboxSetup), then:
 // ./gradlew runPackClient -PwithPack -Pminecraft_version=26.1.2 -Pfabric_version=0.155.3+26.1.2 -Ploader_version=0.20.1 --args="--quickPlaySingleplayer AircraftTest"
 // It fetches the same shader pack and resource packs as the pack game tests and switches them on.
-ext.packShaderPack = ["ComplementaryReimagined_r5.9.3.zip",
-                      "https://cdn.modrinth.com/data/HVnmMxH1/versions/Bqen1mJX/ComplementaryReimagined_r5.9.3.zip"]
+// The pack ships three shader packs; the user plays with Photon (their Prism instances' iris.properties), so that is the
+// default. -PpackShaders=reimagined or =unbound picks one of the Complementary packs instead.
+def packShaderPacks = [
+        photon    : ["photon_v1.3b.zip",
+                     "https://cdn.modrinth.com/data/lLqFfGNs/versions/gUv7fBPN/photon_v1.3b.zip"],
+        reimagined: ["ComplementaryReimagined_r5.9.3.zip",
+                     "https://cdn.modrinth.com/data/HVnmMxH1/versions/Bqen1mJX/ComplementaryReimagined_r5.9.3.zip"],
+        unbound   : ["ComplementaryUnbound_r5.9.3.zip",
+                     "https://cdn.modrinth.com/data/R6NEzAwj/versions/B1kyfoUZ/ComplementaryUnbound_r5.9.3.zip"]
+]
+def packShadersChoice = (project.findProperty("packShaders") ?: "photon").toString()
+if (!packShaderPacks.containsKey(packShadersChoice)) {
+    throw new GradleException("-PpackShaders must be one of " + packShaderPacks.keySet() + ", not " + packShadersChoice)
+}
+ext.packShaderPack = packShaderPacks[packShadersChoice]
 ext.packResourcePacks = [
         "FreshAnimations_v1.10.5.zip" : "https://cdn.modrinth.com/data/50dA9Sha/versions/RGIzA5em/FreshAnimations_v1.10.5.zip",
         "FA+All_Extensions-v1.9.2.zip": "https://cdn.modrinth.com/data/YAVTU8mK/versions/R5ZGSF8A/FA%2BAll_Extensions-v1.9.2.zip",
@@ -288,6 +301,12 @@ if (withSodium && !packExclude.contains("iris")) {
             def config = new File(runDir, "config/iris.properties")
             config.parentFile.mkdirs()
             config.text = "enableShaders=" + shadersOn + "\nshaderPack=" + shaderPackName + "\n"
+            // The shader pack's own options as the user plays it (copied from their Prism instance), so exposure,
+            // bloom and anti-aliasing match what they see.
+            def settings = file("src/gametest/resources/pack-config/shaderpacks/" + shaderPackName + ".txt")
+            if (settings.exists()) {
+                new File(runDir, "shaderpacks/" + shaderPackName + ".txt").text = settings.text
+            }
         }
     }
 }

@@ -41,6 +41,8 @@ final class VehicleLightsLayer<T extends VehicleEntity> extends GeoRenderLayer<T
     private static final Identifier GLOW = Identifier.fromNamespaceAndPath("jeg", "textures/effect/light_glow.png");
     private static final Identifier BEAM = Identifier.fromNamespaceAndPath("jeg", "textures/effect/light_beam.png");
     private static final Identifier POOL = Identifier.fromNamespaceAndPath("jeg", "textures/effect/light_pool.png");
+    /** The drawn pool's strength under a shader pack with no dynamic lights to light the ground instead. */
+    private static final float SHADER_POOL_ALPHA = 0.25F;
     /** The airframe is lit only within this many blocks of the camera; beyond, the glows alone show. */
     private static final float SPILL_DISTANCE = 128.0F;
     /**
@@ -207,7 +209,14 @@ final class VehicleLightsLayer<T extends VehicleEntity> extends GeoRenderLayer<T
                 collector.order(2).submitCustomGeometry(identity, RenderTypes.eyes(BEAM),
                         (pose, buffer) -> shaft(buffer, shaft));
             }
-            if (shaft.hit != null) {
+            // Under a shader pack the drawn pool is bloomed into a hard white blob (the FSV-6's headlights at night on
+            // yftm). There the ground is lit for real by LambDynamicLights (LambDynamicLightsCompat), so the drawn pool
+            // is left out; without that mod it is kept but faint enough not to blow out.
+            boolean shaders = ttv.migami.jeg.client.compat.ShaderPacks.inUse();
+            if (shaft.hit != null && !(shaders && ttv.migami.jeg.client.compat.ShaderPacks.dynamicLights())) {
+                if (shaders) {
+                    shaft.poolAlpha *= SHADER_POOL_ALPHA;
+                }
                 collector.order(2).submitCustomGeometry(identity, RenderTypes.eyes(POOL),
                         (pose, buffer) -> pool(buffer, shaft));
             }

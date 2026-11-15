@@ -475,6 +475,13 @@ silent after a camera switch.
   view skips lamp backs, the lens glare and spill near the eye. Check the night view from every seat.
 - **Cockpit instruments** glow as the A-10's and Mi-28's do (`A10CockpitLayer`, `Mi28CockpitLayer`), dimmed at
   night.
+- **Drawn glows under shader packs.** Every light layer draws additive `RenderTypes.eyes` quads, which a shader pack
+  treats as emissive and blooms: the FSV-6's headlight pool became a hard white blob. Where the pack lights something
+  for real, leave the drawn version out under shaders (`ShaderPacks.inUse()`; spots light the ground through
+  `LambDynamicLightsCompat`), as `VehicleLightsLayer` does for the pool. Check every light at night from outside with
+  the user's shader pack: Photon by default (`-PpackShaders`), with their options from `pack-config/shaderpacks/`.
+- **Glows need geometry behind them.** The A-10's exhaust glow was placed for a nozzle the model never had and read
+  as a hole into the engine; model the part first (`design/a10/nozzle.py`), then put the glow inside it.
 - **HUD.** Add a compact panel for the vehicle's state, drawn small (the bulldozer's is three-quarter size).
   - Show key hints only for a few seconds after boarding, then fade them.
   - Read key names from the bindings.

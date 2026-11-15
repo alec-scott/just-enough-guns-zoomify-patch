@@ -112,6 +112,13 @@ public class SupportLookClientGameTest implements FabricClientGameTest {
             context.runOnClient(mc -> { mc.player.setYRot(truck(mc)); mc.player.setXRot(28); });
             context.waitTicks(4);
             context.takeScreenshot("support_dash_night");
+            // From outside (F5), the headlights' pool on the ground ahead: under the pack's shaders it bloomed into a
+            // hard white blob; the ground must be lit, not painted white.
+            context.runOnClient(mc -> mc.options.setCameraType(net.minecraft.client.CameraType.THIRD_PERSON_BACK));
+            context.runOnClient(mc -> { mc.player.setYRot(truck(mc) - 25); mc.player.setXRot(22); });
+            context.waitTicks(6);
+            context.takeScreenshot("support_headlights_night_outside");
+            context.runOnClient(mc -> mc.options.setCameraType(net.minecraft.client.CameraType.FIRST_PERSON));
             server.runCommand("time set noon");
             context.getInput().pressKey(options -> ttv.migami.jeg.client.KeyBindings.VEHICLE_CHANGE_SEAT);
             context.waitTicks(10);
