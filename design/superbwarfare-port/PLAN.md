@@ -1,7 +1,7 @@
-# Superb Warfare port: vehicles, artillery, explosives and animations
+# Superb Warfare port: vehicles and artillery
 
-Status: drafted 2026-11-15. Not started. Scope, animation picks and the Create Big Cannons overlap are still open
-(see the end).
+Status: scope and triage decided 2026-11-15 ([triage/TRIAGE.md](triage/TRIAGE.md)). Next: step 2, shared tools.
+Open: the Create Big Cannons overlap and the permission's coverage (see the end).
 
 Source: [CrawKatt/SuperbWarfareReFabricated @ 0.8.8-1.21-Fabric](https://github.com/CrawKatt/SuperbWarfareReFabricated/tree/0.8.8-1.21-Fabric),
 a Fabric 1.21 port of [Mercurows/SuperbWarfare](https://github.com/Mercurows/SuperbWarfare) (NeoForge 1.21.1).
@@ -18,23 +18,35 @@ a Fabric 1.21 port of [Mercurows/SuperbWarfare](https://github.com/Mercurows/Sup
     the ARR notice upstream.
   - Use the attribution wording the SBW team asked for, if they asked for any.
 
-## Scope
+## Scope (decided 2026-11-15)
+
+**Vehicles only.** Standalone explosives (mines, grenades, bombs, the Mk-82) are out. The rounds each vehicle fires
+come across as part of that vehicle's weapons: their behaviour (fuzes, blast, guidance, far flight), drawn by jegn's
+projectile renderers. The mortar shell is the one round model kept: it is loaded by hand and seen up close.
+
+| Vehicle | Verdict | Model work |
+| --- | --- | --- |
+| Mortar | keep | rename pinyin bones; `rig.json` |
+| TOW launcher | refit | name 16 generic bones; `rig.json` |
+| Mk42 5"/54 (fixed gun, air and ground) | keep | `rig.json`; LODs exist |
+| BL-132 130 mm/58 (fixed gun, air and ground) | refit | scale ~0.82; names; LODs |
+| Type-63 107 mm MLRS (towed) | refit | scale ~0.78; name 100 generic bones |
+| PLZ-05 155 mm SPH | refit | scale ~0.77; names |
+| Main battle tank (from the YX-100) | **remodel** | new generated model of a real MBT; keeps the YX-100's behaviour (main gun, coax, weapon station) and SBW's track driver |
+
+Out: Mle1934 (dropped at triage), all standalone explosives, Prism Tank (a Command & Conquer unit), Annihilator and
+swarm drone (sci-fi), wheelchair and "Beast Senpai" (memes), mounting guns on Create-built ships.
+
+**Animations** are those of the vehicles in scope: SBW's state-driven bones (turret, barrel, tracks, wheels, recoil
+shake, weapon station) and the `fire` clips as one-shots. The new MBT gets its own.
 
 Already in jegn (see [vehicle_sw_alignment_mapping.md](../../docs/vehicle_sw_alignment_mapping.md)): A-10, AH-6,
 BMP-2, HPJ-11, laser tower, LAV-150, Mi-28, speedboat, TOM-6, truck, waveforce tower, C4, Claymore, TM-62,
 Javelin, Igla, AGM-65, Kh-39, FPV drone.
 
-| Group | Proposed in | Proposed out |
-| --- | --- | --- |
-| Artillery | Mortar, Type-63 107 mm MLRS, PLZ-05 self-propelled howitzer, TOW launcher; Mk42, Mle1934 and BL-132 as fixed ground guns (SBW already places them on land as `ArtilleryEntity`; there are no SBW ships). Mk42 and BL-132 elevate to 85°, so they double as base air defence; the Mle1934 tops out at 30° and is coastal or ground-only | Mounting guns on Create-built ships (entities don't ride Create contraptions) |
-| Armour | YX-100 main battle tank | Prism Tank (a Command & Conquer unit), Annihilator (sci-fi) |
-| Explosives | Mk-82 bomb, BLU-43, PTKM-1R, lunge mine, M67 and RGO grenades, M18 smoke, RPG rockets (standard, TBG), mortar shells, cannon shells, small and medium rockets, wire-guided missile, 9M336, flare decoy | Swarm drone, melon bomb (TOM-6 already has one) |
-| Other | | Wheelchair, "Beast Senpai" (memes) |
-| Animations | User to choose from: mortar, Mk42, Mle1934, BL-132, PLZ-05, YX-100, RPG, drone, lunge mine, PTKM-1R | |
-
 Check against the pack before building: Create Big Cannons already does artillery, and the fleet plan turns the
-waveforce tower into a towed howitzer. Use the `yftm` tools to see what CBC offers on the server, and drop or
-reshape anything that duplicates it.
+waveforce tower into a towed howitzer. Use the `yftm` tools to see what CBC offers on the server, and reshape
+anything that duplicates it.
 
 ## How it comes across
 
@@ -54,18 +66,17 @@ jegn's existing systems instead of copying classes wholesale:
   from the sprocket and idler positions in `rig.json`. Keep SBW `fire` clips only as one-shots started by a synced
   shot event; drop the `idle` clips.
 - **Models:** keep SBW geometry where triage says so. Each kept model gets a refit script, so changes to it stay
-  reproducible (the guide's "generator, not hand edits" rule).
+  reproducible (the guide's "generator, not hand edits" rule). The MBT is generated from scratch, like the bulldozer.
 - **Sound:** the guide asks for CC0 field recordings with `CREDITS.md`. SBW sound can now be used, but the far,
   distant, start-up and interior layers still have to meet the guide. Watch the stream pool (static loops only).
 
 New shared systems, each built once:
 
 1. **Indirect-fire solver:** range table and solver, a rangefinder or impact-indicator HUD, and shells on the
-   long-range projectile path. Used by the mortar, the MLRS and both howitzers.
+   long-range projectile path. Used by the mortar, the MLRS, the PLZ-05 and the waveforce howitzer.
 2. **Salvo sequencing** for the Type-63.
 3. **Wire guidance** for the TOW (gunner steers until impact; the wire breaks if the gunner dismounts or LOS is lost).
-4. **Tracked chassis with turret and hull**, plus armour zones. Shared with the BMP-2 refit in the fleet plan.
-5. **Mine triggers:** pressure (BLU-43), tilt rod and top attack (PTKM-1R). TM-62's existing trigger is the base.
+4. **Tracked chassis with turret and hull**, plus armour zones. Shared by the MBT, the PLZ-05 and the BMP-2 refit.
 
 ## Approach: triage first, then port each one finished
 
@@ -74,13 +85,7 @@ Don't bulk-port raw assets and assess them afterwards:
 - Raw port work (registration, data, renderers) would be redone during normalisation.
 - Anything registered ships in the next `yftm_build`.
 
-1. **Triage, offline** ([triage/TRIAGE.md](triage/TRIAGE.md)). Render each SBW model from the front, side, top and
-   three-quarter view with its own texture. Measure it against the real machine (barrel length from calibre ×
-   calibres for guns, hull size for vehicles) and record bones, cubes, naming, texture size, LODs and clips. The user
-   picks one verdict per model:
-   - **keep:** port the geometry as is;
-   - **refit:** keep the geometry; rescale, rename and fix it by script;
-   - **remodel:** new generated model, SBW behaviour only.
+1. **Triage, offline:** done ([triage/TRIAGE.md](triage/TRIAGE.md)).
 2. **Shared tools, built once:**
    - **`design/<vehicle>/refit.py`:** loads the SBW geometry, applies scale, bone renames and z-fight fixes, and
      writes the GeckoLib geometry, LODs, `rig.json` and model-generated OBBs. Shared helpers go in
@@ -94,13 +99,12 @@ Don't bulk-port raw assets and assess them afterwards:
 
 ## Build order
 
-1. **Explosives:** Mk-82 on the A-10 pylons, BLU-43, PTKM-1R, M18 smoke, then grenades and rockets where JEG lacks
-   an equivalent. Small, self-contained, and they exercise the asset pipeline first.
-2. **Mortar:** builds the indirect-fire solver and HUD.
-3. **Type-63 MLRS**, then the towed howitzer (waveforce repurpose).
-4. **TOW launcher.**
-5. **YX-100 and PLZ-05**, after the BMP-2 tracked-chassis refit.
-6. **Naval or coastal guns**, only if kept in scope.
+1. **Mortar:** the simplest model and a clean rig. It builds the indirect-fire solver and HUD, and is the first use
+   of `refit.py`.
+2. **Mk42**, then **BL-132:** fixed guns on the same turret and barrel bones; base air defence.
+3. **TOW launcher:** wire guidance.
+4. **Type-63 MLRS:** salvo, wheels; then the towed howitzer (waveforce repurpose in the fleet plan).
+5. **PLZ-05**, then the **MBT:** after the bone driver's track paths and the BMP-2 tracked-chassis refit.
 
 Every vehicle needs:
 
@@ -111,8 +115,8 @@ Every vehicle needs:
 
 ## Testing
 
-- One focused game test per item, for example `Mk82Drop`, `Blu43Trigger`, `MortarIndirectFire`, `Type63Salvo`,
-  `TowWireGuide`, `Yx100Turret`.
+- One focused game test per vehicle feature, for example `MortarIndirectFire`, `Mk42AirDefence`, `TowWireGuide`,
+  `Type63Salvo`, `Plz05Tracks`.
 - Every weapon and round is fired at full range (the yftm.13 lesson).
 - Every run uses `-PwithPack`. Check first that the user's Minecraft client is closed, and ask if it's running.
 - Check that each test class actually logged (the bulldozer server test ends the JVM).
@@ -120,13 +124,12 @@ Every vehicle needs:
 
 ## Sequencing with the fleet plan
 
-The fleet plan is waiting on the user's go-ahead. Steps 3 and 5 overlap with it (waveforce howitzer, BMP-2
+The fleet plan is waiting on the user's go-ahead. Build steps 4 and 5 overlap with it (waveforce howitzer, BMP-2
 chassis), so schedule both plans together rather than running them separately.
 
 ## Open questions
 
-1. Is the scope table right, including the exclusions?
-2. Which animations count as "select"?
-3. Mortar and howitzers vs. Create Big Cannons: build, reshape or drop?
-4. Does the SBW permission cover public redistribution (GitHub releases, the server pack), and what attribution do
+1. Mortar, MLRS and PLZ-05 vs. Create Big Cannons: what does CBC already give players on the server, and does any
+   of these need reshaping?
+2. Does the SBW permission cover public redistribution (GitHub releases, the server pack), and what attribution do
    they want?

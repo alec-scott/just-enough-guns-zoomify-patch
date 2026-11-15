@@ -1,7 +1,13 @@
 # SBW triage: what to keep, refit or remodel
 
 Step 1 of [the port plan](../PLAN.md). Each SBW model is rendered offline with its own texture and measured against
-the real machine. **The verdict column is a proposal; the user decides.** Nothing here is in the mod yet.
+the real machine. Nothing here is in the mod yet.
+
+**Decided 2026-11-15:**
+- The proposed verdicts are accepted, **for vehicles only**: standalone explosives are out of scope (the
+  explosives section below is kept for reference).
+- YX-100: **remodel** as a real MBT.
+- Mle1934: **drop**.
 
 - **keep:** port the geometry as is (plus `rig.json` and a generated hitbox).
 - **refit:** keep the geometry; a `refit.py` rescales, renames bones and fixes it.
@@ -82,8 +88,8 @@ must be confirmed in each vehicle's brief.
 For projectiles in flight, jegn's own renderers and far-flight tracers matter more than the model. Port the
 behaviour (fuzes, blast, guidance), and use SBW models only where a round is seen up close or at rest.
 
-## Decisions needed
+## Decisions (2026-11-15)
 
-1. Accept or change each **Proposed** verdict above.
-2. YX-100: remodel as a real MBT, keep it as a sci-fi exception, or drop it?
-3. Mle1934: refit and retexture, or drop?
+1. Proposed verdicts accepted; vehicles only, no standalone explosives.
+2. YX-100: remodel as a real MBT.
+3. Mle1934: drop.
