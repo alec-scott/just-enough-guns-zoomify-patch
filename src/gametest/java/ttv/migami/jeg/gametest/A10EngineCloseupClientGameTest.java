@@ -57,6 +57,10 @@ public class A10EngineCloseupClientGameTest implements FabricClientGameTest {
             this.hold(context, server, jetId, false, 200);
             this.lookIntoExhausts(context, server, "^-2.5 ^2.2 ^-9.5");
             context.takeScreenshot("a10_engines_idle");
+            // Straight behind from standing height, as the user saw it on the runway: the nozzles must read as solid
+            // cowling, lip and tail cone, not a hole into the engine (they were never modelled until design/a10/nozzle.py).
+            this.lookAt(context, server, "^ ^2.6 ^-13", "^ ^3.2 ^");
+            context.takeScreenshot("a10_engines_idle_rear");
 
             this.hold(context, server, jetId, true, 160);
             float spool = context.computeOnClient(mc -> nearestJet(mc).jetSpool());

@@ -28,13 +28,18 @@ final class VehicleExhaustGlowLayer<T extends VehicleEntity> extends GeoRenderLa
     private static final Identifier GLOW = Identifier.fromNamespaceAndPath("jeg", "textures/effect/exhaust_glow.png");
     /** The A-10's nozzles: the bone at each one's mouth (its pivot is on the engine's axis). */
     private static final String[] NOZZLES = {"houwaiyuan", "houwaiyuan2"};
-    /** Model units (1/16 block) along the engine, back from the model's origin: the cone's tip and the nozzle's mouth. */
+    /**
+     * Model units (1/16 block) along the engine, back from the model's origin: just behind the nozzle lip's dark mouth
+     * (design/a10/nozzle.py puts it at z 77, the tail cone standing out of it to 80.4). Until the nozzles were modelled
+     * these discs floated past the end of a flat engine back and read as a hole into the engine.
+     */
     private static final float NOZZLE_PIVOT_Z = 67.5F;
-    private static final float CORE_Z = 78.0F;
-    private static final float MOUTH_Z = 79.4F;
-    private static final float CORE_RADIUS = 0.40F;
+    private static final float CORE_Z = 77.1F;
+    private static final float MOUTH_Z = 77.06F;
+    private static final float CORE_RADIUS = 0.32F;
     private static final float AIRBORNE_MIN_HEAT = 0.6F;
-    private static final float MOUTH_RADIUS = 0.68F;
+    /** Just inside the lip (9.3 px across flats). */
+    private static final float MOUTH_RADIUS = 0.55F;
 
     VehicleExhaustGlowLayer(GeoRenderer<T, Void, VehicleRenderState> renderer) {
         super(renderer);
