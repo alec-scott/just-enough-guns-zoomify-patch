@@ -1,5 +1,28 @@
 # Changelog
 
+## 1.7.2+mc26.1.2.yftm.21 - 2026-11-15
+
+### Added
+- 81 mm mortar, ported from Superb Warfare with the SBW team's permission and refit to a real 81 mm tube. Craft it and its high-explosive rounds at a crafting table. Right-click the ground to set it up (2 s), then man it:
+  - W/S set the elevation (45-85°) and A/D turn it.
+  - R or left click drops a round down the tube; it fires a second later, one round every 4 s.
+  - A second player can load the round in their hand. Sneak-click with an empty hand packs it up.
+  - The gunner's panel shows bearing, elevation, predicted range and flight time, with a marker where the round will land.
+  - Rounds fly about 130-770 blocks, through unloaded terrain. They use Superb Warfare's blast (100 damage fading out at 8 blocks, plus 60 on a direct hit) and break blocks as rockets do. The firing report carries 1,024 blocks.
+
+### Changed
+- Vehicles are drawn opaque, so shader packs shade and shadow them properly. They looked flat and washed out under Photon. Glass (FSV-6 windows, A-10 canopy) is still drawn see-through.
+- A-10: turns tighter on the ground (a circle of about 15 blocks at a slow taxi, from 19). The speed brakes open only on top of the wing.
+- FSV-6: the room's lamp hangs in the middle of the ceiling, and the room is lit from it, fading towards the walls.
+- Every vehicle is named as itself in hold titles, commands and kill messages. Boarding names the real dismount key.
+- The vehicle info panel moved off the work area. Energy shows as a percentage and speeds in m/s.
+- BD-40: with the blade down, a turn cuts the trench walls it swings into. Otherwise the HUD says why the turn is blocked.
+
+### Fixed
+- A-10: the engines have exhaust nozzles; from behind they looked like holes with a glow floating in them.
+- FSV-6: the tyres no longer cut through the body and floor; they sit in wheel arches.
+- FSV-6: under shader packs, the headlights light the ground instead of painting a white blob on it, and the room is no longer blown out white at night.
+
 ## 1.7.2+mc26.1.2.yftm.19 - 2026-11-14
 
 ### Added
