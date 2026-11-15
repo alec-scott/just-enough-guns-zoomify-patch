@@ -2,6 +2,14 @@
 
 ## Testing changes (efficiency)
 
+- **Play-test with mcpfabric first; it is required.** Verify every gameplay or visual change by playing the pack
+  client as a player through mcpfabric, and prefer that over writing new scripted tests:
+  `./gradlew runPackClient -PwithPack -PwithMcp -Pminecraft_version=26.1.2 -Pfabric_version=0.155.3+26.1.2 -Ploader_version=0.20.1`,
+  then drive it with `design/playtest/mcp.py` (join a sandbox world, screenshots, keys, clicks, `/jegkey`). It finds
+  what scripted tests miss and iterates faster, especially when porting vehicles. Write a hand-written game test only
+  when needed: to pin a number that must not regress (range, damage, turning radius, light level), for something
+  that can't be done by hand, or to guard a bug that was found. Say in the report what was played and what was tested.
+  The vehicle guide (section 9) has the workflow and the bridge's gotchas.
 - Verify changes with the Fabric client game tests in `src/gametest/`, but run **only the tests that cover what you
   changed**, never the full suite unless the change could affect other parts of the mod (shared systems, core
   networking, build changes). The full suite takes 10+ minutes and stops at the first failure.

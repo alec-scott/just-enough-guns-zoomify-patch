@@ -118,8 +118,11 @@ Every vehicle needs:
 
 ## Testing
 
-- One focused game test per vehicle feature, for example `MortarIndirectFire`, `Mk42AirDefence`, `TowWireGuide`,
-  `Type63Salvo`, `Plz05Tracks`.
+- **Play each vehicle through mcpfabric first** (required; CLAUDE.md, guide section 9): deploy, crew, drive or lay,
+  fire and pack up as a player in the pack client, under Photon, by day and night. Iterate there.
+- Add a scripted game test only where it earns its place: numbers that must not regress (range, damage, radius) and
+  bugs found while playing, for example `Mk42AirDefence`, `TowWireGuide`, `Type63Salvo`, `Plz05Tracks`. The
+  mortar's `MortarClientGameTest` is the model.
 - Every weapon and round is fired at full range (the yftm.13 lesson).
 - Every run uses `-PwithPack`. Check first that the user's Minecraft client is closed, and ask if it's running.
 - Check that each test class actually logged (the bulldozer server test ends the JVM).

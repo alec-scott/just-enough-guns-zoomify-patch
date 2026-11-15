@@ -593,7 +593,19 @@ plain inventory. The FSV-6's support console (`SupportFitScreen`) is the example
 
 ## 9. Tests
 
-**Play it before the tests are final.** `-PwithMcp` puts mcpfabric in the pack client, so an agent can drive it:
+**Play it first: mcpfabric is required, and preferred over new scripted tests** (the user's standing rule,
+2026-11-15). Develop and iterate by playing the vehicle in the pack client; add a scripted game test only to pin a
+number that must not regress, for what can't be done by hand, or to guard a bug found. `design/playtest/mcp.py`
+calls the bridge (`python -I design/playtest/mcp.py session.join '{"worldId":"sp:SupportTest"}'`, `vision.screenshot
+'{}' out.png`). Gotchas learned on the mortar and FSV-6:
+- Commands that need a player (`/gamemode`, `/ride`, `/jegkey`) go through `chat.send`, not `command.run`.
+- Board a vehicle with `/ride @s mount @e[type=jeg:<id>,limit=1,sort=nearest]`; place the camera relative to a
+  vehicle with `execute as @e[...] at @s run tp @p ^left ^up ^forward facing ...`.
+- Close the pack client before any `./gradlew` compile or game test, and before rebuilding: both use the GPU, and a
+  compile replaces classes under the running client.
+- The client's render distance is agreed with the server at join (C2ME): set it before joining, not after.
+
+`-PwithMcp` puts mcpfabric in the pack client, so an agent can drive it:
 screenshots, movement keys, right-clicks on what the crosshair is on, screens; our own bindings with
 `/jegkey <name> [ticks]` (`DevKeysClient`). Drive where a player would, not where a test starts: the BD-40 turn bug
 only showed after a pass had left it in its own trench. Take bursts of screenshots (2–3 a second) and compare them;
