@@ -1,7 +1,14 @@
 # Superb Warfare port: vehicles and artillery
 
-Status: scope and triage decided 2026-11-15 ([triage/TRIAGE.md](triage/TRIAGE.md)). Next: step 2, shared tools.
-Open: the Create Big Cannons overlap and the permission's coverage (see the end).
+Status, 2026-11-15:
+- Scope and triage decided ([triage/TRIAGE.md](triage/TRIAGE.md)).
+- Refit tooling built (`fetch_sbw.py`, `refit_lib.py`), and the mortar refit done ([../mortar/](../mortar/)).
+- Mortar brief drafted, waiting on the user's answers.
+- The bone driver for tracks, wheels and the weapon station is built with its first user (Type-63 wheels, PLZ-05
+  tracks), so it is tested when written; the mortar needs only `barrel` and the bipod table.
+
+Create Big Cannons: checked. It builds fixed multi-block guns, including a drop mortar, so the carried mortar, the
+towed Type-63 and the self-propelled PLZ-05 fill different roles. Still open: the permission's coverage (see the end).
 
 Source: [CrawKatt/SuperbWarfareReFabricated @ 0.8.8-1.21-Fabric](https://github.com/CrawKatt/SuperbWarfareReFabricated/tree/0.8.8-1.21-Fabric),
 a Fabric 1.21 port of [Mercurows/SuperbWarfare](https://github.com/Mercurows/SuperbWarfare) (NeoForge 1.21.1).
@@ -55,9 +62,10 @@ jegn's existing systems instead of copying classes wholesale:
 
 - **Vehicles** become `data/jeg/vehicles/<id>.json` plus `vehicle_assembly` recipes on `VehicleEntity` and its
   weapon stations. Add Java only for behaviour that data can't express.
-- **Assets** follow the naming rules in the alignment mapping (strip underscores, `superbwarfare:` → `jeg:`, paths
-  under `geo/entity/vehicle/`, `textures/entity/vehicle/`, `animations/entity/vehicle/`, LODs under `lod/`). Add a
-  row per new vehicle to that mapping doc.
+- **Assets** follow the naming rules in the alignment mapping (strip underscores, `superbwarfare:` → `jeg:`), at
+  today's paths: `geckolib/models/entity/vehicle/` (LODs under `lod/`), `geckolib/animations/entity/vehicle/` and
+  `textures/entity/vehicle/`. The mapping doc still lists the older `geo/` and `animations/` paths. Add a row per new
+  vehicle to that mapping doc.
 - **Animations:** SBW's `VehicleModel` already drives bones from synced state by name, which is what the guide asks
   for. jegn's `AbstractVehicleGeoRenderer` handles `turret` and `barrel` under the same names, so guns aim on
   arrival. It lacks the rest of SBW's driver: `base` recoil shake, `trackMov`/`trackRot` link paths, `wheelL`/`wheelR`
@@ -129,7 +137,5 @@ chassis), so schedule both plans together rather than running them separately.
 
 ## Open questions
 
-1. Mortar, MLRS and PLZ-05 vs. Create Big Cannons: what does CBC already give players on the server, and does any
-   of these need reshaping?
-2. Does the SBW permission cover public redistribution (GitHub releases, the server pack), and what attribution do
+1. Does the SBW permission cover public redistribution (GitHub releases, the server pack), and what attribution do
    they want?

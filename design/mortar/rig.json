@@ -1,0 +1,94 @@
+{
+  "model": "jeg:entity/vehicle/mortar",
+  "source": "Superb Warfare mortar, CrawKatt/SuperbWarfareReFabricated@952d73c (used with the SBW team's permission)",
+  "units_per_block": 16,
+  "front": "-Z (fires towards -Z at yaw 0)",
+  "scale_from_source": 0.81462,
+  "tube_length_blocks": 1.269,
+  "elevation_degrees": [
+    45.0,
+    85.0
+  ],
+  "elevation_pivot": [
+    0.0,
+    2.6068,
+    0.0
+  ],
+  "elevation_sign": "barrel bone file X rotation = -elevation (GeckoLib setRotX(+elevation))",
+  "muzzle_rest": [
+    0.0,
+    3.664,
+    -18.962
+  ],
+  "muzzle_at_elevation": {
+    "45": [
+      -0.0,
+      16.7625,
+      -12.6606
+    ],
+    "85": [
+      -0.0,
+      21.5888,
+      -0.5995
+    ]
+  },
+  "bipod_pivot_rest": [
+    0.0,
+    15.43347,
+    -2.45518
+  ],
+  "bipod_angle_by_elevation": {
+    "45": 85.218,
+    "50": 95.283,
+    "55": 105.491,
+    "60": 115.902,
+    "65": 126.633,
+    "70": 137.953,
+    "75": 150.759,
+    "80": 164.882,
+    "85": 177.187
+  },
+  "bipod_note": "file X rotation of bipod_pivot; interpolate linearly; renderer sets setRotX(-angle)",
+  "bipod_foot_gap_blocks": {
+    "85": 0.0148
+  },
+  "shell_drop_pixels": 16.292,
+  "model_bounds_at_min_elevation": [
+    [
+      -5.595,
+      -0.043,
+      -22.569
+    ],
+    [
+      5.295,
+      21.484,
+      4.072
+    ]
+  ],
+  "hitbox": [
+    {
+      "part": "body",
+      "covers": "baseplate",
+      "x": 0.0,
+      "y": 0.075,
+      "z": 0.0001,
+      "half_width": 0.2546,
+      "half_height": 0.075,
+      "half_depth": 0.2546
+    },
+    {
+      "part": "turret",
+      "covers": "tube and bipod, 45-85 deg",
+      "x": -0.0094,
+      "y": 0.6746,
+      "z": 0.6568,
+      "half_width": 0.3403,
+      "half_height": 0.6746,
+      "half_depth": 0.7537
+    }
+  ],
+  "coplanar_face_pairs": {
+    "in_source": 6,
+    "after_refit": 0
+  }
+}

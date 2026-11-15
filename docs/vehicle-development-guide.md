@@ -199,6 +199,24 @@ hand-editing JSON. The script keeps the geometry parametric, validated and repro
 - the GeckoLib geometry, two LOD models, the texture and glow atlas, and the paint mask
 - `rig.json`, the Blockbench project and an offline preview
 
+**Imported models (Superb Warfare).** A model kept from SBW is never hand-edited either: its
+`design/<vehicle>/refit.py` is its generator. It builds on `design/superbwarfare-port/refit_lib.py` and reads the
+source fetched by `fetch_sbw.py` from a pinned commit. The mortar (`design/mortar/refit.py`) is the worked example.
+Lessons from it:
+- **Convert box UV to per-face UV before rescaling.** Box UV is laid out from the cube's size, so scaling a box-UV
+  cube moves its texture. `to_face_uv` is checked lossless by rendering both versions pixel for pixel.
+- **Map every bone by name.** `rename_bones` refuses a bone missing from the map, so no `bone37` or pinyin name
+  survives, and it renames the LODs and clips too.
+- **GeckoLib hands a model the negated head pitch.** SBW's `setRotX(headPitch)` therefore raises a barrel with a
+  negative X rotation in file degrees. Pose the refit that way, and check the pose with a render, not by sign
+  reasoning.
+- **Drop fully transparent cubes before measuring.** SBW hides helper points in the geometry (the YX-100 has one 20
+  blocks ahead of its barrel), and they wreck bounds and hitboxes. `posed_quads(..., texture)` leaves them out.
+- **Solve linked parts from the geometry.** SBW's bipod formula left the feet floating at low elevations. The refit
+  solves the hinge angle per elevation so the feet touch the ground, and writes the table to `rig.json`.
+- **Fit the hitbox over the whole sweep** of a moving part (`refit.py` unions the tube's boxes over 45–85°).
+- `render_geo.py` (in `design/superbwarfare-port/triage/`) renders any Bedrock model with its texture for review.
+
 **Conventions:**
 - 16 units per block; the vehicle faces −Z; +X is the operator's left.
 - Author rotations in ordinary right-handed form; `native_geometry` converts them for GeckoLib.

@@ -94,8 +94,11 @@ def face_uv(faces):
     return out
 
 
-def load_quads(geo_path):
-    data = json.load(open(geo_path, encoding="utf-8"))
+def load_quads(geo_path, pose=None):
+    """geo_path: a .geo.json path or an already loaded geometry dict.
+    pose: {bone: (rx, ry, rz)} in file (Bedrock) degrees, added to each bone's own rotation."""
+    data = geo_path if isinstance(geo_path, dict) else json.load(open(geo_path, encoding="utf-8"))
+    pose = pose or {}
     geo = data["minecraft:geometry"][0]
     desc = geo["description"]
     tw, th = desc.get("texture_width", 64), desc.get("texture_height", 64)
@@ -108,7 +111,7 @@ def load_quads(geo_path):
             return world[name]
         b = bones[name]
         p = b.get("pivot", [0, 0, 0])
-        r = b.get("rotation", [0, 0, 0])
+        r = [a + d for a, d in zip(b.get("rotation", [0, 0, 0]), pose.get(name, (0, 0, 0)))]
         m = affine((-p[0], p[1], p[2]), (-r[0], -r[1], r[2]))
         parent = b.get("parent")
         if parent in bones:
@@ -307,9 +310,9 @@ def visible(quads, tex, tex_size):
     return out
 
 
-def contact_sheet(geo, tex_path, title, notes, barrel_bone="barrel"):
-    quads, tex_size, bones, _ = load_quads(geo)
-    tex = Image.open(tex_path)
+def contact_sheet(geo, tex_path, title, notes, barrel_bone="barrel", pose=None):
+    quads, tex_size, bones, _ = load_quads(geo, pose)
+    tex = tex_path if isinstance(tex_path, Image.Image) else Image.open(tex_path)
     quads = visible(quads, tex, tex_size)
     m = measure(quads, bones, barrel_bone)
     flip = 180 if m["faces"] == "+Z" else 0  # yaw so the "front" view looks at the muzzle end
