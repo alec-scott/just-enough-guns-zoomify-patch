@@ -1,0 +1,8 @@
+{"model":"mortar","m":{"extent_blocks": [0.84, 0.33, 2.44], "min": [-0.41, -0.04, -2.13], "max": [0.43, 0.29, 0.31], "barrel_z": [-1.45, 0.1], "barrel_length": 1.56, "faces": "+Z"}}
+{"model":"tow","m":{"extent_blocks": [1.09, 1.39, 1.69], "min": [-0.69, -0.01, -1.04], "max": [0.4, 1.39, 0.65], "barrel_z": [-1.04, 0.65], "barrel_length": 1.7, "faces": "+Z"}}
+{"model":"mk_42","m":{"extent_blocks": [4.14, 4.36, 9.71], "min": [-2.07, 0.02, -6.94], "max": [2.07, 4.38, 2.76], "barrel_z": [-6.94, 0.47], "barrel_length": 7.42, "faces": "-Z"}}
+{"model":"mle_1934","m":{"extent_blocks": [5.65, 3.06, 11.55], "min": [-2.83, 0.0, -8.13], "max": [2.83, 3.06, 3.42], "barrel_z": [-8.13, -1.75], "barrel_length": 6.39, "faces": "-Z"}}
+{"model":"bl_132","m":{"extent_blocks": [7.54, 4.81, 11.78], "min": [-3.77, 0.0, -7.14], "max": [3.77, 4.81, 4.64], "barrel_z": [-7.14, 2.06], "barrel_length": 9.2, "faces": "-Z"}}
+{"model":"type_63","m":{"extent_blocks": [2.08, 1.47, 3.3], "min": [-1.04, -0.0, -0.77], "max": [1.04, 1.46, 2.52], "barrel_z": [-0.77, 0.87], "barrel_length": 1.65, "faces": "-Z"}}
+{"model":"yx_100","m":{"extent_blocks": [5.09, 6.16, 11.49], "min": [-2.54, 0.04, -6.96], "max": [2.54, 6.2, 4.54], "barrel_z": [-6.96, 0.54], "barrel_length": 7.5, "faces": "-Z"}}
+{"model":"plz_05","m":{"extent_blocks": [4.45, 7.15, 14.42], "min": [-2.22, 0.0, -10.41], "max": [2.22, 7.15, 4.01], "barrel_z": [-10.41, 0.72], "barrel_length": 11.15, "faces": "-Z"}}

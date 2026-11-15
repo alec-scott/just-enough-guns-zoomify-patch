@@ -341,8 +341,8 @@ multiplayer).
 2. The driver keeps the main gun when alone; a passenger in the gunner seat takes it over.
 3. Sentry and CIWS automatic fire: on by default, with a config cap per chunk.
 4. The BMP-2, LAV-150 and support vehicle are built at 1:1.
-5. Superb Warfare assets: acknowledged. The licence is still to be confirmed before a release that ships refitted
-   ported geometry; all ported sound is replaced with CC0 recordings.
+5. Superb Warfare assets: the SBW team gave permission to use their assets (user, 2026-11-15). Keep the written
+   record and the redistribution check described in [superbwarfare-port/PLAN.md](superbwarfare-port/PLAN.md).
 
 ## Open questions for the user (as asked)
 
