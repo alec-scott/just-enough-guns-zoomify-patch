@@ -147,12 +147,12 @@ public final class AircraftLights {
     /**
      * The FSV-6's room, lit only by its one fitted lamp (none fitted, the room is dark): a soft warm glow on the lamp and a
      * warm wash over the walls, bunks and bays round it (spill, wrapped like cockpit light). The shell's lit cells give
-     * the matching block light. Render space negates the model's X: the lamp hook is at model x 11, z 16
-     * ({@code SupportVehicleRenderer.LAMP_HOOK}).
+     * the matching block light. Render space negates the model's X: the lamp hook is at model x 0, z 16, the middle of
+     * the room ({@code SupportVehicleRenderer.LAMP_HOOK}); the glow sits on the lantern's body, drawn at 0.65 scale.
      */
     private static final List<PointLight> TRUCK_ROOM_LAMP = List.of(
-            new PointLight(Kind.POSITION, -11F, 41.5F, 16F, WARM, .3F, 0F, 0F, 0),
-            new PointLight(Kind.COCKPIT, -11F, 40F, 16F, WARM, 0F, 3.2F, .38F, 0),
+            new PointLight(Kind.POSITION, 0F, 41F, 16F, WARM, .3F, 0F, 0F, 0),
+            new PointLight(Kind.COCKPIT, 0F, 40F, 16F, WARM, 0F, 3.2F, .38F, 0),
             new PointLight(Kind.COCKPIT, -16F, 34F, 16F, WARM, 0F, 1.6F, .16F, 0),
             new PointLight(Kind.COCKPIT, 16F, 34F, 16F, WARM, 0F, 1.6F, .12F, 0));
     /** Outside: the awning's light strip, on whenever the generator is. */

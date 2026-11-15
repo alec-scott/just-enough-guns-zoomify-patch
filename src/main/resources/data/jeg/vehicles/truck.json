@@ -17,25 +17,25 @@
   "dismount": {"x": 1.6, "y": 0.1, "z": 2.875},
   "collision_level": "none",
   "obb": [
-    {"part": "wheel_left", "x": 1.1169, "y": 0.5234, "z": 2.7500, "half_width": 0.3356, "half_height": 0.5234, "half_depth": 0.5469},
-    {"part": "wheel_left", "x": 1.0856, "y": 0.5234, "z": -1.8125, "half_width": 0.3044, "half_height": 0.5234, "half_depth": 1.1094},
-    {"part": "wheel_right", "x": -1.1169, "y": 0.5234, "z": 2.7500, "half_width": 0.3356, "half_height": 0.5234, "half_depth": 0.5469},
-    {"part": "wheel_right", "x": -1.0856, "y": 0.5234, "z": -1.8125, "half_width": 0.3044, "half_height": 0.5234, "half_depth": 1.1094},
+    {"part": "wheel_left", "x": 1.1169, "y": 0.4984, "z": 2.7500, "half_width": 0.3262, "half_height": 0.4984, "half_depth": 0.5219},
+    {"part": "wheel_left", "x": 1.0856, "y": 0.4984, "z": -1.8125, "half_width": 0.3044, "half_height": 0.4984, "half_depth": 1.0844},
+    {"part": "wheel_right", "x": -1.1169, "y": 0.4984, "z": 2.7500, "half_width": 0.3262, "half_height": 0.4984, "half_depth": 0.5219},
+    {"part": "wheel_right", "x": -1.0856, "y": 0.4984, "z": -1.8125, "half_width": 0.3044, "half_height": 0.4984, "half_depth": 1.0844},
     {"part": "main_engine", "x": 0.0000, "y": 1.7812, "z": 3.0312, "half_width": 1.2812, "half_height": 1.2812, "half_depth": 1.1250},
     {"part": "body", "x": -0.0469, "y": 0.5312, "z": -0.0156, "half_width": 1.3094, "half_height": 0.3187, "half_depth": 3.8906},
     {"part": "body", "x": 0.0000, "y": 2.0000, "z": -1.0000, "half_width": 1.2688, "half_height": 1.1500, "half_depth": 2.7687},
-    {"part": "module", "x": 0.0000, "y": 1.9450, "z": -1.0000, "half_width": 1.2525, "half_height": 1.0575, "half_depth": 2.5025}
+    {"part": "module", "x": 0.0000, "y": 1.9825, "z": -1.0000, "half_width": 1.2525, "half_height": 1.0200, "half_depth": 2.5025}
   ],
   "obb_deployed": [
-    {"part": "wheel_left", "x": 1.1169, "y": 0.5234, "z": 2.7500, "half_width": 0.3356, "half_height": 0.5234, "half_depth": 0.5469},
-    {"part": "wheel_left", "x": 1.0856, "y": 0.5234, "z": -1.8125, "half_width": 0.3044, "half_height": 0.5234, "half_depth": 1.1094},
-    {"part": "wheel_right", "x": -1.1169, "y": 0.5234, "z": 2.7500, "half_width": 0.3356, "half_height": 0.5234, "half_depth": 0.5469},
-    {"part": "wheel_right", "x": -1.0856, "y": 0.5234, "z": -1.8125, "half_width": 0.3044, "half_height": 0.5234, "half_depth": 1.1094},
+    {"part": "wheel_left", "x": 1.1169, "y": 0.4984, "z": 2.7500, "half_width": 0.3262, "half_height": 0.4984, "half_depth": 0.5219},
+    {"part": "wheel_left", "x": 1.0856, "y": 0.4984, "z": -1.8125, "half_width": 0.3044, "half_height": 0.4984, "half_depth": 1.0844},
+    {"part": "wheel_right", "x": -1.1169, "y": 0.4984, "z": 2.7500, "half_width": 0.3262, "half_height": 0.4984, "half_depth": 0.5219},
+    {"part": "wheel_right", "x": -1.0856, "y": 0.4984, "z": -1.8125, "half_width": 0.3044, "half_height": 0.4984, "half_depth": 1.0844},
     {"part": "main_engine", "x": 0.0000, "y": 1.7812, "z": 3.0312, "half_width": 1.2812, "half_height": 1.2812, "half_depth": 1.1250},
     {"part": "body", "x": -0.0469, "y": 0.5312, "z": -0.0156, "half_width": 1.3094, "half_height": 0.3187, "half_depth": 3.8906},
     {"part": "body", "x": 0.0000, "y": 2.0000, "z": -1.0000, "half_width": 1.2688, "half_height": 1.1500, "half_depth": 2.7687},
-    {"part": "module", "x": 1.6262, "y": 1.9450, "z": -1.0000, "half_width": 0.6262, "half_height": 1.0575, "half_depth": 2.5250},
-    {"part": "module", "x": -1.6262, "y": 1.9450, "z": -1.0000, "half_width": 0.6262, "half_height": 1.0575, "half_depth": 2.5250}
+    {"part": "module", "x": 1.6262, "y": 1.9825, "z": -1.0000, "half_width": 0.6262, "half_height": 1.0200, "half_depth": 2.5250},
+    {"part": "module", "x": -1.6262, "y": 1.9825, "z": -1.0000, "half_width": 0.6262, "half_height": 1.0200, "half_depth": 2.5250}
   ],
   "weapons": [],
   "has_decoy": false,

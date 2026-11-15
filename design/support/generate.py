@@ -59,11 +59,15 @@ BODY_HALF = 20.0                # packed body half-width (2.5 blocks)
 BODY_FRONT, BODY_REAR = -28.0, 60.0
 INTERIOR_FRONT, INTERIOR_REAR = -24.0, 56.0
 CELL = 16.0
-WHEEL_RADIUS = 8.0              # tyre tops meet the van floor (FLOOR_Y): as big as the body allows
+WHEEL_RADIUS = 7.6              # tyre tops just under the floor plate (15.4) in cut wheel arches; 8.0 cut
+                                # through the sill, cab floor and slide floors (user report, 2026-11-15)
 WHEEL_HALF_WIDTH = 3.0          # (kept for the rig: the old tyre; see TYRE below)
 WHEEL_X = 16.0                  # (kept for the rig: jack and ground probes use it)
 # Tyre centre x and half-width per axle: wide super-single steer tyres in front, chunky tandem tyres behind.
-TYRE = {"front": (17.5, 5.0), "middle": (17.0, 4.5), "rear": (17.0, 4.5)}
+TYRE = {"front": (17.5, 4.85), "middle": (17.0, 4.5), "rear": (17.0, 4.5)}   # front clears the arch flare (22.4)
+# Wheel arches: the sill, rub strips and cab floor are cut over the tyres (inner edge 12.5), outboard of this x.
+ARCH_X = 12.2
+ARCH_CLEAR = 0.3
 AXLES = [("front", -44.0), ("middle", 20.0), ("rear", 38.0)]
 DOOR_HINGE = [0.0, FLOOR_Y, BODY_REAR]
 DOOR_HEIGHT = CEILING_Y - FLOOR_Y
@@ -87,9 +91,9 @@ JACK_FOOT_Y = 3.0
 WINDOWS_Z = (-14.0, 12.0, 38.0)
 WINDOW_HALF = 5.0
 WINDOW_Y0, WINDOW_Y1 = 30.0, 41.0
-# The room's one lamp hangs mid-room over the aisle's left edge, clear of a walking player's head
-# (SupportVehicleRenderer.LAMP_HOOK draws the fitted lamp here).
-LAMP_HOOK = (11.0, 16.0)
+# The room's one lamp hangs in the middle of the ceiling (the user's choice, 2026-11-15; it was over the aisle's left
+# edge), drawn small so it hangs high (SupportVehicleRenderer.LAMP_HOOK draws the fitted lamp here).
+LAMP_HOOK = (0.0, 16.0)
 JACK_REACH = 24.0               # foot travel below its stowed height
 MAST_BASE = [14.0, ROOF_TOP, -20.0]
 MAST_LENGTH = 14.0              # each tube's length
@@ -155,6 +159,26 @@ def box(parent, name, a, b, material="olive", rotation=None, pivot=None):
 def side_x(side, x0, x1):
     """An x range authored for the left (+X) side, mirrored to the right for side -1."""
     return (x0, x1) if side > 0 else (-x1, -x0)
+
+
+def arch_gaps():
+    """z ranges cut out of the sill, rub strips and cab floor over the tyres: the front axle, and the tandem as one."""
+    r = WHEEL_RADIUS + ARCH_CLEAR
+    return [(AXLES[0][1] - r, AXLES[0][1] + r), (AXLES[1][1] - r, AXLES[2][1] + r)]
+
+
+def around(z0, z1, gaps):
+    """The parts of z0..z1 outside every gap."""
+    parts, start = [], z0
+    for g0, g1 in sorted(gaps):
+        if g1 <= start or g0 >= z1:
+            continue
+        if g0 > start:
+            parts.append((start, g0))
+        start = max(start, g1)
+    if start < z1:
+        parts.append((start, z1))
+    return parts
 
 
 def sbox(parent, name, side, x0, x1, y0, y1, z0, z1, material="olive", rotation=None, pivot=None):
@@ -280,7 +304,11 @@ def create_model():
 
     # ---- Cab: forward-control steel cab with two seats, the dash and a turning wheel.
     bone("cab", "chassis", [0, 16, -46])
-    box("cab", "cab floor", [-19.5, 13.6, -63], [19.5, 16, -30.5], "frame")
+    # The cab floor, cut over the front tyres outboard; the front wheel arches (above the floor) roof the cut.
+    box("cab", "cab floor", [-ARCH_X, 13.6, -63], [ARCH_X, 16, -30.5], "frame")
+    for side in (1, -1):
+        for z0, z1 in around(-63, -30.5, arch_gaps()):
+            sbox("cab", "cab floor", side, ARCH_X, 19.5, 13.6, 16, z0, z1, "frame")
     box("cab", "cab back wall", [-19.5, 16, -32], [19.5, 48, -30.5])
     box("cab", "cab roof", [-20, 46, -64], [20, 49, -30.5])
     box("cab", "roof peak", [-18.5, 49, -62], [18.5, 49.6, -32], "olive_light")
@@ -376,7 +404,11 @@ def create_model():
 
     # ---- Van body: fixed floor, front wall, roof and rear posts. The side walls are the slide-outs' outer walls.
     bone("body", "chassis", [0, FLOOR_Y, 16])
-    box("body", "body sill", [-BODY_HALF, 13.6, BODY_FRONT], [BODY_HALF, FLOOR_Y - .6, BODY_REAR], "frame")
+    # The sill, cut over the tandem outboard (the floor plate and slide floors above close the cut).
+    box("body", "body sill", [-ARCH_X, 13.6, BODY_FRONT], [ARCH_X, FLOOR_Y - .6, BODY_REAR], "frame")
+    for side in (1, -1):
+        for z0, z1 in around(BODY_FRONT, BODY_REAR, arch_gaps()):
+            sbox("body", "body sill", side, ARCH_X, BODY_HALF, 13.6, FLOOR_Y - .6, z0, z1, "frame")
     box("body", "floor plate", [-16, FLOOR_Y - .6, INTERIOR_FRONT], [16, FLOOR_Y, INTERIOR_REAR], "floor")
     box("body", "front wall", [-BODY_HALF, FLOOR_Y, BODY_FRONT], [BODY_HALF, CEILING_Y, INTERIOR_FRONT])
     box("body", "front wall lining", [-16, FLOOR_Y, INTERIOR_FRONT], [16, CEILING_Y, INTERIOR_FRONT + .3], "interior")
@@ -389,7 +421,8 @@ def create_model():
         sbox("body", "rear post lining", side, 16, 16.3, FLOOR_Y, CEILING_Y, INTERIOR_REAR, BODY_REAR, "interior")
         sbox("body", "front corner post", side, BODY_HALF - .2, BODY_HALF + .4, FLOOR_Y - 2, CEILING_Y + 1, BODY_FRONT - .2, BODY_FRONT + 3, "olive_dark")
         sbox("body", "rear corner post", side, BODY_HALF - .2, BODY_HALF + .4, FLOOR_Y - 2, CEILING_Y + 1, BODY_REAR - 3, BODY_REAR + .2, "olive_dark")
-        sbox("body", "sill rub strip", side, BODY_HALF, BODY_HALF + .3, 13.6, 14.6, BODY_FRONT, BODY_REAR, "frame")
+        for z0, z1 in around(BODY_FRONT, BODY_REAR, arch_gaps()):
+            sbox("body", "sill rub strip", side, BODY_HALF, BODY_HALF + .3, 13.6, 14.6, z0, z1, "frame")
         sbox("body", "front marker", side, 17, 19, CEILING_Y + .2, CEILING_Y + 1.2, BODY_FRONT - .4, BODY_FRONT, "amber")
         sbox("body", "rear marker", side, 17, 19, CEILING_Y - 2, CEILING_Y - .8, BODY_REAR + .2, BODY_REAR + .5, "tail")
         sbox("body", "rear work lamp", side, 12, 15, CEILING_Y - 1.4, CEILING_Y + .2, BODY_REAR, BODY_REAR + .6, "lamp")
@@ -466,7 +499,8 @@ def create_model():
     for side in (1, -1):
         name = "left" if side > 0 else "right"
         slide = bone("slide_" + name, "body", [0, FLOOR_Y, 16])
-        sbox(slide, "slide floor", side, 0, BODY_HALF, 14.2, FLOOR_Y + .4, INTERIOR_FRONT, INTERIOR_REAR, "frame")
+        # Underside at the floor plate's (15.4), above the tyres in every slide position (it was 14.2, through them).
+        sbox(slide, "slide floor", side, 0, BODY_HALF, FLOOR_Y - .6, FLOOR_Y + .4, INTERIOR_FRONT, INTERIOR_REAR, "frame")
         sbox(slide, "slide floor plate", side, 0, 16, FLOOR_Y + .4, FLOOR_Y + .6, INTERIOR_FRONT, INTERIOR_REAR, "floor")
         # The outer wall and its lining, built round three window openings you can see through from either side.
         edges = [INTERIOR_FRONT]
@@ -758,6 +792,25 @@ def posed_cubes(state, bones=None):
             yield b["name"], c, [apply(matrices[b["name"]], p) for p in cube_corners(c)]
 
 
+def tyre_clashes(progress):
+    """Body cubes a tyre's tread passes through in this pose (axle beams excepted: the wheels are on them)."""
+    state = pose(progress)
+    tyres, body = [], []
+    for name, c, pts in posed_cubes(state):
+        box_ = extent_points(pts)
+        wheelish = "wheel" in name or "steer" in name
+        if wheelish and c["_name"] == "tyre":
+            tyres.append(box_)
+        elif not wheelish and "axle" not in c["_name"] and "differential" not in c["_name"]:
+            body.append((name, c["_name"], box_))
+    found = set()
+    for lo, hi in tyres:
+        for name, label, (blo, bhi) in body:
+            if all(min(hi[i], bhi[i]) - max(lo[i], blo[i]) > 0.01 for i in range(3)):
+                found.add((name, label))
+    return sorted(found)
+
+
 def extent_points(points):
     return [min(p[i] for p in points) for i in range(3)], [max(p[i] for p in points) for i in range(3)]
 
@@ -1021,8 +1074,11 @@ def validate(animations, project):
     assert (INTERIOR_REAR - INTERIOR_FRONT) % CELL == 0 and (2 * INTERIOR_X) % CELL == 0 and FLOOR_Y == CELL
     # The driver's head clears the cab roof, and the eye is behind the windscreen.
     assert SEAT_DRIVER[1] + 29 <= 46, "Cab roof too low for the driver's head"
-    # The tyres roll on the ground and clear the body sill.
+    # The tyres roll on the ground and touch nothing of the body, packed and deployed (not just "fit under the floor").
     assert WHEEL_RADIUS * 2 <= FLOOR_Y, "Tyres reach into the room"
+    for progress in (0.0, 1.0):
+        clashes = tyre_clashes(progress)
+        assert not clashes, f"Tyres cut through the body at progress {progress}: {clashes[:6]}"
     assert AXLES[1][1] - WHEEL_RADIUS >= 12.0, "Middle tyres hit the lockers"
     assert AXLES[2][1] + WHEEL_RADIUS <= 47.6, "Rear tyres hit the mud flaps"
     assert AXLES[0][1] - WHEEL_RADIUS >= -53.0, "Front tyres hit the cab step"

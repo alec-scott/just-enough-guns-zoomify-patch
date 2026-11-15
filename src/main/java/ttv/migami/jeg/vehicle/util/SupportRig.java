@@ -15,7 +15,8 @@ public final class SupportRig {
     public static final double INTERIOR_X = 32, INTERIOR_FRONT = -24, INTERIOR_REAR = 56, CELL = 16;
     public static final int COLUMNS = 4, ROWS = 5;
     public static final double SLIDE_TRAVEL = 16;
-    public static final double WHEEL_RADIUS = 8, WHEEL_X = 17;
+    /** Rolling radius (rig.json wheel_radius): 7.6 since the tyres sit in cut wheel arches under the floor plate. */
+    public static final double WHEEL_RADIUS = 7.6, WHEEL_X = 17;
     /** Front, middle and rear axle positions along the model's Z. */
     public static final double[] AXLE_Z = {-44, 20, 38};
     public static final Vec3 DOOR_HINGE = new Vec3(0, 16, 60);

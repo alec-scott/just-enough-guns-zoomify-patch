@@ -160,7 +160,8 @@ public final class SupportVehicleRenderer extends AbstractVehicleGeoRenderer<Sup
                 boolean hangs = state.hasProperty(net.minecraft.world.level.block.state.properties.BlockStateProperties.HANGING);
                 if (hangs) state = state.setValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.HANGING, true);
                 // A hanging lantern's block reaches the ceiling (its chain at the top); a cube lamp hangs small under it.
-                float scale = hangs ? .8F : .4F;
+                // Drawn a little small so a centred lantern hangs high over the aisle (bottom about 1.35 blocks up).
+                float scale = hangs ? .65F : .4F;
                 double y = SupportRig.CEILING_Y - 8 * scale;
                 drawBlock(info, drawn, out, truck, state, LAMP_HOOK[0], y, LAMP_HOOK[1], scale);
             } else if (!fitted.isEmpty()) {
@@ -188,8 +189,8 @@ public final class SupportVehicleRenderer extends AbstractVehicleGeoRenderer<Sup
         }));
     }
 
-    /** The lamp hook in the ceiling (model px x, z; generate.py's LAMP_HOOK): mid-room over the aisle's left edge, clear of a walking player's head. */
-    public static final double[] LAMP_HOOK = {11, 16};
+    /** The lamp hook in the ceiling (model px x, z; generate.py's LAMP_HOOK): the middle of the room (user's choice, 2026-11-15). */
+    public static final double[] LAMP_HOOK = {0, 16};
 
     /** The block a fitted item stands for, if it is drawn from its block model (not a chest or bed's special model). */
     @org.jetbrains.annotations.Nullable
