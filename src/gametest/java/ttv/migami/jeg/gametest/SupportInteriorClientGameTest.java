@@ -149,7 +149,16 @@ public class SupportInteriorClientGameTest implements FabricClientGameTest {
             context.waitTicks(5);
             int lampLit = server.computeOnServer(s -> roomLight(truck(s)));
             LOG.info("[support-interior] room light with a lantern: {}", lampLit);
-            if (lampLit != 15) failures.append("room lit to ").append(lampLit).append(" by a fitted lantern\n");
+            // Light falls off from under the lamp (SupportShell.lampCell): measured, not just the cells' setting.
+            int[] measured = server.computeOnServer(s -> new int[] {
+                    blockLight(truck(s), new SupportRig.ShellCell(1, 2, 1, SupportRig.Cell.ROOM, 0)),
+                    blockLight(truck(s), new SupportRig.ShellCell(1, 0, 1, SupportRig.Cell.ROOM, 0)),
+                    blockLight(truck(s), new SupportRig.ShellCell(2, 4, 1, SupportRig.Cell.ROOM, 0))});
+            LOG.info("[support-interior] measured light: under the lamp {}, front of aisle {}, back of aisle {}", measured[0], measured[1], measured[2]);
+            if (lampLit != 14) failures.append("the cell under the lamp gives ").append(lampLit).append(" for a lantern, not 14\n");
+            if (measured[1] >= measured[0] || measured[2] >= measured[0] || measured[1] < 8 || measured[2] < 8) {
+                failures.append("the room's light must fall off from the lamp but stay lit: ").append(java.util.Arrays.toString(measured)).append('\n');
+            }
 
             String panel = this.clickPanel(context, server, CONSOLE_X, true);
             LOG.info("[support-interior] click support panel -> {}", panel);
@@ -386,6 +395,12 @@ public class SupportInteriorClientGameTest implements FabricClientGameTest {
         context.waitTick();
         context.getInput().pressMouse(org.lwjgl.glfw.GLFW.GLFW_MOUSE_BUTTON_LEFT);
         context.waitTicks(4);
+    }
+
+    /** Measured block light in a room cell. */
+    private static int blockLight(SupportVehicleEntity truck, SupportRig.ShellCell cell) {
+        BlockPos pos = SupportShell.cellPos(truck.position(), truck.getYRot(), cell);
+        return truck.level().getBrightness(net.minecraft.world.level.LightLayer.BLOCK, pos);
     }
 
     /** Block light of a room cell (the aisle at the middle row, one block up). */

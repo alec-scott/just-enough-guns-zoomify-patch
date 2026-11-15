@@ -117,6 +117,10 @@ tasks.matching { it.name == "runPackClient" }.configureEach {
             file.text = (lines + values.collect { key, value -> key + separator + value }).join(System.lineSeparator()) + System.lineSeparator()
         }
         setLines(new File(runDir, "config/iris.properties"), "=", [enableShaders: "true", shaderPack: shaderName])
+        def shaderSettings = file("src/gametest/resources/pack-config/shaderpacks/" + shaderName + ".txt")
+        if (shaderSettings.exists()) {
+            new File(runDir, "shaderpacks/" + shaderName + ".txt").text = shaderSettings.text
+        }
         // FallingTree as the server runs it (left alone once it exists, so changes made in game stay).
         def fallingTree = new File(runDir, "config/fallingtree.json")
         if (!fallingTree.exists()) {

@@ -203,11 +203,11 @@ public final class SupportShell {
                 case SupportRig.FACE_REAR -> forward;
                 default -> Direction.NORTH;
             };
-            boolean lit = kind == VehicleShellBlock.Kind.ROOM && cell.level() == 1;
+            boolean lit = kind == VehicleShellBlock.Kind.ROOM && lampCell(cell);
             BlockState state = ModBlocks.VEHICLE_SHELL.get().defaultBlockState()
                     .setValue(VehicleShellBlock.KIND, kind)
                     .setValue(VehicleShellBlock.FACING, kind == VehicleShellBlock.Kind.WALL || kind == VehicleShellBlock.Kind.PANEL || kind == VehicleShellBlock.Kind.BEACON_PANEL ? facing : Direction.NORTH)
-                    .setValue(VehicleShellBlock.LIGHT, lit ? roomLight : 0);
+                    .setValue(VehicleShellBlock.LIGHT, lit ? lampLevel(roomLight) : 0);
             // A bunk with a bed fitted becomes that bed, head to the front of the room.
             if (vehicle != null && cell.kind() == SupportRig.Cell.BUNK) {
                 int slot = cell.column() == 3 ? SupportModules.BUNK_LEFT : SupportModules.BUNK_RIGHT;
@@ -318,16 +318,33 @@ public final class SupportShell {
         return lostBeds;
     }
 
+    /**
+     * The room's light comes from under the lamp, not from every cell: the two head-height aisle cells either side of
+     * the centred hook (model x 0, z 16: columns 1 and 2 of row 2) give the lamp's level less one, and vanilla light
+     * falls off from there to the walls (about 10-11 in the corners for a lantern). Every cell at full level used to
+     * light the room evenly at 15, which Photon blew out to white (user report, 2026-11-15).
+     */
+    static boolean lampCell(SupportRig.ShellCell cell) {
+        return cell.level() == 1 && cell.row() == 2 && (cell.column() == 1 || cell.column() == 2);
+    }
+
+    static int lampLevel(int roomLight) {
+        return Math.max(0, roomLight - 1);
+    }
+
     /** Set the room's light, the camp lamps and the bunks' beds after the fittings of a deployed vehicle change. */
     public static void relight(SupportVehicleEntity vehicle) {
         if (!(vehicle.level() instanceof ServerLevel level) || !isPlaced(vehicle)) return;
         checkBeds(vehicle);
-        int light = vehicle.modules().roomLight();
+        int roomLamp = lampLevel(vehicle.modules().roomLight());
         for (Placed placed : layout(vehicle.position(), vehicle.getYRot(), vehicle)) {
             BlockState state = level.getBlockState(placed.pos());
             if (state.getBlock() instanceof VehicleShellBlock && state.getValue(VehicleShellBlock.KIND) == VehicleShellBlock.Kind.ROOM
-                    && placed.cell().level() == 1 && state.getValue(VehicleShellBlock.LIGHT) != light) {
-                level.setBlock(placed.pos(), state.setValue(VehicleShellBlock.LIGHT, light), Block.UPDATE_ALL);
+                    && placed.cell().level() == 1) {
+                int light = lampCell(placed.cell()) ? roomLamp : 0;
+                if (state.getValue(VehicleShellBlock.LIGHT) != light) {
+                    level.setBlock(placed.pos(), state.setValue(VehicleShellBlock.LIGHT, light), Block.UPDATE_ALL);
+                }
             }
         }
         Registry registry = registry(level);
