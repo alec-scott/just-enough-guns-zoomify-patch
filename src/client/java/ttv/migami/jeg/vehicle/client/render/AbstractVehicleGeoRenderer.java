@@ -23,6 +23,7 @@ abstract class AbstractVehicleGeoRenderer<T extends VehicleEntity> extends GeoEn
     @SuppressWarnings("unchecked")
     protected AbstractVehicleGeoRenderer(EntityRendererProvider.Context context, GeoModel<? extends VehicleEntity> model) {
         super(context, (GeoModel<T>) model);
+        this.withRenderLayer(new VehicleGlassLayer<>(this));
         this.withRenderLayer(new VehicleBoatWaterMaskLayer<>(this));
         this.withRenderLayer(new VehicleGlowLayer<>(this));
         this.withRenderLayer(new VehicleBarrelHeatLayer<>(this));
@@ -34,7 +35,10 @@ abstract class AbstractVehicleGeoRenderer<T extends VehicleEntity> extends GeoEn
 
     @Override
     public RenderType getRenderType(VehicleRenderState renderState, Identifier texture) {
-        return RenderTypes.entityTranslucent(texture);
+        // Opaque (cutout), so shader packs light and shadow vehicles as they do mobs. Drawn translucent (as since the
+        // port), Photon lit them in its flatter translucent pass: washed out by day, no proper shading. Compared side by
+        // side with VehicleLookCompareClientGameTest. Glass is split out and drawn translucent by VehicleGlassLayer.
+        return RenderTypes.entityCutout(ttv.migami.jeg.vehicle.client.resource.VehicleGlassTextures.split(texture).solid());
     }
 
     /**
@@ -288,14 +292,13 @@ abstract class AbstractVehicleGeoRenderer<T extends VehicleEntity> extends GeoEn
                 }
             });
         }
-        // Speed brakes: each wingtip aileron splits, its upper half up and its lower half down.
+        // Speed brakes: each wingtip aileron's upper half rises out of the top of the wing. The lower halves (wingLR2,
+        // wingRR2) stay closed: the user wants nothing coming out under the wing (2026-11-15), although the real
+        // A-10's decelerons split both ways.
         float split = vehicle.jetSpeedBrake(partialTick) * SPEED_BRAKE_ANGLE;
         if (split > 0.0F) {
             for (String upper : new String[]{"wingLR", "wingRR"}) {
                 snapshots.ifPresent(upper, snapshot -> snapshot.setRotX(-split));
-            }
-            for (String lower : new String[]{"wingLR2", "wingRR2"}) {
-                snapshots.ifPresent(lower, snapshot -> snapshot.setRotX(split));
             }
         }
         for (String bone : A10_UNUSED_STORES) {

@@ -15,6 +15,7 @@
       "ttv.migami.jeg.gametest.BulldozerRipperLaneClientGameTest",
       "ttv.migami.jeg.gametest.BulldozerHitboxClientGameTest",
       "ttv.migami.jeg.gametest.MortarClientGameTest",
+      "ttv.migami.jeg.gametest.VehicleLookCompareClientGameTest",
       "ttv.migami.jeg.gametest.BulldozerFarSoundClientGameTest",
       "ttv.migami.jeg.gametest.SupportDeployClientGameTest",
       "ttv.migami.jeg.gametest.SupportModulesClientGameTest",

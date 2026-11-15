@@ -275,6 +275,12 @@ smaller of each such pair out by 0.04 px within a bone; scan both poses after ch
 under a floor or in a block (the FSV-6 stands its floor a block up), override `getBlockLightLevel` and
 `getSkyLightLevel` in the renderer to read the light where the occupants are.
 
+**Opaque models, glass apart.** Vehicles draw opaque (`RenderTypes.entityCutout`) so shader packs light and shadow
+them like mobs; drawn translucent (as from the port until 2026-11-15) Photon gave every vehicle a flat, washed-out
+look (`VehicleLookCompareClientGameTest` shows both). Glass is any partly transparent pixel: `VehicleGlassTextures`
+splits it out of the texture (painted ones too) and `VehicleGlassLayer` draws only it, translucent. So give glass an
+alpha between 1 and 254, and every other pixel 0 or 255.
+
 **Materials and paint:**
 - Real colours, a little weathering, and a separate material per finish: paint, bare steel, rubber, glass, lamps.
 - The paint mask works per texture pixel. Use `separate_finishes` and the derived `unpainted_parts` so no

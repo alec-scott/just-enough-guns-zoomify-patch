@@ -85,15 +85,16 @@ final class JetFlight {
      * Ground: distance between the nose wheel and the main gear, and the most the nose wheel turns at taxi speed (less as
      * it speeds up, a few degrees by take-off). A heavy jet on its wheels: the nose wheel swings over in about a second,
      * the turn takes a moment to build, and grip on the tyres caps how hard it can turn at speed, so the faster it rolls
-     * the wider it turns. Crawling, it turns in a circle about 20 blocks across; taxiing briskly (about 18 km/h) it comes
+     * the wider it turns. Crawling, it turns in a circle about 13 blocks across (tightened from about 19 at the user's
+     * request, 2026-11-15: 40 degrees of nose wheel and a 1.2 degree a tick cap); taxiing briskly (about 18 km/h) it comes
      * full circle in about 20 seconds; at 70 km/h a 90-degree turn takes about 10 seconds; at take-off speed it only
      * corrects its line.
      */
     private static final double WHEELBASE = 5.4D;
-    private static final double MAX_NOSE_WHEEL_ANGLE = 30.0D;
+    private static final double MAX_NOSE_WHEEL_ANGLE = 40.0D;
     private static final double TAKEOFF_NOSE_WHEEL_ANGLE = 3.0D;
     private static final double NOSE_WHEEL_SLEW = 0.05D;
-    private static final double MAX_GROUND_YAW_RATE = 0.9D;
+    private static final double MAX_GROUND_YAW_RATE = 1.2D;
     private static final double GROUND_SIDE_ACCELERATION = 0.008D;
     private static final double GROUND_YAW_RESPONSE = 0.1D;
     /** How much the mouse steers the nose wheel on the ground, against the A and D keys' full lock. */

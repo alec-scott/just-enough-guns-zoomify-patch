@@ -27,11 +27,15 @@ public class A10TaxiClientGameTest implements FabricClientGameTest {
     private int rolledTicks;
     private float maxRoll;
 
-    /** Ground speed (blocks a tick), and the fastest and slowest steady turn allowed (degrees a tick). */
+    /**
+     * Ground speed (blocks a tick), and the fastest and slowest steady turn allowed (degrees a tick). The cap rose from
+     * 0.95 to 1.25 when the grounded turning circle was tightened (2026-11-15: 40 degrees of nose wheel, 1.2 deg/tick):
+     * measured radius 7.4 blocks at 9 km/h (was about 9.5) and 12 at 18 km/h.
+     */
     private static final double[][] RUNS = {
-            {0.12D, 0.95D, 0.25D},
-            {0.25D, 0.95D, 0.5D},
-            {0.5D, 0.95D, 0.4D},
+            {0.12D, 1.25D, 0.6D},
+            {0.25D, 1.25D, 0.8D},
+            {0.5D, 1.25D, 0.4D},
             {0.62D, 0.8D, 0.3D}
     };
 
