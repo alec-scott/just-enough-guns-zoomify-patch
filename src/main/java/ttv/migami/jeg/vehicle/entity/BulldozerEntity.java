@@ -55,6 +55,9 @@ public final class BulldozerEntity extends VehicleEntity {
     private final BulldozerTerrainWork work = new BulldozerTerrainWork();
     private int parkedTicks;
     private boolean gradePressed, ripperPressed;
+    /** Ticks the working status is held over the empty ticks between bites of a steady cut. */
+    private static final int WORK_HOLD_TICKS = 12;
+    private int lastWorkTick = -1000, lastWorkStatus = BulldozerTerrainWork.WORKING;
     /** Forward speed limit while pushing material, eased so the machine never jerks between bites. */
     private double pushCap = .26;
     private float ripperO, ripperShown;
@@ -141,8 +144,12 @@ public final class BulldozerEntity extends VehicleEntity {
     public boolean hydraulicMoving() { return Math.abs((this.level().isClientSide() ? this.liftShown : this.bladeLift()) - this.liftO) > .01F; }
     /** Material in the bite the blade has not cleared, or something it cannot move, stops forward travel. */
     public boolean bladeHolding() {
-        int status = this.workStatus();
-        return status == BulldozerTerrainWork.BUSY || status == BulldozerTerrainWork.SOLID || status == BulldozerTerrainWork.PROTECTED;
+        return holds(this.workStatus());
+    }
+
+    private static boolean holds(int status) {
+        return status == BulldozerTerrainWork.BUSY || status == BulldozerTerrainWork.SOLID || status == BulldozerTerrainWork.PROTECTED
+                || status == BulldozerTerrainWork.RAISED_BLOCKED;
     }
 
     /** Speed along the machine's heading, blocks per tick (negative in reverse). */
@@ -205,6 +212,24 @@ public final class BulldozerEntity extends VehicleEntity {
             this.entityData.set(RIPPER, ripper);
             this.entityData.set(HORN, driver != null && this.powered() && input.fire());
             int status = this.work.tick(this, pushing);
+            // Steering inside a cut: a lowered blade cuts the walls the turn swings into; otherwise say why it won't turn.
+            int steer = (input.right() ? 1 : 0) - (input.left() ? 1 : 0);
+            if (driver != null && this.engineRunning() && steer != 0) {
+                int turn = this.work.clearTurn(this, input.forwardAxis() < 0 ? -steer : steer);
+                if (turn == BulldozerTerrainWork.WORKING) {
+                    if (status == BulldozerTerrainWork.IDLE || status == BulldozerTerrainWork.RAISED) status = turn;
+                } else if (turn != BulldozerTerrainWork.IDLE && !holds(status)) {
+                    status = turn;
+                }
+            }
+            // A steady cut takes a bite every few ticks with empty ticks between; hold the working status over the gaps
+            // so the HUD (and the blade's sound and chatter) don't flicker between "Clearing" and "Ready".
+            if (status == BulldozerTerrainWork.WORKING || status == BulldozerTerrainWork.SPOIL || status == BulldozerTerrainWork.TREE) {
+                this.lastWorkTick = this.tickCount;
+                this.lastWorkStatus = status;
+            } else if (status == BulldozerTerrainWork.IDLE && (pushing || steer != 0) && this.tickCount - this.lastWorkTick <= WORK_HOLD_TICKS) {
+                status = this.lastWorkStatus;
+            }
             if (this.ripperDeployed() && pushing && this.travelSpeed() > .01) this.work.pave(this);
             this.entityData.set(STATUS, status);
             this.entityData.set(LOAD, Mth.lerp(.35F, this.load(), this.work.load()));

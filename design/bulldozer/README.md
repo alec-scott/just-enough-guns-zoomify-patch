@@ -11,7 +11,7 @@ The dozer drives with the same steered-track model as the truck and BMP-2.
 
 | Key | Action |
 | --- | --- |
-| W / S | Throttle forward / reverse (top speed about 12 km/h, slower under load) |
+| W / S | Throttle forward / reverse (top speed about 3.3 m/s, slower under load) |
 | A / D | Steer; at a standstill the tracks counter-rotate and the machine pivots |
 | Left Ctrl | Brake |
 | Space / Left Shift | Raise / lower the blade |

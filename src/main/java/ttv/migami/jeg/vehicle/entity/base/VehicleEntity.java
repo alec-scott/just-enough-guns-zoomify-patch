@@ -674,6 +674,21 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         this.setBoundingBox(this.makeBoundingBox(this.position()));
     }
 
+    /** The block-collision box the hull would have turned to {@code yaw}, where it stands now. */
+    public AABB boundingBoxAtYaw(float yaw) {
+        float previousYaw = this.getYRot();
+        this.setYRot(yaw);
+        AABB turned = this.makeBoundingBox(this.position());
+        this.setYRot(previousYaw);
+        return turned;
+    }
+
+    /** True when turning to {@code yaw} would be refused by {@link #setVehicleYawIfUnblocked} because of blocks. */
+    public boolean turnBlockedByBlocks(float yaw) {
+        return this.usesObbBlockCollisionBounds() && !this.intersectsBlockCollision(this.getBoundingBox())
+                && this.intersectsBlockCollision(this.boundingBoxAtYaw(yaw));
+    }
+
     protected boolean setVehicleYawIfUnblocked(float yaw) {
         if (!this.usesObbBlockCollisionBounds()) {
             this.setYRot(yaw);
@@ -7409,9 +7424,11 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         return null;
     }
 
+    // The entity's name (kill messages, commands, the hold's title) is the vehicle's own, e.g. "BD-40 Bulldozer"; it was
+    // "Vehicle Inventory" for every vehicle because MenuProvider and Entity share getDisplayName.
     @Override
-    public Component getDisplayName() {
-        return Component.translatable("container.jeg.vehicle");
+    protected Component getTypeName() {
+        return Component.translatable("entity." + this.vehicleDataId().getNamespace() + "." + this.vehicleDataId().getPath());
     }
 
     @Override

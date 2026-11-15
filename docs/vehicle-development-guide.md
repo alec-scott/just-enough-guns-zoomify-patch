@@ -486,6 +486,28 @@ real key names (`KeyMapping.getTranslatedKeyMessage()`):
 - **In the seat:** a row in the driver's panel, with a pulsing lamp when there is something to act on ("N: hitch
   LAV-150"), and a key for it (a new `KeyMapping`; check the pack's options for a free default, N here).
 - **When nothing happens, say why:** an empty locker says what to fit and where.
+  - A turn the vehicle refuses (`setVehicleYawIfUnblocked` silently undoes a turn into blocks) needs a status. The
+    BD-40 sat in its own trench saying "Ready" while A and D did nothing; it now cuts the walls with the blade down
+    (`BulldozerTerrainWork.clearTurn`, natural ground only, using `turnBlockedByBlocks`/`boundingBoxAtYaw`) and says
+    "Turn blocked: lower the blade to cut" or "back out" otherwise.
+  - Name the real reason. A raised blade against a dirt bank said "Too hard for the blade", which tells the player
+    lowering it won't help; it now says "Blade raised: lower it to dig".
+- **Hold a working status over the gaps between bites.** Work that happens every few ticks (a blade cutting a block a
+  column at a time) reads as on/off/on; the dozer holds "Clearing" 12 ticks after its last bite while pushing. Sample
+  the status every tick in a test and fail on any drop back to idle.
+- **The vehicle info panel (name, hull, energy, weapon) must not cover the work.** Its old spot, lower middle, was
+  over the BD-40's blade, over every vehicle in F5, and over the AH-6's and A-10's cockpit instruments. Now
+  (`VehicleHudOverlay.vehicleInfoInCorner` / `vehicleInfoAtTop`): the FSV-6 and the BD-40 put it in the bottom-right
+  corner in both views (their own panel is top left, where a top-middle title ran into the FSV-6's hint and refusal
+  lines, and they have no weapon list); any other vehicle in F5 and aircraft in first person put it at the top middle
+  (the bottom corners hold the seat and weapon lists); other ground vehicles in first person keep the lower middle, with the
+  action bar lifted above it (`GuiMixin`). A new vehicle with a dashboard or a tool in the lower middle joins one of
+  those. Energy reads as a percentage, not the raw store (5,000,000); speeds read in m/s everywhere (jets too).
+- **The boarding line names the real dismount key.** Vanilla's "Press Left Shift to Dismount" is wrong here (Shift is
+  descend or blade down); `VehicleInputHandler` replaces it with `VEHICLE_DISMOUNT`'s key on boarding.
+- **Names:** a vehicle's name is its `entity.jeg.<id>` (`VehicleEntity.getTypeName`). Don't override
+  `getDisplayName` for a menu title: Entity and MenuProvider share it, and every vehicle was "Vehicle Inventory" in
+  kill messages, commands and hold titles.
 
 ### Cab instruments
 
@@ -535,6 +557,17 @@ plain inventory. The FSV-6's support console (`SupportFitScreen`) is the example
   `pressMouse`, and assert the menu that opened on the server (`SupportInteriorClientGameTest.clickConsole`).
 
 ## 9. Tests
+
+**Play it before the tests are final.** `-PwithMcp` puts mcpfabric in the pack client, so an agent can drive it:
+screenshots, movement keys, right-clicks on what the crosshair is on, screens; our own bindings with
+`/jegkey <name> [ticks]` (`DevKeysClient`). Drive where a player would, not where a test starts: the BD-40 turn bug
+only showed after a pass had left it in its own trench. Take bursts of screenshots (2–3 a second) and compare them;
+a label that flickers shows only across frames. Each problem found becomes a focused test.
+```
+./gradlew runPackClient -PwithPack -PwithMcp -Pminecraft_version=26.1.2 -Pfabric_version=0.155.3+26.1.2 -Ploader_version=0.20.1
+```
+Before launching, check no other session is building in this checkout: a compile replaces `build/classes` under a
+running client (`NoClassDefFoundError` for a class that exists).
 
 **Bisecting the pack.** `-PpackExclude=shaders` currently crashes on start ("Global terrain uniforms have not been
 updated", Iris and Voxy) and `-PpackExclude=etf` fails to load (a pack mod requires EMF). To tell whether a fault is

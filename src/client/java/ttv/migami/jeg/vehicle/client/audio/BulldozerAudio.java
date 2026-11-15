@@ -123,7 +123,7 @@ public final class BulldozerAudio {
             int status = dozer.workStatus();
             boolean working = status == BulldozerTerrainWork.WORKING || status == BulldozerTerrainWork.BUSY
                     || status == BulldozerTerrainWork.SPOIL || status == BulldozerTerrainWork.TREE;
-            boolean struck = status == BulldozerTerrainWork.SOLID && group.trackSpeed > .02F;
+            boolean struck = (status == BulldozerTerrainWork.SOLID || status == BulldozerTerrainWork.RAISED_BLOCKED) && group.trackSpeed > .02F;
             if (group.impactCooldown > 0) group.impactCooldown--;
             if ((working && !group.wasWorking || struck) && group.impactCooldown == 0) {
                 group.shot(mc, "blade_impact", struck ? IMPACT_LOUDNESS * 1.3F : IMPACT_LOUDNESS, .9F + dozer.getRandom().nextFloat() * .15F, 14);

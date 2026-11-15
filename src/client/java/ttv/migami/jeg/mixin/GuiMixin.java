@@ -40,6 +40,28 @@ public final class GuiMixin {
         }
     }
 
+    @org.spongepowered.asm.mixin.Unique private boolean jeg$liftedOverlayMessage;
+
+    // The action bar (boarding line, prompts, other mods' messages) sits where the vehicle info panel is drawn at the
+    // bottom middle and wrote over its hull line; lift it above the panel while that panel is there.
+    @Inject(method = "extractOverlayMessage", at = @At("HEAD"))
+    private void jeg$liftOverlayMessageAboveVehicleInfo(GuiGraphicsExtractor guiGraphics, DeltaTracker deltaTracker, CallbackInfo ci) {
+        int lift = VehicleHudOverlay.overlayMessageLift();
+        this.jeg$liftedOverlayMessage = lift > 0;
+        if (lift > 0) {
+            guiGraphics.pose().pushMatrix();
+            guiGraphics.pose().translate(0, -lift);
+        }
+    }
+
+    @Inject(method = "extractOverlayMessage", at = @At("RETURN"))
+    private void jeg$restoreOverlayMessage(GuiGraphicsExtractor guiGraphics, DeltaTracker deltaTracker, CallbackInfo ci) {
+        if (this.jeg$liftedOverlayMessage) {
+            guiGraphics.pose().popMatrix();
+            this.jeg$liftedOverlayMessage = false;
+        }
+    }
+
     @Inject(method = "extractItemHotbar", at = @At("HEAD"), cancellable = true)
     private void jeg$hideVehicleHotbar(GuiGraphicsExtractor guiGraphics, DeltaTracker deltaTracker, CallbackInfo ci) {
         if (VehicleHudOverlay.shouldReplaceHotbar()) {

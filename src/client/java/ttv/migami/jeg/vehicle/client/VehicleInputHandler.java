@@ -122,6 +122,12 @@ public final class VehicleInputHandler {
             wasRidingVehicle = false;
             return;
         }
+        if (!wasRidingVehicle) {
+            // Vanilla's boarding line says "Press Left Shift to Dismount", but Shift is a vehicle control here
+            // (descend, blade down) and never ejects: name the real dismount key over it.
+            minecraft.gui.setOverlayMessage(net.minecraft.network.chat.Component.translatable("mount.onboard",
+                    KeyBindings.VEHICLE_DISMOUNT.getTranslatedKeyMessage()), false);
+        }
         wasRidingVehicle = true;
 
         boolean vehicleInventoryDown = minecraft.options.keyInventory.isDown();
@@ -247,7 +253,7 @@ public final class VehicleInputHandler {
         } else if (autoForwardToggled) {
             jetCruise = jetCruise >= 0.0F ? -1.0F : (float) vehicle.getDeltaMovement().length();
             minecraft.gui.setOverlayMessage(jetCruise >= 0.0F
-                    ? net.minecraft.network.chat.Component.translatable("message.jeg.vehicle.jet_cruise_on", Math.round(jetCruise * 72.0F))
+                    ? net.minecraft.network.chat.Component.translatable("message.jeg.vehicle.jet_cruise_on", Math.round(jetCruise * 20.0F))
                     : net.minecraft.network.chat.Component.translatable("message.jeg.vehicle.auto_forward_off"), false);
         } else if (jetCruise >= 0.0F) {
             float top = (float) vehicle.jetTopSpeed();

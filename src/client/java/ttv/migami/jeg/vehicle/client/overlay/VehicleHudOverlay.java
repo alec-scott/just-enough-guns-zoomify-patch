@@ -87,6 +87,23 @@ public final class VehicleHudOverlay {
         return player != null && player.getVehicle() instanceof VehicleEntity;
     }
 
+    /**
+     * How far to lift the action bar so it sits above the vehicle info panel at the bottom middle (its title is drawn
+     * 12 above the panel's top line, which is 80 or 112 above the bottom; the action bar is 68 above it); 0 when the
+     * panel is in the corner or not shown.
+     */
+    public static int overlayMessageLift() {
+        Minecraft minecraft = Minecraft.getInstance();
+        LocalPlayer player = minecraft.player;
+        if (player == null || !(player.getVehicle() instanceof VehicleEntity vehicle) || vehicleInfoInCorner(minecraft, vehicle)
+                || vehicleInfoAtTop(minecraft, vehicle)
+                || isFocusedVehicleSight(vehicle) && vehicle.vehicleData().defaults().vehicleType() != VehicleType.BOAT) {
+            return 0;
+        }
+        int panelTop = shouldReplaceHotbar(player, vehicle) ? 80 : 112;
+        return panelTop + 24 - 68;
+    }
+
     public static boolean shouldReplaceHotbar() {
         LocalPlayer player = Minecraft.getInstance().player;
         return player != null
@@ -138,11 +155,12 @@ public final class VehicleHudOverlay {
         int width = guiGraphics.guiWidth();
         // A passenger with their own hands keeps their health, armor and food bars; sit the vehicle's info above them.
         int y = guiGraphics.guiHeight() - (shouldReplaceHotbar(minecraft.player, vehicle) ? 80 : 112);
-        if (vehicle instanceof ttv.migami.jeg.vehicle.entity.SupportVehicleEntity && minecraft.options.getCameraType().isFirstPerson()) {
-            // In the FSV-6's cab the lower middle of the screen is the dashboard (live instruments): the info moves to the
-            // bottom right corner (everything below is centred on width / 2).
+        if (vehicleInfoInCorner(minecraft, vehicle)) {
+            // Everything below is centred on width / 2: this puts it in the bottom right corner.
             width = 2 * (guiGraphics.guiWidth() - 92);
             y = guiGraphics.guiHeight() - 44;
+        } else if (vehicleInfoAtTop(minecraft, vehicle)) {
+            y = VEHICLE_INFO_TOP;
         }
         float healthRatio = vehicle.maxVehicleHealth() <= 0.0F ? 0.0F : Mth.clamp(vehicle.vehicleHealth() / vehicle.maxVehicleHealth(), 0.0F, 1.0F);
         int barWidth = 60;
@@ -158,7 +176,8 @@ public final class VehicleHudOverlay {
         if (vehicle.maxVehicleEnergy() > 0) {
             float energyRatio = Mth.clamp((float) vehicle.vehicleEnergy() / (float) vehicle.maxVehicleEnergy(), 0.0F, 1.0F);
             renderValueBar(guiGraphics, ENERGY_ICON, x - 12, lineY - 1, energyRatio);
-            Component energy = Component.translatable("hud.jeg.vehicle.energy", vehicle.vehicleEnergy(), vehicle.maxVehicleEnergy());
+            // A share, not the raw store (a full dozer holds 5,000,000).
+            Component energy = Component.translatable("hud.jeg.vehicle.energy", Math.round(energyRatio * 100));
             guiGraphics.text(minecraft.font, energy, (width - minecraft.font.width(energy)) / 2, lineY + 8, 0xFF8FC7FF);
             lineY += 19;
         }
@@ -173,7 +192,9 @@ public final class VehicleHudOverlay {
                         : Component.translatable("hud.jeg.vehicle.weapon", Component.translatable("item." + selectedWeaponId.getNamespace() + "." + selectedWeaponId.getPath()), String.valueOf(vehicle.selectedVehicleWeaponAmmo(minecraft.player)));
                 if (!vehicle.isJet()) {
                     // A jet's weapon list (right) already shows each weapon's icon.
-                    renderSelectedWeaponIcon(guiGraphics, vehicle, minecraft.player, width / 2 - 128, lineY - 4);
+                    // Just left of the line, however long the weapon's name (a fixed spot overlapped long names).
+                    int textLeft = (width - minecraft.font.width(ammo)) / 2;
+                    renderSelectedWeaponIcon(guiGraphics, vehicle, minecraft.player, Math.min(width / 2 - 128, textLeft - WEAPON_ICON_WIDTH - 4), lineY - 4);
                 }
                 guiGraphics.text(minecraft.font, ammo, (width - minecraft.font.width(ammo)) / 2, lineY, 0xFFFFDD88);
                 lineY += 11;
@@ -424,6 +445,7 @@ public final class VehicleHudOverlay {
     }
 
     private static void renderSpeedIndicator(GuiGraphicsExtractor guiGraphics, Minecraft minecraft, VehicleEntity vehicle) {
+        // m/s, as every vehicle's speed reads (jets included).
         Component speed = Component.literal(String.format(java.util.Locale.ROOT, "%.1f m/s", vehicleSpeedBlocksPerSecond(vehicle)));
         int x = guiGraphics.guiWidth() - minecraft.font.width(speed) - 16;
         int y = 16;
@@ -478,7 +500,7 @@ public final class VehicleHudOverlay {
      * doing. The pilot also gets a flashing stall or pull-up warning under the crosshair.
      */
     private static void renderJetInstruments(GuiGraphicsExtractor guiGraphics, Minecraft minecraft, VehicleEntity jet) {
-        double speed = jet.getDeltaMovement().length() * 20.0D * 3.6D;
+        double speed = jet.getDeltaMovement().length() * 20.0D;
         double altitude = jet.exactAltitudeAboveGround();
         boolean grounded = jet.onGround();
         float gear = jet.jetGear();
@@ -498,7 +520,7 @@ public final class VehicleHudOverlay {
         }
         float cruise = ttv.migami.jeg.vehicle.client.VehicleInputHandler.jetCruiseTarget();
         if (minecraft.player != null && jet.getControllingPassenger() == minecraft.player && cruise >= 0.0F) {
-            Component line = Component.translatable("hud.jeg.vehicle.jet_cruise", Math.round(cruise * 72.0F));
+            Component line = Component.translatable("hud.jeg.vehicle.jet_cruise", Math.round(cruise * 20.0F));
             guiGraphics.text(minecraft.font, line, guiGraphics.guiWidth() - minecraft.font.width(line) - 16, y, 0xFF66CCFF);
             y += 11;
         }
@@ -805,9 +827,12 @@ public final class VehicleHudOverlay {
         boolean starting = dozer.powered() && !dozer.engineRunning();
         int light = starting ? 0xFFE0B040 : switch (status) {
             case ttv.migami.jeg.vehicle.terrain.BulldozerTerrainWork.WORKING, ttv.migami.jeg.vehicle.terrain.BulldozerTerrainWork.TREE -> 0xFF6BD36B;
-            case ttv.migami.jeg.vehicle.terrain.BulldozerTerrainWork.BUSY, ttv.migami.jeg.vehicle.terrain.BulldozerTerrainWork.SPOIL -> 0xFFE0B040;
+            case ttv.migami.jeg.vehicle.terrain.BulldozerTerrainWork.BUSY, ttv.migami.jeg.vehicle.terrain.BulldozerTerrainWork.SPOIL,
+                 ttv.migami.jeg.vehicle.terrain.BulldozerTerrainWork.RAISED_BLOCKED,
+                 ttv.migami.jeg.vehicle.terrain.BulldozerTerrainWork.TURN_BLOCKED_RAISED -> 0xFFE0B040;
             case ttv.migami.jeg.vehicle.terrain.BulldozerTerrainWork.SOLID, ttv.migami.jeg.vehicle.terrain.BulldozerTerrainWork.PROTECTED,
-                 ttv.migami.jeg.vehicle.terrain.BulldozerTerrainWork.NO_POWER -> 0xFFE05A40;
+                 ttv.migami.jeg.vehicle.terrain.BulldozerTerrainWork.NO_POWER,
+                 ttv.migami.jeg.vehicle.terrain.BulldozerTerrainWork.TURN_BLOCKED -> 0xFFE05A40;
             default -> 0xFF8C9490;
         };
         g.fill(x - 4, y - 4, x + w + 4, y + row * rows - 1, 0x88101414);
@@ -994,12 +1019,14 @@ public final class VehicleHudOverlay {
 
         int x = guiGraphics.guiWidth() / 2 + 96;
         int y = guiGraphics.guiHeight() - 72;
-        boolean fsv6Cab = vehicle instanceof ttv.migami.jeg.vehicle.entity.SupportVehicleEntity && minecraft.options.getCameraType().isFirstPerson();
-        if (fsv6Cab) {
-            // The FSV-6's dashboard fills the lower middle: the damage diagram sits left of the vehicle info (moved to the
-            // bottom right, see render), without the divider line.
+        if (vehicleInfoInCorner(minecraft, vehicle)) {
+            // The lower middle is the FSV-6's dashboard or the dozer's blade: the damage diagram sits left of the vehicle
+            // info (moved to the bottom right, see render), without the divider line.
             x = guiGraphics.guiWidth() - 200;
             y = guiGraphics.guiHeight() - 40;
+        } else if (vehicleInfoAtTop(minecraft, vehicle)) {
+            // Beside the vehicle info at the top middle, without the divider line.
+            y = VEHICLE_INFO_TOP - 6;
         } else {
             guiGraphics.blit(RenderPipelines.GUI_TEXTURED, LAND_LINE, guiGraphics.guiWidth() / 2 - 64, guiGraphics.guiHeight() - 56, 0.0F, 0.0F, 128, 1, 128, 1);
         }
@@ -1010,6 +1037,31 @@ public final class VehicleHudOverlay {
         if (vehicle.isTurretDamaged()) {
             guiGraphics.fill(x + 16, y + 1, x + 17, y + 17, 0xFFFF4033);
         }
+    }
+
+    /**
+     * The vehicle info (name, hull, energy, damage diagram) leaves the lower middle of the screen where that is the work:
+     * the FSV-6's dashboard in its cab, and the dozer's blade from the seat (in F5, the machine itself).
+     */
+    private static boolean vehicleInfoInCorner(Minecraft minecraft, VehicleEntity vehicle) {
+        // Both have their own panel at the top left (which the top middle would run into) and no weapon list in the
+        // bottom right corner, so they use that corner in every view.
+        return vehicle instanceof ttv.migami.jeg.vehicle.entity.SupportVehicleEntity
+                || vehicle instanceof ttv.migami.jeg.vehicle.entity.BulldozerEntity;
+    }
+
+    /** Top line of the vehicle info when it is drawn at the top middle (its title sits 12 above). */
+    private static final int VEHICLE_INFO_TOP = 26;
+
+    /**
+     * The vehicle info goes to the top middle (open sky) where the lower middle is the vehicle: in a chase view (F5) it
+     * covered the vehicle itself, and from an aircraft's seat it covered the cockpit's live instruments. The bottom
+     * corners already hold the seat list and the weapon list.
+     */
+    private static boolean vehicleInfoAtTop(Minecraft minecraft, VehicleEntity vehicle) {
+        if (vehicleInfoInCorner(minecraft, vehicle)) return false;
+        boolean aircraft = vehicle.isJet() || vehicle.vehicleData().defaults().vehicleType() == VehicleType.HELICOPTER;
+        return !minecraft.options.getCameraType().isFirstPerson() || aircraft;
     }
 
     private static boolean hasApcWeaponHud(VehicleEntity vehicle) {

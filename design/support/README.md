@@ -9,7 +9,7 @@ See the [plan](PLAN.md) for the design and [implementation status](IMPLEMENTATIO
 
 | Key | Action |
 | --- | --- |
-| W / S | Throttle forward / reverse; it coasts when released (about 75 km/h flat out); S while rolling forward brakes (brake lights) |
+| W / S | Throttle forward / reverse; it coasts when released (about 21 m/s flat out); S while rolling forward brakes (brake lights) |
 | A / D | Steer (turning radius about 10 blocks at low speed) |
 | Left Ctrl | Brake |
 | R (hold 1 s, driver) | Deploy / pack up |

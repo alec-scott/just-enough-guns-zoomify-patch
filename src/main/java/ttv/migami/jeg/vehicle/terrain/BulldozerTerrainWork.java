@@ -48,6 +48,11 @@ import ttv.migami.jeg.vehicle.util.BulldozerRig;
  */
 public final class BulldozerTerrainWork {
     public static final int IDLE = 0, WORKING = 1, RAISED = 2, PROTECTED = 3, SPOIL = 4, NO_POWER = 5, SOLID = 6, TREE = 7, BUSY = 8;
+    /** Walls stop a turn: the blade is raised (lower it to cut them), or they are not ground it may cut (back out). */
+    public static final int TURN_BLOCKED_RAISED = 9, RAISED_BLOCKED = 10, TURN_BLOCKED = 11;
+    /** A turn clears the walls the hull would swing into this many degrees ahead of its heading. */
+    private static final float TURN_LOOKAHEAD = 8F;
+    private static final int TURN_BLOCKS_PER_TICK = 12;
     public static final float MAX_HARDNESS = 10F;
     public static final int BANK_HEIGHT = 10;
     /** The machine's height in blocks (canopy roof): this much above the tracks is always cleared. */
@@ -97,7 +102,8 @@ public final class BulldozerTerrainWork {
         float lift = dozer.bladeLift();
         if (lift > BulldozerRig.TRAVEL_LIFT) {
             clear(dozer);
-            return pushing && this.bladeObstructed(dozer, level, lift) ? SOLID : RAISED;
+            // Not "too hard": the raised blade does no work, and lowering it is what gets through.
+            return pushing && this.bladeObstructed(dozer, level, lift) ? RAISED_BLOCKED : RAISED;
         }
         if (!pushing) { clear(dozer); return IDLE; }
 
@@ -169,6 +175,55 @@ public final class BulldozerTerrainWork {
         }
         if (spoil && status == WORKING) status = SPOIL;
         return status;
+    }
+
+    /**
+     * Turning inside a cut. The hull's swing would meet the cut's walls, and the vehicle refuses a turn into blocks, so a
+     * machine in its own trench could only back out. With the blade lowered the walls the swing meets are cut away (only
+     * natural ground, at and above the level the tracks stand on), as a dozer pivoting with its blade down carves the
+     * corner; drops go into the hold like the blade's.
+     * @param steer 1 turning right, -1 left, in the direction the heading actually turns
+     * @return {@link #WORKING} when it cut, {@link #TURN_BLOCKED_RAISED} or {@link #TURN_BLOCKED} when walls stop the turn,
+     *         {@link #NO_POWER}, or {@link #IDLE} when nothing is in the way
+     */
+    public int clearTurn(BulldozerEntity dozer, int steer) {
+        if (steer == 0 || !(dozer.level() instanceof ServerLevel level) || !(dozer.getControllingPassenger() instanceof ServerPlayer player)) return IDLE;
+        float target = dozer.getYRot() + steer * TURN_LOOKAHEAD;
+        if (!dozer.turnBlockedByBlocks(target)) return IDLE;
+        if (dozer.bladeLift() > BulldozerRig.TRAVEL_LIFT) return TURN_BLOCKED_RAISED;
+        AABB swing = dozer.boundingBoxAtYaw(target);
+        int floorY = Mth.floor(dozer.getY() + 1.0E-3);
+        boolean stuck = false;
+        int cut = 0;
+        for (BlockPos pos : BlockPos.betweenClosed(Mth.floor(swing.minX), Math.max(floorY, Mth.floor(swing.minY)), Mth.floor(swing.minZ),
+                Mth.floor(swing.maxX - 1.0E-7), Mth.floor(swing.maxY - 1.0E-7), Mth.floor(swing.maxZ - 1.0E-7))) {
+            BlockState state = level.getBlockState(pos);
+            if (state.isAir()) continue;
+            var shape = state.getCollisionShape(level, pos);
+            if (shape.isEmpty() || !shape.bounds().move(pos).intersects(swing)) continue;
+            if (!state.is(NATURAL_GROUND) || !cuttable(state, level, pos) || !level.getWorldBorder().isWithinBounds(pos)
+                    || !level.mayInteract(player, pos) || player.gameMode.getGameModeForPlayer() == GameType.ADVENTURE) {
+                stuck = true;
+                continue;
+            }
+            if (cut >= TURN_BLOCKS_PER_TICK) continue;
+            int energy = 20 + Math.round(state.getDestroySpeed(level, pos) * 30);
+            if (dozer.vehicleEnergy() < energy) return NO_POWER;
+            BlockPos at = pos.immutable();
+            if (!PlayerBlockBreakEvents.BEFORE.invoker().beforeBlockBreak(level, player, at, state, null)) {
+                stuck = true;
+                continue;
+            }
+            List<ItemStack> drops = Block.getDrops(state, level, at, null, player, tool(state));
+            this.remove(level, player, at, state, cut < EFFECTS_PER_TICK);
+            this.store(dozer, level, at, drops);
+            dozer.consumeEnergy(energy);
+            PlayerBlockBreakEvents.AFTER.invoker().afterBlockBreak(level, player, at, state, null);
+            if (cut < 2) this.spray(level, dozer, at, state);
+            cut++;
+        }
+        if (cut > 0) return WORKING;
+        return stuck ? TURN_BLOCKED : IDLE;
     }
 
     /** True when something solid sits in the raised blade's path. */
