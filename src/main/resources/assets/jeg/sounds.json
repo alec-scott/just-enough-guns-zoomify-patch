@@ -1796,14 +1796,6 @@
       }
     ]
   },
-  "vehicle.truck.engine": {
-    "subtitle": "subtitle.jeg.vehicle.engine",
-    "sounds": [
-      {
-        "name": "jeg:vehicle/truck/engine"
-      }
-    ]
-  },
   "vehicle.waveforce_tower.fire": {
     "subtitle": "subtitle.jeg.vehicle.fire",
     "sounds": [
@@ -2030,5 +2022,21 @@
         "stream": false
       }
     ]
-  }
+  },
+  "vehicle.truck.engine_idle": {"subtitle": "subtitle.jeg.truck.engine_idle", "sounds": [{"name": "jeg:vehicle/truck/engine_idle", "attenuation_distance": 96, "stream": false}]},
+  "vehicle.truck.engine_load": {"subtitle": "subtitle.jeg.truck.engine_load", "sounds": [{"name": "jeg:vehicle/truck/engine_load", "attenuation_distance": 96, "stream": false}]},
+  "vehicle.truck.engine_cab": {"subtitle": "subtitle.jeg.truck.engine_cab", "sounds": [{"name": "jeg:vehicle/truck/engine_cab", "attenuation_distance": 16, "stream": false}]},
+  "vehicle.truck.engine_distant": {"subtitle": "subtitle.jeg.truck.engine_distant", "sounds": [{"name": "jeg:vehicle/truck/engine_distant", "attenuation_distance": 192, "stream": false}]},
+  "vehicle.truck.engine_start": {"subtitle": "subtitle.jeg.truck.engine_start", "sounds": [{"name": "jeg:vehicle/truck/engine_start", "attenuation_distance": 96, "stream": false}]},
+  "vehicle.truck.engine_stop": {"subtitle": "subtitle.jeg.truck.engine_stop", "sounds": [{"name": "jeg:vehicle/truck/engine_stop", "attenuation_distance": 96, "stream": false}]},
+  "vehicle.truck.generator": {"subtitle": "subtitle.jeg.truck.generator", "sounds": [{"name": "jeg:vehicle/truck/generator", "attenuation_distance": 64, "stream": false}]},
+  "vehicle.truck.generator_distant": {"subtitle": "subtitle.jeg.truck.generator_distant", "sounds": [{"name": "jeg:vehicle/truck/generator_distant", "attenuation_distance": 160, "stream": false}]},
+  "vehicle.truck.slide_motor": {"subtitle": "subtitle.jeg.truck.slide_motor", "sounds": [{"name": "jeg:vehicle/truck/slide_motor", "attenuation_distance": 32, "stream": false}]},
+  "vehicle.truck.hydraulic": {"subtitle": "subtitle.jeg.truck.hydraulic", "sounds": [{"name": "jeg:vehicle/bulldozer/hydraulic", "attenuation_distance": 32, "stream": false}]},
+  "vehicle.truck.hydraulic_stop": {"subtitle": "subtitle.jeg.truck.hydraulic_stop", "sounds": [{"name": "jeg:vehicle/bulldozer/hydraulic_stop", "attenuation_distance": 24, "stream": false}]},
+  "vehicle.truck.reverse": {"subtitle": "subtitle.jeg.truck.reverse", "sounds": [{"name": "jeg:vehicle/bulldozer/reverse", "attenuation_distance": 48, "stream": false}]},
+  "vehicle.truck.horn": {"subtitle": "subtitle.jeg.truck.horn", "sounds": [{"name": "jeg:vehicle/truck/horn", "attenuation_distance": 128, "stream": false}]},
+  "vehicle.truck.horn_distant": {"subtitle": "subtitle.jeg.truck.horn_distant", "sounds": [{"name": "jeg:vehicle/truck/horn_distant", "attenuation_distance": 256, "stream": false}]},
+  "vehicle.truck.air_brake": {"subtitle": "subtitle.jeg.truck.air_brake", "sounds": [{"name": "jeg:vehicle/truck/air_brake", "attenuation_distance": 48, "stream": false}]},
+  "vehicle.truck.ramp_clank": {"subtitle": "subtitle.jeg.truck.ramp_clank", "sounds": [{"name": "jeg:vehicle/truck/ramp_clank", "attenuation_distance": 48, "stream": false}]}
 }

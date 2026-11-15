@@ -41,7 +41,13 @@ import ttv.migami.jeg.vehicle.entity.base.VehicleEntity;
  * and +X its right, and the nose points to -Z.
  */
 public final class AircraftLights {
-    public enum Kind { POSITION, BEACON, STROBE, COCKPIT }
+    public enum Kind {
+        POSITION, BEACON, STROBE, COCKPIT,
+        /** A road vehicle's tail lamp: dim as a tail light, bright while braking. */
+        BRAKE,
+        /** A road vehicle's reversing lamp: on only while it reverses. */
+        REVERSE
+    }
 
     /**
      * One light. {@code size} is the glow's width in blocks; it casts {@code spill} of its colour onto the airframe within
@@ -117,6 +123,57 @@ public final class AircraftLights {
             new PointLight(Kind.BEACON, 7.8F, 49.3F, 14.8F, 0xFFAC35, .45F, 1.3F, .3F, 0)
     ), new Searchlight(0, 26.4F, -35.6F, 16, 26, 30, SEARCH_WHITE, false), List.of(), null, true);
 
+    /**
+     * The FSV-6: headlamps (the beam), tail lamps, cab marker lamps and the two amber beacons on the cab roof. Render
+     * space negates the model's X. The room, awning and mast light their surroundings with real light while deployed
+     * (the walk-in shell's lit cells) and glow through the glow texture.
+     */
+    private static final LightSet TRUCK = new LightSet(List.of(
+            new PointLight(Kind.POSITION, -16F, 22F, -64.9F, SEARCH_WHITE, .2F, 1.2F, .16F, 0),
+            new PointLight(Kind.POSITION, 16F, 22F, -64.9F, SEARCH_WHITE, .2F, 1.2F, .16F, 0),
+            new PointLight(Kind.BRAKE, -15.3F, 7.5F, 63.3F, RED, .24F, 1.4F, .3F, 0),
+            new PointLight(Kind.BRAKE, 15.3F, 7.5F, 63.3F, RED, .24F, 1.4F, .3F, 0),
+            new PointLight(Kind.BRAKE, 0F, 47.1F, 60.7F, RED, .18F, 1.0F, .2F, 0),
+            new PointLight(Kind.REVERSE, -10.9F, 7.5F, 63.3F, WHITE, .2F, 1.6F, .3F, 0),
+            new PointLight(Kind.REVERSE, 10.9F, 7.5F, 63.3F, WHITE, .2F, 1.6F, .3F, 0),
+            new PointLight(Kind.POSITION, -16.5F, 49.6F, -61.5F, 0xFFAC35, .06F, .4F, .05F, 0),
+            new PointLight(Kind.POSITION, 16.5F, 49.6F, -61.5F, 0xFFAC35, .06F, .4F, .05F, 0),
+            new PointLight(Kind.BEACON, -12F, 52F, -40F, 0xFFAC35, .4F, 1.3F, .3F, 0),
+            new PointLight(Kind.BEACON, 12F, 52F, -40F, 0xFFAC35, .4F, 1.3F, .3F, .5F)
+    ), new Searchlight(0, 22F, -65F, 8, 22, 34, SEARCH_WHITE, false), List.of(), null, false);
+
+    private static final int WARM = 0xFFC27A;
+
+    /**
+     * The FSV-6's room, lit only by its one fitted lamp (none fitted, the room is dark): a soft warm glow on the lamp and a
+     * warm wash over the walls, bunks and bays round it (spill, wrapped like cockpit light). The shell's lit cells give
+     * the matching block light. Render space negates the model's X: the lamp hook is at model x 11, z 16
+     * ({@code SupportVehicleRenderer.LAMP_HOOK}).
+     */
+    private static final List<PointLight> TRUCK_ROOM_LAMP = List.of(
+            new PointLight(Kind.POSITION, -11F, 41.5F, 16F, WARM, .3F, 0F, 0F, 0),
+            new PointLight(Kind.COCKPIT, -11F, 40F, 16F, WARM, 0F, 3.2F, .38F, 0),
+            new PointLight(Kind.COCKPIT, -16F, 34F, 16F, WARM, 0F, 1.6F, .16F, 0),
+            new PointLight(Kind.COCKPIT, 16F, 34F, 16F, WARM, 0F, 1.6F, .12F, 0));
+    /** Outside: the awning's light strip, on whenever the generator is. */
+    private static final List<PointLight> TRUCK_AWNING = List.of(
+            new PointLight(Kind.POSITION, -43F, 44.8F, 16F, WARM, .28F, 1.8F, .2F, 0));
+    /** The mast's two floodlights once the mast is fully up (lenses at the head's front face). */
+    private static final List<PointLight> TRUCK_MAST = List.of(
+            new PointLight(Kind.POSITION, -11F, 103.9F, -21.8F, SEARCH_WHITE, .3F, 1.2F, .15F, 0),
+            new PointLight(Kind.POSITION, -17F, 103.9F, -21.8F, SEARCH_WHITE, .3F, 1.2F, .15F, 0));
+
+    /** The FSV-6 on its generator: deploying or packing (awning), deployed (and the mast), each with or without a lamp. */
+    private static final LightSet TRUCK_DEPLOYING = truckSet(false, false), TRUCK_DEPLOYING_LAMP = truckSet(true, false),
+            TRUCK_MAST_UP = truckSet(false, true), TRUCK_MAST_UP_LAMP = truckSet(true, true);
+
+    private static LightSet truckSet(boolean lamp, boolean mast) {
+        List<PointLight> lights = new java.util.ArrayList<>(TRUCK_AWNING);
+        if (lamp) lights.addAll(TRUCK_ROOM_LAMP);
+        if (mast) lights.addAll(TRUCK_MAST);
+        return new LightSet(List.copyOf(lights), null, List.of(), null, false);
+    }
+
     private static final LightSet A10 = new LightSet(List.of(
             new PointLight(Kind.POSITION, -142.7F, 39.5F, -8.0F, RED, 0.5F, 1.8F, 0.55F, 0.0F),
             new PointLight(Kind.POSITION, 142.7F, 39.5F, -8.0F, GREEN, 0.5F, 1.8F, 0.55F, 0.0F),
@@ -185,6 +242,11 @@ public final class AircraftLights {
     public static LightSet forVehicle(VehicleEntity vehicle) {
         return switch (vehicle.vehicleDataId().getPath()) {
             case "bulldozer" -> BULLDOZER;
+            case "truck" -> {
+                if (!(vehicle instanceof ttv.migami.jeg.vehicle.entity.SupportVehicleEntity support) || !support.generatorRunning()) yield TRUCK;
+                boolean lamp = !support.fittedForDisplay(ttv.migami.jeg.vehicle.support.SupportModules.LAMP).isEmpty();
+                yield support.isDeployed() ? (lamp ? TRUCK_MAST_UP_LAMP : TRUCK_MAST_UP) : (lamp ? TRUCK_DEPLOYING_LAMP : TRUCK_DEPLOYING);
+            }
             case "a10" -> A10;
             case "ah6" -> AH6;
             case "mi28" -> MI28;
@@ -195,6 +257,7 @@ public final class AircraftLights {
     /** The aircraft has power: someone at the controls or the engine still turning. A wreck is dark. */
     public static boolean isPowered(VehicleEntity vehicle) {
         if (vehicle instanceof ttv.migami.jeg.vehicle.entity.BulldozerEntity dozer) return dozer.powered();
+        if (vehicle instanceof ttv.migami.jeg.vehicle.entity.SupportVehicleEntity truck) return truck.engineRunning() || truck.generatorRunning();
         if (vehicle.isWrecked()) {
             return false;
         }
@@ -237,6 +300,15 @@ public final class AircraftLights {
      * rotating or LED beacon does; a strobe double-flashes every 1.4 seconds. {@code seed} puts each aircraft on its own
      * beat.
      */
+    /** Brake and reversing lamps follow what the vehicle is doing; other lights flash on their own beat. */
+    public static float flash(VehicleEntity vehicle, PointLight light, float seconds, float seed) {
+        if (vehicle instanceof ttv.migami.jeg.vehicle.entity.SupportVehicleEntity truck) {
+            if (light.kind() == Kind.BRAKE) return truck.braking() ? 1.0F : 0.28F;
+            if (light.kind() == Kind.REVERSE) return truck.reversing() ? 1.0F : 0.0F;
+        }
+        return flash(light, seconds, seed);
+    }
+
     public static float flash(PointLight light, float seconds, float seed) {
         return switch (light.kind()) {
             case BEACON -> {

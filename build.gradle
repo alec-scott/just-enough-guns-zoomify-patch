@@ -30,6 +30,9 @@ dependencies {
     include "com.electronwill.night-config:core:3.8.1"
     compileOnly files("${gradle.gradleUserHomeDir}/caches/fabric-loom/minecraftMaven/net/minecraft/minecraft-clientonly-deobf/${project.minecraft_version}/minecraft-clientonly-deobf-${project.minecraft_version}.jar")
     compileOnly "com.google.code.findbugs:jsr305:3.0.2"
+    // Inventory Profiles Next's API (in the yftm pack), for @IPNIgnore on screens its sort buttons would break.
+    // Compile only: the annotation is ignored at runtime when IPN is absent.
+    compileOnly "maven.modrinth:O7RBXm3n:lOBWkkzv"
 }
 
 loom {
@@ -109,6 +112,33 @@ tasks.matching { it.name == "runPackClient" }.configureEach {
         }
         setLines(new File(runDir, "options.txt"), ":",
                 [resourcePacks: "[\"vanilla\",\"fabric\"," + packResourcePacks.keySet().collect { "\"file/" + it + "\"" }.join(",") + "]"])
+    }
+}
+
+// Let an AI agent play the pack client: -PwithMcp adds mcpfabric (https://github.com/denfry/mcpfabric), which serves
+// screenshots, movement, look, clicks and screens on a token-protected bridge at 127.0.0.1:25599. Dev runs only: it sits
+// in the gametest classpath, never in the jar or the yftm pack. Our own key bindings are pressed with /jegkey
+// (DevKeysClient), since mcpfabric only holds the vanilla movement keys.
+// ./gradlew runPackClient -PwithPack -PwithMcp -Pminecraft_version=26.1.2 -Pfabric_version=0.155.3+26.1.2 -Ploader_version=0.20.1 --args="--quickPlaySingleplayer DozerTest"
+if (project.hasProperty("withMcp")) {
+    def mcVersion = project.property("minecraft_version").toString()
+    def mcpfabricVersions = ["26.1": "kQfIuotv", "26.2": "rT1ZQQ5w"] // 0.10.0+26.1.2 (whole 26.1 line), 0.10.0+26.2
+    def mcpfabric = mcpfabricVersions[mcVersion.startsWith("26.1") ? "26.1" : mcVersion]
+    if (mcpfabric == null) {
+        throw new GradleException("-PwithMcp has no mcpfabric build listed for Minecraft " + mcVersion)
+    }
+    dependencies {
+        gametestRuntimeOnly "maven.modrinth:eA63YgUh:" + mcpfabric
+    }
+    tasks.matching { it.name == "runPackClient" }.configureEach {
+        doFirst {
+            // Screens can be clicked (off by default); the token and the rest stay as mcpfabric generated them.
+            def config = file("build/run/packClient/config/mcpfabric.config.json")
+            def json = config.exists() ? new groovy.json.JsonSlurper().parse(config) : [:]
+            json.enableUiControl = true
+            config.parentFile.mkdirs()
+            config.text = groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(json))
+        }
     }
 }
 

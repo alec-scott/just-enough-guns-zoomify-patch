@@ -5,6 +5,9 @@
   "name": "JEG Client Game Tests",
   "environment": "client",
   "entrypoints": {
+    "client": [
+      "ttv.migami.jeg.gametest.DevKeysClient"
+    ],
     "fabric-client-gametest": [
       "ttv.migami.jeg.gametest.BulldozerClientGameTest",
       "ttv.migami.jeg.gametest.BulldozerBankClientGameTest",
@@ -12,6 +15,14 @@
       "ttv.migami.jeg.gametest.BulldozerAudioClientGameTest",
       "ttv.migami.jeg.gametest.BulldozerHitboxClientGameTest",
       "ttv.migami.jeg.gametest.BulldozerFarSoundClientGameTest",
+      "ttv.migami.jeg.gametest.SupportDeployClientGameTest",
+      "ttv.migami.jeg.gametest.SupportModulesClientGameTest",
+      "ttv.migami.jeg.gametest.SupportTowClientGameTest",
+      "ttv.migami.jeg.gametest.SupportHitboxClientGameTest",
+      "ttv.migami.jeg.gametest.SupportInteriorClientGameTest",
+      "ttv.migami.jeg.gametest.SupportLookClientGameTest",
+      "ttv.migami.jeg.gametest.A10GroundClientGameTest",
+      "ttv.migami.jeg.gametest.SupportSandboxSetupClientGameTest",
       "ttv.migami.jeg.gametest.DozerSandboxSetupClientGameTest",
       "ttv.migami.jeg.gametest.DozerSandbox2SetupClientGameTest",
       "ttv.migami.jeg.gametest.MultiplayerGunAudioClientGameTest",

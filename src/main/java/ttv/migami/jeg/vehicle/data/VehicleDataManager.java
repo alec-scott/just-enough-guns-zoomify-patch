@@ -146,7 +146,8 @@ public final class VehicleDataManager {
         CameraPos camera = parseCamera(getObject(object, "third_person_camera"), fallback.thirdPersonCamera());
         DismountInfo dismount = parseDismount(getObject(object, "dismount"), fallback.dismount());
         CollisionLevel collisionLevel = getEnum(object, "collision_level", CollisionLevel.class, fallback.collisionLevel());
-        OBBInfo obb = parseObb(object, fallback.obb());
+        OBBInfo obb = parseObb(object, "obb", fallback.obb());
+        OBBInfo deployedObb = parseObb(object, "obb_deployed", null);
         VehicleArmorProfile armor = parseArmor(getObject(object, "armor"), fallback.armor());
         DamageModifierInfo damageModifier = parseDamageModifier(getObject(object, "damage_modifier"), fallback.damageModifier());
         List<VehicleWeaponInfo> weapons = parseWeapons(object, fallback.weapons());
@@ -179,7 +180,7 @@ public final class VehicleDataManager {
                 hasDecoy,
                 seek,
                 destroy
-        ));
+        ), deployedObb);
     }
 
     private static DefaultVehicleData fallbackFor(Identifier id) {
@@ -301,8 +302,8 @@ public final class VehicleDataManager {
         return List.copyOf(seats);
     }
 
-    private static OBBInfo parseObb(JsonObject object, OBBInfo fallback) {
-        JsonElement element = object.get("obb");
+    private static OBBInfo parseObb(JsonObject object, String key, OBBInfo fallback) {
+        JsonElement element = object.get(key);
         if (element == null || !element.isJsonArray()) {
             return fallback;
         }

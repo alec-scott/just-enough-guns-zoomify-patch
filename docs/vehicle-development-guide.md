@@ -37,6 +37,50 @@ A vehicle is done when all of these are true and shown by a game test run with `
    distant players see the tracers and impacts.
 8. **It looks right at night from every seat**, not just from outside.
 9. **There is a sandbox world** the user can open and play the vehicle in immediately.
+10. **It passes the player's checklist below**, checked as a player in the sandbox, before it is handed over.
+
+### The player's checklist: what the first review catches
+
+The FSV-6's first hand-over passed every automated test, and the user's first ten minutes in it still found fifteen
+problems; the second hand-over found ten more (the rows marked *second review*), the third eight more (*third
+review*), and the fourth four (*fourth review*). Each was cheap to fix and should have been caught before the hand-over. All of them are things a player
+notices at once, and none were covered by a test that called code directly. Go through this list in the sandbox, as a
+player, with real keys and clicks, before reporting a vehicle done. Write the answers into the brief.
+
+| Area | Check | What went wrong on the FSV-6 |
+| --- | --- | --- |
+| Interaction | Every block or fitting that looks usable opens with a **real right-click aimed by the player's view**, from where a player stands | The furnace, chest, workbench and beds inside could not be clicked: the vehicle's own entity box took every click |
+| Interaction | Everything the player can fit or store can be added **and removed from where they use it**, in every state (packed, unfolding, deployed, moving) | Fitting needed a trip outside; the second bed could not be added and the first could not be removed while deployed |
+| Interaction | Every input slot accepts **what a player would naturally try** | The beacon rack refused raw iron, gold and diamonds; players carry ingots, not blocks |
+| Interaction | A vehicle with several functions has **one place inside that shows them all**, a console in the vehicle's own style | Fittings were only reachable from separate side menus |
+| Interaction | Each module's own screen (furnace, chest, beacon) opens **only from that module, where it is, one at a time**. The seats' screens show just the hold and the fit-out | *Second review:* the hold and the console each had a button per module, which made the cab a remote control for the room |
+| Interaction | Every action has a **prompt where the player is**: looking at it on foot, or in the driver's panel, with the real key names | *Third review:* towing worked only by sneak-clicking the low rear bumper, with nothing to say so, and the tester could not tow at all; an empty outside locker did nothing when clicked |
+| Interaction | Our own screens are **marked `@IPNIgnore`** (Inventory Profiles Next, in the pack) unless sorting them is harmless | *Fourth review:* IPN's sort buttons on the support console would scramble fittings |
+| Sound | Fitted blocks **keep their vanilla sounds**: chests and barrels open and close, furnaces crackle, a brew chimes, fitting and removing sound as placing and breaking the block | *Fourth review:* opening a chest bay was silent |
+| Interaction | **No input is hidden.** Every item a function consumes goes in a slot the player can see and reach from the function's own screen | *Second review:* the beacon kept its own payment inventory that no screen showed, so raw ore could not be added |
+| Model | Nothing **flickers while walking round it** at any distance | The entity was culled whenever its small remaining box left the screen (section 6) |
+| Model | Every fitted block is drawn, **including the ones drawn by a block entity renderer** (chests, ender chests, shulker boxes) | *Third review:* chests were invisible in the bays: their block model is empty (section 6) |
+| Model | **Real blocks placed in a moving room never show through its walls**: walls stand proud of the block cells they close | *Third review:* the bunk's bed (a full block to the cell edge) showed through the slide-out's end wall, which stopped on the same plane |
+| Model | **Tyres are as wide and as tall as the real vehicle's**, front ones included; compare the side and three-quarter views with photos | *Third review:* 6 px tyres looked skinny on a 7-block truck. *Fourth review:* still too small; now 16 px tall (the most under a floor one block up), 10 px wide in front |
+| Model | **Size the wheels before fixing the floor height.** The tyres' top limits how big they can be under a walk-in floor | The FSV-6's floor is one block up for its room, which caps its tyres at one block; a real 6×6's are bigger and its floor higher |
+| Model | A closed cab has **live instruments** (gauges, warning lamps, a status screen), as the helicopters do | *Third review:* the cab had a flat painted panel behind the wheel |
+| Model | Windows are **real openings** with glass, and can be seen through **from both sides** | Painted windows read as fake from the cab and from outside |
+| Model | Light sources are **3D blocks or 3D models**, like vanilla's, not flat icons | The interior lamp was a flat item sprite |
+| Model | A moving vehicle **turns as tightly as the real one**: measure the radius in a test and set it in the brief | The truck needed about 20 blocks to turn round; the target was about 10 |
+| Lights | A road vehicle has **tail, brake and reversing lights**, and they follow the controls | No brake lights |
+| Lights | Lights on a moving part **switch on only when the part reaches its working position**, sit exactly on its lamp and go off **as it starts to leave** | The mast's lamp was lit from the start of the climb until the mast had fully stowed, and floated beside the head |
+| Lights | Interiors have a **warm light source you can see**, with block light to match, not just a bright room | The first room was lit by nothing visible |
+| Lights | The interior's light comes **only from what the player fitted**: no built-in fill light, no glow without a lamp | *Second review:* four default lanterns and a built-in level 12 lit the room whatever was fitted; the user wanted one lamp slot as its only light |
+| Camera | The F5 camera sits **far enough back to see the whole vehicle** and **does not stutter in a hard turn** | *Second review:* 9 blocks was too close for a 7-block truck; full lock made the view jump 20 times a second (section 6) |
+| Sound | Every recording is **of the real thing**: a real truck start, a real truck horn. A synthesized or generic substitute is noticed at once | The synthesized start and car-like horn were both rejected |
+| Sound | **No voices** in any vehicle sound. Scan every source for speech before shipping it | Recordings with a voice in them played on start and deploy |
+| Sound | Loops are **long (15–20 s) and vary** (slow random pitch and volume drift), so they don't sound repetitive | A 4-second idle loop was obviously repetitive within a minute |
+| Sound | A loop holds **only the steady sound**: no start, horn or door from the same take inside it | *Second review:* the driving loop was cut across a second engine start in the take, heard every 15 s |
+| Sound | A vehicle feature that copies a vanilla block **sounds like that block**: a beacon activates, hums, deactivates and clicks when an effect is chosen | *Third review:* the roof beacon was silent |
+| Sound | **Steady machinery is quieter than the engine** and sits back in the mix | The generator was 40% too loud, then another 40% (×0.36 in all) |
+
+**Ask the user to listen.** Builders can't hear the game. Say in the report which sounds are new and ask for a
+listening check. Don't call a sound finished because its gain values look right.
 
 ## 1. Learn from the A-10 and the helicopters
 
@@ -140,6 +184,11 @@ clears, and grows the entity box at every angle that isn't square on.
   the occupant cannot look around.
 - **`hide_passenger`.** True only for enclosed or armoured crews. `enclosed` controls damage protection, not
   visibility; set it to what the real seat offers.
+- **Turning circle.** For wheeled land vehicles, `steering_speed` sets how fast the wheels turn in: each tick
+  `wheelSteering += input × steering_speed`, and steering decays by `× max(0.78 − 0.25v, 0.1)`. The FSV-6 went from
+  a radius of about 20 blocks to 10.3 when `steering_speed` was raised to 0.18. Put the real vehicle's radius in the
+  brief, then measure it in a test: drive at full lock for 2 s and work out the radius from the distance travelled
+  and the heading change (`SupportInteriorClientGameTest`).
 - **Other entries.** Give it no `weapons`, `seek` or decoys unless it is armed.
 
 ## 5. Model
@@ -182,6 +231,27 @@ hand-editing JSON. The script keeps the geometry parametric, validated and repro
 - Keep tall fittings off the centre of the forward view.
 - Keep the headrest and screens below and behind the eye.
 - Confirm with first-person screenshots.
+- Before the game, render the model from the eye point in perspective: `design/support/render_eye.py` does it for any
+  model point and pose. It shows at once whether the geometry or the game is wrong.
+
+**Driving bones from code (GeckoLib snapshots).**
+- Translations are in pixels in the authored sense: `setTranslateX(+16)` moves a bone 16 px to the vehicle's left
+  (+X). This was checked on the FSV-6's slide-outs with a top-down screenshot. The A-10's fan code negates X inside a
+  rotated sub-frame, so check each new use with a picture from above.
+- X rotations are as authored. Y and Z rotations are the negative of the authored right-handed sense.
+- To draw something in a moving part (a module in a bay), add a per-bone render on that bone. The pose is at the bone's
+  pivot in render space (the model's X negated): translate by `(-x / 16 - pivotX / 16, y / 16 - pivotY / 16,
+  z / 16 - pivotZ / 16)`. Coordinates are in the bone's own unmoved frame: the bone's animation moves them.
+- Items and blocks draw with `ItemStackRenderState` and `ItemDisplayContext.NONE`: a block item is then a full-size
+  block centred on the pose. Chests, beds and beacons render through their special models.
+
+**Coplanar faces flicker.** Two cubes of different finishes sharing a face plane z-fight as the camera moves (rim
+on tyre, lamp on housing, end wall on outer wall). `design/support/generate.py`'s `resolve_zfighting()` pushes the
+smaller of each such pair out by 0.04 px within a bone; scan both poses after changes.
+
+**Light on the model.** GeckoLib lights the whole model with one value, read at the entity's origin. When the origin is
+under a floor or in a block (the FSV-6 stands its floor a block up), override `getBlockLightLevel` and
+`getSkyLightLevel` in the renderer to read the light where the occupants are.
 
 **Materials and paint:**
 - Real colours, a little weathering, and a separate material per finish: paint, bare steel, rubber, glass, lamps.
@@ -195,6 +265,14 @@ physically; parts that stop working when hit.
 
 - **Server first.** World changes happen on the server only. Respect the world border, spawn protection and
   adventure mode, and call `PlayerBlockBreakEvents.BEFORE`/`AFTER` for every block, so claim mods apply.
+- **A vehicle container sets a jet down on its wheels where the box stood.** It spawned every vehicle half its
+  height up; a jet fell with no pilot, its flight model turned the nose into the fall, and it landed nose first
+  (`VehicleContainerBlockEntity.deploy`).
+- **Carry On (in the pack) picks up any entity with sneak + right-click and an empty hand.** Unblacklisted, a player
+  could carry a whole vehicle off, and every sneak-click on a vehicle went to Carry On instead of the vehicle (the
+  FSV-6's on-foot tow click lifted the truck). Every JEG vehicle entity is listed in
+  `data/carryon/tags/entity_type/entity_blacklist.json` (and the legacy `entity_types` folder Carry On ships). Add new
+  vehicle entity types there.
 - **Present the vehicle's work to other mods as the matching player action.** For example, the bulldozer holds an
   axe while breaking logs so FallingTree fells the tree. Restore the player's real hand afterwards, and keep a safe
   fallback for when the mod is absent.
@@ -211,11 +289,71 @@ physically; parts that stop working when hit.
   on both sides.
 - **Real controls and start-up.** A hydrostatic machine stops when the lever is released; a truck coasts. Engines
   crank and catch: no instant power, and no power before the start-up sound says so.
+- **A rider's view turns with a land vehicle.** `VehicleInputHandler.clampSeatView` turns the rider's yaw by the
+  vehicle's yaw as drawn this frame (`rotLerp` of `yRotO`/`getYRot()`), as a boat does, and clamps the seat's yaw
+  limits against that same yaw. Clamping against the tick's yaw while the view kept its world heading made a hard turn
+  hit the limit and step the F5 camera 20 times a second. Turret seats and vehicles posed by `usesVehiclePoseTransform`
+  keep their world aim. Set `third_person_camera.z` to about 1.6× the vehicle's length (the FSV-6: 11.5 blocks).
 - **Shift is free for controls.** Riding a JEG vehicle, Shift neither ejects (`wantsToStopRiding`) nor crouches
   (`getDesiredPose`, `PlayerVehicleSneakDismountMixin`); crouching sank the first-person camera into the seat.
   Keys that are unused on an unarmed vehicle (R, left mouse button) can carry its tools.
 - **Limits that protect the world.** Give hardness caps, deny tags, block entities, and grade or floor locks clear
   rules, and show them in the HUD.
+
+### Vehicles that move themselves, unfold, or carry working blocks
+
+Lessons from the FSV-6 (`design/support/`).
+- **The driver's client owns a ridden vehicle's position.** Vanilla's move-vehicle packet lets the driver's client
+  report where the vehicle is, and the server takes it. To place a ridden vehicle from the server (squaring up, lifting
+  onto jacks), override `isLocalClientAuthoritative()` to return false while you do. Otherwise the server's move is
+  snapped back to the client's next tick.
+- **A walk-in interior needs blocks.** Entity collision cannot make a hollow, rotated room. Snap the vehicle to the
+  block grid and a cardinal heading when it parks, then place invisible, unbreakable shell blocks for floor, walls,
+  ceiling and steps. `VehicleShellBlock` has kinds with their own collision shapes.
+- **Keeping the shell safe:**
+  - Keep a saved registry of every block a vehicle placed.
+  - Let a shell block whose vehicle is gone clear itself (random tick plus the registry).
+  - Remove the shell when the entity is destroyed (`remove` with `shouldDestroy()`).
+  - Refuse to pack up with anyone inside.
+- **The entity box is one axis-aligned envelope.** `envelopeBoxes` are merged into a single box round all of them,
+  so keeping any long box makes the entity's box span the whole vehicle. On the FSV-6, the chassis box under the floor
+  made the box cover the room, and every click inside hit the vehicle. Keep only the boxes that are really outside
+  the room.
+- **Culling.** When the entity box is cut down like that, override `partBounds()` to cover the whole unfolded vehicle,
+  or it vanishes whenever the part that is left leaves the screen (seen as flicker walking round it).
+- **Test clicks with the real use key, aimed by the player's view.** Calling the use method from the server passes
+  even when every real click is taken by something else (`SupportInteriorClientGameTest`).
+- **Room cells and clicks.** Give the room's cells an empty outline shape, so clicks pass through to the real blocks
+  and bays. While the vehicle is unfolded, keep its own entity box out of the room (`envelopeBoxes`,
+  `entityPushBoxes`), or the player is pushed out and every click inside picks the vehicle.
+- **Shapes that change.** A vehicle with a second pose gives its fitted boxes for it as `obb_deployed` in the vehicle
+  JSON, and returns them from `obbBoxes()` in that pose.
+- **Working blocks as data.** Fitted blocks (crafting tables, furnaces, chests) are data on the vehicle, not blocks
+  in the world:
+  - They work while it moves, survive the crowbar's container (save them in `addAdditionalSaveData`), and mobs and
+    pistons cannot reach them.
+  - Open the vanilla menus bound to the vehicle: subclass them and override `stillValid`.
+  - Give `ContainerLevelAccess.create(level, pos)` real coordinates, or crafting results never compute.
+  - Cook and brew with your own tick: the vanilla block entities write lit states into the world at their position.
+- **Walking about inside while it moves is not possible with a block shell.** The shell exists only while parked;
+  vanilla has no collision against a moving, rotating entity interior, and each player's own client owns their
+  movement, so a room built from entity boxes jitters by the network lag between the driver's and each passenger's
+  client. The ways to do it, from cheapest: crew seats in the back that face a module and open it (one at a time);
+  own moving collision plus carrying riders along each tick (large, and still laggy for passengers); or a Sable
+  sub-level (Create Aeronautics, in the pack), which moves real blocks that players can walk on, at the cost of a hard
+  dependency that `-PwithPack` does not load.
+- **Fitted blocks are drawn two ways; test both.** A block with a real model is drawn with `submitMovingBlock`. A
+  chest, trapped chest, ender chest or shulker box also reports `RenderShape.MODEL` in 26.1, but its block model is
+  empty (its look comes from the block entity's renderer), so that draws nothing. Draw those through
+  `BlockModelResolver.update(state, blockState, BlockDisplayContext.create())` and `BlockModelRenderState.submit`, as
+  an enderman draws its held block (`SupportVehicleRenderer.drawSpecialBlock`). Fit both kinds in the visual test
+  (`SupportLookClientGameTest`): the FSV-6's chests were invisible in every bay until then.
+- **Walls proud of the cells.** Where a real block (a bed) fills a cell up to the room's edge, the wall that closes
+  that edge must stand a little outside it (0.4 px), not on the same plane, or the block shows through from outside.
+- **Real blocks only where needed.** Place a real block only where a feature needs one (a bed for sleep and spawn).
+  - Block players from breaking it (`PlayerBlockBreakEvents.BEFORE` on registered positions).
+  - Use up the fitted item if the block was destroyed some other way, so nothing doubles.
+  - Lock that fitting while the block exists.
 
 ### Hold and tool bays
 
@@ -245,6 +383,17 @@ physically; parts that stop working when hit.
 - Cut idle and working loops from one take where possible, so the crossfade stays one voice.
 - For each engine and each gun, prepare a muffled `_distant` version with ground echo, as the aircraft have.
 - For enclosed cabs, prepare an interior recording; it is the first-person sound.
+- **Use a real recording for every recognisable sound.** Players know what a truck start and a truck horn sound
+  like. A synthesized start and a car horn were both rejected on the FSV-6. Synthesize only sounds nobody can compare
+  against, such as a brake-air hiss under the mix.
+- **No voices.** Field recordings often have someone talking in them. Listen to every source and cut the take
+  clear of the talking; note in the script which seconds were cut and why (`design/support/prepare_audio.py`). The
+  FSV-6 first shipped a start and a deploy sound with a voice in them.
+- **Loops of 15–20 s, with slow drift.** A loop of a few seconds is heard as a loop within a minute. Cut long loops,
+  and let pitch (about ±3%) and volume (about ±7%) wander slowly on top of the RPM model. Two or three sines with
+  random phases per instance and periods of several seconds are enough (`SupportAudio`).
+- **Machinery under the engine.** Generators, pumps and fans run for minutes, so mix them well below the engine.
+  The FSV-6's generator was cut by 40% after review.
 
 **Pipeline.**
 - Use a script (`prepare_audio.py`): band-limit, cut, crossfade loop seams, and measure peaks, levels and seams
@@ -319,11 +468,77 @@ silent after a camera switch.
   the panel's edge.
   Reserve separate space for the player inventory's heading below the tool tab. If the player slots move down,
   move the hotbar and grow the screen height too. Check counted stacks and both headings at GUI scales 2 and 3.
+- **Brake and reversing lights** are light kinds (`AircraftLights.Kind.BRAKE`, `REVERSE`), driven by synced
+  `braking()`/`reversing()` state in `flash(vehicle, …)`. Tail lamps glow dim when lit and bright when braking.
+- **Lights on moving parts** belong to a separate light set used only when the part is fully in its working position
+  (the FSV-6's `TRUCK_MAST_UP`). Place them at the lamp's lens in the posed model, not where the part sits when
+  stowed. Screenshot them at mid-travel to show they are off.
 - **Match the tool's footprint to the blade's.** A tool that lays or works the cut lane covers the same block columns
   the blade clears: sample the same band (`BulldozerRig.inBite` uses the edge less 0.05) at under a block apart. A
   4-block blade off the grid clears 5 columns.
 
+### Prompts for actions in the world
+
+Every action a player can take on the vehicle needs a prompt, shown where they are when they could take it, with the
+real key names (`KeyMapping.getTranslatedKeyMessage()`):
+- **On foot:** the action bar while looking at the part (`SupportHints`: the hitch at the back, each outside
+  locker), refreshed every half second.
+- **In the seat:** a row in the driver's panel, with a pulsing lamp when there is something to act on ("N: hitch
+  LAV-150"), and a key for it (a new `KeyMapping`; check the pack's options for a free default, N here).
+- **When nothing happens, say why:** an empty locker says what to fit and where.
+
+### Cab instruments
+
+- **Live faces are additive: draw them on plain dark faces.** `RenderTypes.eyes` adds its light to what is under it,
+  so anything painted on the model face shows through. The FSV-6's wall screens were modelled with the "gauge"
+  material, which the atlas paints as a dial, and every screen showed a stretched dial behind its display. Give a
+  face that carries a live display a plain dark material ("seal").
+- **Draw each set of instruments only for the players who can see it** (aboard for the cab, inside the room for its
+  panels; `SupportCockpitLayer`): nobody else can read them, and it saves the work.
+
+A closed cab gets live instruments, as the helicopters do (`SupportCockpitLayer`, after `Mi28CockpitLayer`):
+- **Placement:** put the driver's gauges where they are seen over the steering wheel (a binnacle on the dash top),
+  and check the sightline from the driver's eye in the generator (`render_eye.py`).
+- **Drawing:** backlit dials with live needles (`CockpitPanel.needle`; textures from a script, `make_cockpit.py`,
+  with the needle's angle convention), warning lamps from a symbol strip tinted when lit, and a status screen for the
+  co-driver with bars filled from synced state.
+- **Power:** the screens boot with power (`CockpitPanel.bootLevel`) and dim a little at night.
+
+### Screens inside the vehicle (consoles)
+
+A vehicle with more than one function needs a single screen that opens the rest. Make it part of the vehicle, not a
+plain inventory. The FSV-6's support console (`SupportFitScreen`) is the example.
+- **Draw it as equipment in the vehicle's style.** Use a steel case with rivets and a stencilled name plate,
+  recessed wells for slots, a CRT status display and push-buttons. Draw everything with `fill` and text, with no
+  texture to keep in step with the model. Share the drawing (`ConsoleStyle`) between a vehicle's screens.
+- **Lay the fittings out as the vehicle.** The FSV-6's fit-out is a top-down plan: cab at the top, each slot where
+  that fitting is in the vehicle, and empty slots showing a faded picture of what they take. Players find a slot by
+  where it is, not by reading labels.
+- **The status display reads the synced entity state.** Show only values that are synced to the client (power,
+  battery, unfold state, light level, beacon level and effect, bunks, towing), each with a status lamp: green on,
+  amber partial or working, dark off. A value the client cannot see should not appear on the display.
+- **The console shows; the modules open.** The console shows each module (icons, a lit lamp on a burning furnace)
+  and fits them, but a module's own screen opens only by clicking the module in the room. Its keys open only the
+  vehicle's own screens (the hold) through one payload (`SupportModulePayload`). Play `UI_BUTTON_CLICK` on press.
+- **A module with its own controls gets its own terminal in the room.** The FSV-6's beacon terminal
+  (`SupportBeaconScreen`, its own `VehicleShellBlock.Kind.BEACON_PANEL` cell beside the console) holds the beacon's
+  power rack and its effect keys. Don't reuse a vanilla screen that keeps state the vehicle can't see: the vanilla
+  beacon screen's payment slot was an inventory no other screen showed.
+- **One panel per clickable wall cell.** Two panels in one wall cell can't be told apart by a click: give each its own
+  cell and draw each centred on its cell (`generate.py`), and aim tests at each cell's centre.
+- **Empty slots say what they take** in a tooltip. Hints are short, and never run under a neighbouring label: the
+  pack's font is wider than vanilla's.
+- **Leave room for the pack's screen buttons.** Inventory Profiles Next puts a sort button at the screen's right
+  edge, level with the player inventory label. A wide screen with its own content there gets the button drawn on top
+  of it. Keep that spot empty, and screenshot the screen in a `-PwithPack` run to check.
+- **Test it with the mouse.** Give the screen a lookup (`keyCentre(slot)`), move the cursor there in the test,
+  `pressMouse`, and assert the menu that opened on the server (`SupportInteriorClientGameTest.clickConsole`).
+
 ## 9. Tests
+
+**Bisecting the pack.** `-PpackExclude=shaders` currently crashes on start ("Global terrain uniforms have not been
+updated", Iris and Voxy) and `-PpackExclude=etf` fails to load (a pack mod requires EMF). To tell whether a fault is
+the pack's or ours, run the same test on the bare client (no `-PwithPack`) instead.
 
 Follow `CLAUDE.md`, which sets the test commands, JDK and pack versions. For a vehicle that means:
 

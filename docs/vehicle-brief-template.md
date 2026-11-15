@@ -84,6 +84,8 @@ Changes from the peer vehicle, and why: <...>
 | weapon | | | 2.5 | firing | loop (static) |
 | | | | | | |
 
+- **Real recordings, no voices, loop lengths:** <source of each recognisable sound; speech scan done; loops 15–20 s
+  with drift>
 - **Heard to:** <blocks; the far track extended to this vehicle: yes / no>
 - **First-person sound:** <exterior centred (open seat) / interior recording (closed cab)>
 
@@ -94,6 +96,27 @@ Changes from the peer vehicle, and why: <...>
 - **Searchlight lens on:** <real lamp>
 - **`openSeat`:** <yes / no>
 - **Instruments:** <...>
+- **Lights on moving parts:** <on only in the working position; lens position in the posed model>
+
+## Interior, interaction and screens
+
+- **What the player can use inside:** <each block or fitting; where they stand to click it; what it opens>
+- **What can be fitted or removed, in which states:** <packed / unfolding / deployed / moving; from where>
+- **What each input slot accepts:** <include the raw forms a player carries: ingots, not blocks>
+- **Console / main screen:** <status readings (synced only), keys, module icons; style to match the vehicle>
+- **Windows:** <real openings with glass, seen through from both sides / none>
+- **Interior light:** <visible 3D source, block light level>
+
+## Road-vehicle basics (if it drives on wheels)
+
+- **Turning radius:** <real value in blocks; `steering_speed`; measured value>
+- **Tail / brake / reversing lights:** <positions in model px>
+- **Horn:** <real recording of this class of vehicle>
+
+## Player checklist (before hand-over)
+
+Copy the table from the guide's "The player's checklist" and answer each row for this vehicle, as a player in the
+sandbox, with real keys and clicks.
 
 ## Tests
 

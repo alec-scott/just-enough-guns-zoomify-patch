@@ -1,0 +1,77 @@
+{
+  "replace": false,
+  "values": [
+    {
+      "id": "jeg:truck",
+      "required": false
+    },
+    {
+      "id": "jeg:bulldozer",
+      "required": false
+    },
+    {
+      "id": "jeg:lav150",
+      "required": false
+    },
+    {
+      "id": "jeg:speedboat",
+      "required": false
+    },
+    {
+      "id": "jeg:ah6",
+      "required": false
+    },
+    {
+      "id": "jeg:a10",
+      "required": false
+    },
+    {
+      "id": "jeg:bmp2",
+      "required": false
+    },
+    {
+      "id": "jeg:mi28",
+      "required": false
+    },
+    {
+      "id": "jeg:tom6",
+      "required": false
+    },
+    {
+      "id": "jeg:laser_tower",
+      "required": false
+    },
+    {
+      "id": "jeg:hpj11",
+      "required": false
+    },
+    {
+      "id": "jeg:waveforce_tower",
+      "required": false
+    },
+    {
+      "id": "jeg:light_combat_vehicle",
+      "required": false
+    },
+    {
+      "id": "jeg:test_wheel_vehicle",
+      "required": false
+    },
+    {
+      "id": "jeg:test_aircraft",
+      "required": false
+    },
+    {
+      "id": "jeg:test_helicopter",
+      "required": false
+    },
+    {
+      "id": "jeg:test_boat",
+      "required": false
+    },
+    {
+      "id": "jeg:test_artillery",
+      "required": false
+    }
+  ]
+}

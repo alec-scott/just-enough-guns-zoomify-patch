@@ -159,7 +159,17 @@ public final class VehicleInputHandler {
                 VehicleClientState.updateAircraftMouse(0.1F, 0.5F, 0.35F, false, freeLook);
             }
         }
-        boolean reload = KeyBindings.RELOAD.consumeClick();
+        // The support vehicle's driver holds R to deploy or pack up, so it is sent held rather than as a press.
+        boolean holdReload = vehicle instanceof ttv.migami.jeg.vehicle.entity.SupportVehicleEntity && vehicle.getControllingPassenger() == player;
+        boolean reload;
+        if (holdReload) {
+            while (KeyBindings.RELOAD.consumeClick()) {
+                // Drain presses so none fire later as a click.
+            }
+            reload = KeyBindings.RELOAD.isDown();
+        } else {
+            reload = KeyBindings.RELOAD.consumeClick();
+        }
         int weaponSlot = -1;
         for (int index = 0; index < minecraft.options.keyHotbarSlots.length; index++) {
             if (minecraft.options.keyHotbarSlots[index].consumeClick()) {
@@ -169,6 +179,11 @@ public final class VehicleInputHandler {
         }
         boolean vehicleZoom = minecraft.options.keyUse.isDown() && vehicle.canPassengerUseSelectedVehicleWeapon(player);
         VehicleClientState.update(vehicle, freeLook, vehicleZoom, seek);
+        boolean towPressed = false;
+        while (KeyBindings.VEHICLE_TOW.consumeClick()) towPressed = true;
+        if (towPressed && vehicle instanceof ttv.migami.jeg.vehicle.entity.SupportVehicleEntity && vehicle.getControllingPassenger() == player) {
+            net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.send(new ttv.migami.jeg.vehicle.network.SupportModulePayload(vehicle.getId(), -3));
+        }
         if (KeyBindings.VEHICLE_CHANGE_SEAT.consumeClick()) {
             ClientNetworkHandler.sendVehicleChangeSeat(vehicle.getId());
         }
@@ -360,8 +375,28 @@ public final class VehicleInputHandler {
         return true;
     }
 
+    /** The land vehicle whose turning the rider's view follows, and its yaw as last drawn. */
+    private static int followedVehicleId = -1;
+    private static float followedVehicleYaw;
+
     private static void clampSeatView(LocalPlayer player, VehicleEntity vehicle, ttv.migami.jeg.vehicle.data.subdata.SeatInfo seat) {
-        float targetYaw = aircraftBoundYaw(player, vehicle, seat);
+        // A land vehicle's rider turns with it, as in a boat, by the vehicle's yaw as drawn this frame. Before, the view
+        // kept its world heading, so a hard turn reached the seat's yaw limit and was pushed round by the tick's yaw:
+        // the F5 camera stepped 20 times a second. A turret seat keeps its world aim (stabilised gun).
+        float referenceYaw = vehicle.getYRot();
+        boolean turret = vehicle.vehicleData().defaults().turret().enabled() && seat.index() == vehicle.vehicleData().defaults().turret().seatIndex();
+        if (!vehicle.usesVehiclePoseTransform() && !turret) {
+            float partialTick = Minecraft.getInstance().getDeltaTracker().getGameTimeDeltaPartialTick(false);
+            referenceYaw = Mth.rotLerp(partialTick, vehicle.yRotO, vehicle.getYRot());
+            if (followedVehicleId == vehicle.getId()) {
+                player.setYRot(player.getYRot() + Mth.wrapDegrees(referenceYaw - followedVehicleYaw));
+            }
+            followedVehicleId = vehicle.getId();
+            followedVehicleYaw = referenceYaw;
+        } else {
+            followedVehicleId = -1;
+        }
+        float targetYaw = aircraftBoundYaw(player, vehicle, seat, referenceYaw);
         float targetPitch = aircraftBoundPitch(player, vehicle, seat);
         float previousYaw = targetYaw;
         float previousPitch = targetPitch;
@@ -390,7 +425,7 @@ public final class VehicleInputHandler {
                 && !vehicle.isJetPodView(player);
     }
 
-    private static float aircraftBoundYaw(LocalPlayer player, VehicleEntity vehicle, ttv.migami.jeg.vehicle.data.subdata.SeatInfo seat) {
+    private static float aircraftBoundYaw(LocalPlayer player, VehicleEntity vehicle, ttv.migami.jeg.vehicle.data.subdata.SeatInfo seat, float referenceYaw) {
         if (isViewLockedToAircraft(player, vehicle, seat)) {
             return vehicle.getYRot();
         }
@@ -400,9 +435,9 @@ public final class VehicleInputHandler {
             // Third-person free look orbits the whole aircraft, so skip the seat's head-turn limits.
             return player.getYRot();
         }
-        float relativeYaw = Mth.wrapDegrees(player.getYRot() - vehicle.getYRot());
+        float relativeYaw = Mth.wrapDegrees(player.getYRot() - referenceYaw);
         float clampedYaw = Mth.clamp(relativeYaw, seat.minYaw(), seat.maxYaw());
-        return vehicle.getYRot() + clampedYaw;
+        return referenceYaw + clampedYaw;
     }
 
     private static float aircraftBoundPitch(LocalPlayer player, VehicleEntity vehicle, ttv.migami.jeg.vehicle.data.subdata.SeatInfo seat) {

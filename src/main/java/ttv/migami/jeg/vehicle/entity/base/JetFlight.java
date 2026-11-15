@@ -111,6 +111,13 @@ final class JetFlight {
      */
     private static final double IDLE_HOLD_BRAKE = 0.008D;
     private static final double TYRE_GRIP = 0.55D;
+    /**
+     * Reverse taxi: on the ground, with the throttle closed and reverse still held, the jet backs up (a ground crew's
+     * pushback, for parking) at up to this speed (about 8 km/h at the A-10's scale), gaining this much a tick. Steering
+     * by the nose wheel is reversed, as when rolling backwards.
+     */
+    private static final double REVERSE_TAXI_SPEED = 0.11D;
+    private static final double REVERSE_TAXI_ACCELERATION = 0.006D;
     private static final double AIRBRAKE_DRAG = 1.4D;
     /**
      * Speed brakes (the A-10's split wingtip ailerons): out with the brake key in the air, or with reverse held in a dive
@@ -494,13 +501,24 @@ final class JetFlight {
         if (grounded) {
             // The tyres and brakes act along the ground only: taken off the whole velocity, most of it went into this
             // tick's gravity (which the ground stops anyway), and a slow jet never quite came to rest.
+            Vector3d ahead = new Vector3d(forward.x, 0.0D, forward.z);
+            if (ahead.lengthSquared() > 1.0E-6D) ahead.normalize();
+            double along = velocity.x * ahead.x + velocity.z * ahead.z;
+            boolean reverseTaxi = controlled && input.backward() && !input.brake() && this.throttle <= 1.0E-3D && along < 0.05D;
             double wheelDrag = ROLLING_FRICTION + (controlled && input.brake() ? WHEEL_BRAKE : 0.0D) + (pilot == null ? PARKING_BRAKE : 0.0D)
-                    + (controlled && this.throttle <= 1.0E-3D ? IDLE_HOLD_BRAKE : 0.0D);
+                    + (controlled && this.throttle <= 1.0E-3D && !reverseTaxi ? IDLE_HOLD_BRAKE : 0.0D);
             double rolling = Math.sqrt(velocity.x * velocity.x + velocity.z * velocity.z);
             if (rolling > 1.0E-6D) {
                 double kept = Math.max(0.0D, rolling - wheelDrag) / rolling;
                 velocity.x *= kept;
                 velocity.z *= kept;
+            }
+            if (reverseTaxi) {
+                double back = -(velocity.x * ahead.x + velocity.z * ahead.z);
+                double limit = REVERSE_TAXI_SPEED * Math.max(scale, 0.5D);
+                double push = Math.min(REVERSE_TAXI_ACCELERATION * Math.max(scale, 0.5D), Math.max(0.0D, limit - back));
+                velocity.x -= ahead.x * push;
+                velocity.z -= ahead.z * push;
             }
         }
         newSpeed = velocity.length();

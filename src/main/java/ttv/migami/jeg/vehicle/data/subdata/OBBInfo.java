@@ -12,7 +12,9 @@ public record OBBInfo(List<Box> boxes) {
         WHEEL_RIGHT,
         MAIN_ENGINE,
         SUB_ENGINE,
-        INTERACTIVE
+        INTERACTIVE,
+        /** A support vehicle's module bays: hits there can knock out fitted modules. */
+        MODULE
     }
 
     public record Box(Part part, double x, double y, double z, double halfWidth, double halfHeight, double halfDepth) {}

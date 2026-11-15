@@ -39,6 +39,12 @@ public final class ModBlocks {
             () -> new VehicleChargingStationBlock(blockProperties(Reference.id("vehicle_charging_station")).strength(3.5F).sound(SoundType.METAL))
     );
 
+    /** The invisible walk-in structure of a deployed field support vehicle. */
+    public static final DeferredHolder<Block, ttv.migami.jeg.block.VehicleShellBlock> VEHICLE_SHELL = REGISTER.register(
+            "vehicle_shell",
+            () -> new ttv.migami.jeg.block.VehicleShellBlock(blockProperties(Reference.id("vehicle_shell")))
+    );
+
     private static BlockBehaviour.Properties blockProperties(Identifier id) {
         return BlockBehaviour.Properties.of().setId(ResourceKey.create(Registries.BLOCK, id));
     }

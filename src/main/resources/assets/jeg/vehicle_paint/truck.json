@@ -1,0 +1,32 @@
+{
+  "unpainted_parts": [
+    "finish_generator",
+    "finish_locker_door_left",
+    "finish_locker_door_right",
+    "finish_wheel_front_left",
+    "finish_wheel_front_right",
+    "finish_wheel_middle_left",
+    "finish_wheel_middle_right",
+    "finish_wheel_rear_left",
+    "finish_wheel_rear_right",
+    "steering_column",
+    "beacon_left",
+    "beacon_right",
+    "finish_cab",
+    "beacon_mount",
+    "mast_1",
+    "finish_mast",
+    "finish_rear_door",
+    "bunk_left",
+    "awning",
+    "finish_slide_left",
+    "bunk_right",
+    "finish_slide_right",
+    "jack_front_left",
+    "jack_front_right",
+    "jack_rear_left",
+    "jack_rear_right",
+    "finish_body",
+    "finish_chassis"
+  ]
+}

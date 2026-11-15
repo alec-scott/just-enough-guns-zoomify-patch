@@ -93,7 +93,9 @@ public final class VehicleContainerBlockEntity extends BlockEntity {
             vehicle.loadVehicleContainerState(this.entityTag);
         }
         double spawnX = spawnPos.getX() + 0.5D;
-        double spawnY = spawnPos.getY() + vehicle.getBbHeight() * 0.5D;
+        // A jet is checked for room on top of the box and then stands on its wheels where the box was (below). Dropped from
+        // half its height it fell with no pilot, and its flight model points the nose into the fall: it hit nose first.
+        double spawnY = vehicle.isJet() ? spawnPos.getY() : spawnPos.getY() + vehicle.getBbHeight() * 0.5D;
         double spawnZ = spawnPos.getZ() + 0.5D;
         vehicle.snapTo(spawnX, spawnY, spawnZ, player.getYRot(), 0.0F);
         vehicle.setYRot(player.getYRot());
@@ -103,8 +105,16 @@ public final class VehicleContainerBlockEntity extends BlockEntity {
             player.sendSystemMessage(Component.translatable("message.jeg.vehicle_container.blocked"));
             return false;
         }
+        BlockPos boxPos = this.getBlockPos();
+        if (vehicle.isJet()) {
+            level.removeBlock(boxPos, false);
+            vehicle.snapTo(spawnX, boxPos.getY(), spawnZ, player.getYRot(), 0.0F);
+            vehicle.setDeltaMovement(net.minecraft.world.phys.Vec3.ZERO);
+            level.addFreshEntity(vehicle);
+            return true;
+        }
         level.addFreshEntity(vehicle);
-        level.removeBlock(this.getBlockPos(), false);
+        level.removeBlock(boxPos, false);
         return true;
     }
 

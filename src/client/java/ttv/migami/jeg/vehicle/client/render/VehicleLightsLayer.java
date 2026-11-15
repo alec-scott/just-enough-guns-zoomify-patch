@@ -88,7 +88,7 @@ final class VehicleLightsLayer<T extends VehicleEntity> extends GeoRenderLayer<T
                 spills.add(new float[]{at.x, at.y, at.z, r, g, b, light.spill() * level, light.spillRadius() * 1.25F, 0.4F});
                 continue;
             }
-            float flash = AircraftLights.flash(light, seconds, seed);
+            float flash = AircraftLights.flash(vehicle, light, seconds, seed);
             if (flash <= 0.002F) {
                 continue;
             }

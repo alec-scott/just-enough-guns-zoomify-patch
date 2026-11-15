@@ -83,6 +83,7 @@ public final class NetworkHandler {
         PayloadTypeRegistry.serverboundPlay().register(VehicleChangeSeatPayload.TYPE, VehicleChangeSeatPayload.STREAM_CODEC);
         PayloadTypeRegistry.serverboundPlay().register(VehicleDismountPayload.TYPE, VehicleDismountPayload.STREAM_CODEC);
         PayloadTypeRegistry.serverboundPlay().register(VehicleOpenMenuPayload.TYPE, VehicleOpenMenuPayload.STREAM_CODEC);
+        PayloadTypeRegistry.serverboundPlay().register(ttv.migami.jeg.vehicle.network.SupportModulePayload.TYPE, ttv.migami.jeg.vehicle.network.SupportModulePayload.STREAM_CODEC);
         PayloadTypeRegistry.serverboundPlay().register(AssembleTestVehiclePayload.TYPE, AssembleTestVehiclePayload.STREAM_CODEC);
         PayloadTypeRegistry.clientboundPlay().register(BulletTrailPayload.TYPE, BulletTrailPayload.STREAM_CODEC);
         PayloadTypeRegistry.clientboundPlay().register(GunFireFxPayload.TYPE, GunFireFxPayload.STREAM_CODEC);
@@ -154,6 +155,16 @@ public final class NetworkHandler {
         });
         ServerPlayNetworking.registerGlobalReceiver(VehicleOpenMenuPayload.TYPE, (payload, context) -> {
             context.server().execute(() -> handleVehicleOpenMenu(payload, context.player()));
+        });
+        ServerPlayNetworking.registerGlobalReceiver(ttv.migami.jeg.vehicle.network.SupportModulePayload.TYPE, (payload, context) -> {
+            context.server().execute(() -> {
+                ServerPlayer player = context.player();
+                if (player.level().getEntity(payload.vehicleId()) instanceof ttv.migami.jeg.vehicle.entity.SupportVehicleEntity truck
+                        && truck.modules().canUse(player)) {
+                    if (payload.slot() == -3) truck.towKey(player);
+                    else truck.openModule(player, payload.slot());
+                }
+            });
         });
         ServerPlayNetworking.registerGlobalReceiver(AssembleTestVehiclePayload.TYPE, (payload, context) -> {
             context.server().execute(() -> handleAssembleTestVehicle(payload, context.player()));

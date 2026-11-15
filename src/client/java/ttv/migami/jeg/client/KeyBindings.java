@@ -112,6 +112,14 @@ public final class KeyBindings {
             CATEGORY
     );
 
+    /** The FSV-6's tow hitch, from the driver's seat. N is free in the yftm pack (it is F3+N only there). */
+    public static final KeyMapping VEHICLE_TOW = new KeyMapping(
+            "key.jeg.vehicle_tow",
+            InputConstants.Type.KEYSYM,
+            GLFW.GLFW_KEY_N,
+            CATEGORY
+    );
+
     public static void init() {
         if (initialised) {
             return;
@@ -131,6 +139,7 @@ public final class KeyBindings {
         KeyMappingHelper.registerKeyMapping(VEHICLE_CHANGE_SEAT);
         KeyMappingHelper.registerKeyMapping(VEHICLE_DISMOUNT);
         KeyMappingHelper.registerKeyMapping(VEHICLE_PLAYER_INVENTORY);
+        KeyMappingHelper.registerKeyMapping(VEHICLE_TOW);
     }
 
     /** Names of Zoomify's zoom keys; Zoomify binds zoom to C by default, the same key as vehicle free look. */

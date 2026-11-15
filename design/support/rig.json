@@ -1,0 +1,414 @@
+{
+  "model": "jeg:entity/vehicle/truck",
+  "units_per_block": 16,
+  "front": "-Z in the source model",
+  "floor_y": 16.0,
+  "ceiling_y": 48.0,
+  "roof_top": 50.0,
+  "interior_half_x": 32.0,
+  "interior_front": -24.0,
+  "interior_rear": 56.0,
+  "cell": 16.0,
+  "slide_travel": 16.0,
+  "body_half": 20.0,
+  "body_front": -28.0,
+  "body_rear": 60.0,
+  "wheel_radius": 8.0,
+  "wheel_x": 16.0,
+  "axles": [
+    [
+      "front",
+      -44.0
+    ],
+    [
+      "middle",
+      20.0
+    ],
+    [
+      "rear",
+      38.0
+    ]
+  ],
+  "door_hinge": [
+    0.0,
+    16.0,
+    60.0
+  ],
+  "door_height": 32.0,
+  "door_open_degrees": 119.461,
+  "jacks": [
+    [
+      "front_left",
+      17.0,
+      -25.5
+    ],
+    [
+      "front_right",
+      -17.0,
+      -25.5
+    ],
+    [
+      "rear_left",
+      17.0,
+      58.0
+    ],
+    [
+      "rear_right",
+      -17.0,
+      58.0
+    ]
+  ],
+  "jack_foot_y": 3.0,
+  "jack_reach": 24.0,
+  "mast_base": [
+    14.0,
+    50.0,
+    -20.0
+  ],
+  "mast_length": 14.0,
+  "mast_stage": 12.0,
+  "beacon_mount": [
+    0.0,
+    50.0,
+    24.0
+  ],
+  "beacon_raise": 8.0,
+  "awning_roller": [
+    22.0,
+    45.5
+  ],
+  "awning_depth": 32.0,
+  "lamp_hook": [
+    11.0,
+    16.0
+  ],
+  "windows_z": [
+    -14.0,
+    12.0,
+    38.0
+  ],
+  "window_y": [
+    30.0,
+    41.0
+  ],
+  "seat_driver": [
+    10.0,
+    16.0,
+    -46.0
+  ],
+  "seat_codriver": [
+    -10.0,
+    16.0,
+    -46.0
+  ],
+  "driver_eye": [
+    10.0,
+    41.92,
+    -46.0
+  ],
+  "exhaust_tip": [
+    -18.0,
+    54.0,
+    -29.0
+  ],
+  "generator_exhaust": [
+    -21.0,
+    8.0,
+    -6.0
+  ],
+  "stages": {
+    "jacks": [
+      0.0,
+      0.19
+    ],
+    "slides": [
+      0.19,
+      0.56
+    ],
+    "doors": [
+      0.56,
+      0.75
+    ],
+    "mast_raise": [
+      0.75,
+      0.86
+    ],
+    "mast": [
+      0.86,
+      1.0
+    ]
+  },
+  "model_bounds": {
+    "packed": [
+      [
+        -27.4,
+        -0.75,
+        -67.6
+      ],
+      [
+        27.400000000000002,
+        54.0,
+        63.199999999999996
+      ]
+    ],
+    "deployed": [
+      [
+        -36.6,
+        -3.2367720340314308,
+        -67.6
+      ],
+      [
+        69.83164603443925,
+        105.19999999999999,
+        89.8294256988528
+      ]
+    ]
+  },
+  "hitbox": {
+    "packed": [
+      {
+        "part": "wheel_left",
+        "covers": "left front wheel",
+        "min": [
+          12.5,
+          0.0,
+          -52.75
+        ],
+        "max": [
+          23.240000000000002,
+          16.75,
+          -35.25
+        ]
+      },
+      {
+        "part": "wheel_left",
+        "covers": "left tandem wheels",
+        "min": [
+          12.5,
+          0.0,
+          11.249999999999998
+        ],
+        "max": [
+          22.240000000000002,
+          16.75,
+          46.75
+        ]
+      },
+      {
+        "part": "wheel_right",
+        "covers": "right front wheel",
+        "min": [
+          -23.24,
+          0.0,
+          -52.75
+        ],
+        "max": [
+          -12.5,
+          16.75,
+          -35.25
+        ]
+      },
+      {
+        "part": "wheel_right",
+        "covers": "right tandem wheels",
+        "min": [
+          -22.24,
+          0.0,
+          11.249999999999998
+        ],
+        "max": [
+          -12.5,
+          16.75,
+          46.75
+        ]
+      },
+      {
+        "part": "main_engine",
+        "covers": "cab and engine",
+        "min": [
+          -20.5,
+          8.0,
+          -66.5
+        ],
+        "max": [
+          20.5,
+          49.0,
+          -30.5
+        ]
+      },
+      {
+        "part": "body",
+        "covers": "chassis, tanks, lockers and generator",
+        "min": [
+          -21.7,
+          3.4,
+          -62.0
+        ],
+        "max": [
+          20.200000000000003,
+          13.6,
+          62.5
+        ]
+      },
+      {
+        "part": "body",
+        "covers": "van body",
+        "min": [
+          -20.3,
+          13.6,
+          -28.3
+        ],
+        "max": [
+          20.3,
+          50.4,
+          60.3
+        ]
+      },
+      {
+        "part": "module",
+        "covers": "slide-outs, stowed",
+        "min": [
+          -20.04,
+          14.2,
+          -24.04
+        ],
+        "max": [
+          20.04,
+          48.04,
+          56.04
+        ]
+      }
+    ],
+    "deployed": [
+      {
+        "part": "wheel_left",
+        "covers": "left front wheel",
+        "min": [
+          12.5,
+          0.0,
+          -52.75
+        ],
+        "max": [
+          23.240000000000002,
+          16.75,
+          -35.25
+        ]
+      },
+      {
+        "part": "wheel_left",
+        "covers": "left tandem wheels",
+        "min": [
+          12.5,
+          0.0,
+          11.249999999999998
+        ],
+        "max": [
+          22.240000000000002,
+          16.75,
+          46.75
+        ]
+      },
+      {
+        "part": "wheel_right",
+        "covers": "right front wheel",
+        "min": [
+          -23.24,
+          0.0,
+          -52.75
+        ],
+        "max": [
+          -12.5,
+          16.75,
+          -35.25
+        ]
+      },
+      {
+        "part": "wheel_right",
+        "covers": "right tandem wheels",
+        "min": [
+          -22.24,
+          0.0,
+          11.249999999999998
+        ],
+        "max": [
+          -12.5,
+          16.75,
+          46.75
+        ]
+      },
+      {
+        "part": "main_engine",
+        "covers": "cab and engine",
+        "min": [
+          -20.5,
+          8.0,
+          -66.5
+        ],
+        "max": [
+          20.5,
+          49.0,
+          -30.5
+        ]
+      },
+      {
+        "part": "body",
+        "covers": "chassis, tanks, lockers and generator",
+        "min": [
+          -21.7,
+          3.4,
+          -62.0
+        ],
+        "max": [
+          20.200000000000003,
+          13.6,
+          62.5
+        ]
+      },
+      {
+        "part": "body",
+        "covers": "van body",
+        "min": [
+          -20.3,
+          13.6,
+          -28.3
+        ],
+        "max": [
+          20.3,
+          50.4,
+          60.3
+        ]
+      },
+      {
+        "part": "module",
+        "covers": "left slide-out",
+        "min": [
+          16.0,
+          14.2,
+          -24.4
+        ],
+        "max": [
+          36.04,
+          48.04,
+          56.4
+        ]
+      },
+      {
+        "part": "module",
+        "covers": "right slide-out",
+        "min": [
+          -36.04,
+          14.2,
+          -24.4
+        ],
+        "max": [
+          -16.0,
+          48.04,
+          56.4
+        ]
+      }
+    ]
+  },
+  "revision": "01 - expansible van body, walk-in deploy",
+  "bones": 53,
+  "cuboids": 776
+}

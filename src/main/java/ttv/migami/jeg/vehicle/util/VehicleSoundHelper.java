@@ -38,8 +38,7 @@ public final class VehicleSoundHelper {
             Map.entry("lav150", Reference.id("vehicle.lav150.engine")),
             Map.entry("mi28", Reference.id("vehicle.mi28.engine")),
             Map.entry("speedboat", Reference.id("vehicle.speedboat.engine")),
-            Map.entry("tom6", Reference.id("vehicle.tom6.engine")),
-            Map.entry("truck", Reference.id("vehicle.truck.engine"))
+            Map.entry("tom6", Reference.id("vehicle.tom6.engine"))
     );
 
     private VehicleSoundHelper() {}

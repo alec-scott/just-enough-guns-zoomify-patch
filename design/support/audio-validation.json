@@ -1,0 +1,135 @@
+{
+  "engine_start": {
+    "duration_seconds": 3.1,
+    "loop": false,
+    "peak": 0.609,
+    "rms": 0.1281,
+    "seam_step": 0.00016,
+    "sha256": "a9c056cab681d3255fc83ce90c7f1633b6f0d94d807d0c331656d1148d993c87"
+  },
+  "engine_idle": {
+    "duration_seconds": 19.7,
+    "loop": true,
+    "peak": 0.5766,
+    "rms": 0.1189,
+    "seam_step": 0.00514,
+    "sha256": "5d699680759ea0179d8458c4d93f2a37a60d3edf48ed65364f2e6a5df6f43729"
+  },
+  "engine_load": {
+    "duration_seconds": 17.3,
+    "loop": true,
+    "peak": 0.5943,
+    "rms": 0.1385,
+    "seam_step": 0.00428,
+    "sha256": "f8d284c84e0fe6c59822f5605e5bf8ff5cafc057fd9a05d352f2772a7e980e29"
+  },
+  "engine_stop": {
+    "duration_seconds": 2.2,
+    "loop": false,
+    "peak": 0.7403,
+    "rms": 0.0913,
+    "seam_step": 0.00382,
+    "sha256": "0dbdb94917d112846da37ab80051d6806798c450b34d3d359ff832cfe108c24b"
+  },
+  "engine_distant": {
+    "duration_seconds": 17.2,
+    "loop": true,
+    "peak": 0.3451,
+    "rms": 0.0896,
+    "seam_step": 0.00036,
+    "sha256": "1c1c0f86bf0dfa601ee68e913e44dac17047558ffc11e722a849f6d439c67bb3"
+  },
+  "engine_cab": {
+    "duration_seconds": 19.6,
+    "loop": true,
+    "peak": 0.4657,
+    "rms": 0.109,
+    "seam_step": 0.00073,
+    "sha256": "88fab2e432ebd87ac990b5a44f921aad3e17723e3e8cd8b1be4b91d5f9cc159b"
+  },
+  "generator": {
+    "duration_seconds": 5.7,
+    "loop": true,
+    "peak": 0.4316,
+    "rms": 0.098,
+    "seam_step": 0.00675,
+    "sha256": "aedc8aa8a0d343d59ef9e6e1db966f36e8a10df7dfd4c81b3f7568b2d2884d81"
+  },
+  "generator_distant": {
+    "duration_seconds": 5.7,
+    "loop": true,
+    "peak": 0.2591,
+    "rms": 0.0788,
+    "seam_step": 0.004,
+    "sha256": "bae00eb71daaa5ffbd84d58475a0ec8cd36ab231733cf7539fb40252f18fc9d6"
+  },
+  "slide_motor": {
+    "duration_seconds": 1.05,
+    "loop": true,
+    "peak": 0.2455,
+    "rms": 0.08,
+    "seam_step": 0.00421,
+    "sha256": "2de2eb10e8a1efb77686af51da27f7bf36bb75577a67cf751c148e94ccf2f77f"
+  },
+  "horn": {
+    "duration_seconds": 1.03,
+    "loop": true,
+    "peak": 0.7019,
+    "rms": 0.1594,
+    "seam_step": 0.00027,
+    "sha256": "37cc6aed90b1c977b758b614848123da3641482e041d070cf096e8997a0b8724"
+  },
+  "horn_distant": {
+    "duration_seconds": 1.03,
+    "loop": true,
+    "peak": 0.5656,
+    "rms": 0.1201,
+    "seam_step": 0.02985,
+    "sha256": "89bf7b946c454f3aa106f66197133623098880b0d1b2637632c0e0c8c73b3969"
+  },
+  "air_brake": {
+    "duration_seconds": 1.0,
+    "loop": false,
+    "peak": 0.9373,
+    "rms": 0.0962,
+    "seam_step": 0.00197,
+    "sha256": "87b96d3c15ddcdd0cd1d6916265cdb44d1729dacb691ecd053ee75066325a5c4"
+  },
+  "ramp_clank": {
+    "duration_seconds": 1.1,
+    "loop": false,
+    "peak": 0.7008,
+    "rms": 0.1188,
+    "seam_step": 0.0003,
+    "sha256": "f2e0def39eb956ab69d679d805c0701f65c488af960d243be524f1121ba60094"
+  },
+  "source_segments_seconds": {
+    "idle": 4.0,
+    "load": [
+      [
+        1.6,
+        6.0
+      ],
+      [
+        9.6,
+        6.1
+      ],
+      [
+        17.6,
+        6.3
+      ]
+    ],
+    "generator": 1.0,
+    "motor": 2.9,
+    "horn": 0.1,
+    "door": 0.42,
+    "diesel_repitch": 1.0,
+    "synthesized": [
+      "air_brake"
+    ],
+    "derived": [
+      "engine_cab (the idle, muffled)",
+      "engine_distant (load, rumble + echo)"
+    ]
+  }
+}

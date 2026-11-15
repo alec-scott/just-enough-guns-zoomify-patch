@@ -2,6 +2,7 @@ package ttv.migami.jeg.vehicle.client.overlay;
 
 import net.minecraft.client.CameraType;
 import net.minecraft.client.Minecraft;
+import net.minecraft.core.BlockPos;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.client.player.LocalPlayer;
@@ -103,6 +104,9 @@ public final class VehicleHudOverlay {
         if (vehicle instanceof ttv.migami.jeg.vehicle.entity.BulldozerEntity dozer && vehicle.getControllingPassenger() == minecraft.player) {
             renderDozerPanel(guiGraphics, minecraft, dozer);
         }
+        if (vehicle instanceof ttv.migami.jeg.vehicle.entity.SupportVehicleEntity support && vehicle.getControllingPassenger() == minecraft.player) {
+            renderSupportPanel(guiGraphics, minecraft, support);
+        }
         boolean focusedSight = isFocusedVehicleSight(vehicle);
         renderLandVehicleStatus(guiGraphics, minecraft, vehicle);
         if (vehicle.hasVehicleWeapons() && vehicle.canPassengerUseSelectedVehicleWeapon(minecraft.player)) {
@@ -134,6 +138,12 @@ public final class VehicleHudOverlay {
         int width = guiGraphics.guiWidth();
         // A passenger with their own hands keeps their health, armor and food bars; sit the vehicle's info above them.
         int y = guiGraphics.guiHeight() - (shouldReplaceHotbar(minecraft.player, vehicle) ? 80 : 112);
+        if (vehicle instanceof ttv.migami.jeg.vehicle.entity.SupportVehicleEntity && minecraft.options.getCameraType().isFirstPerson()) {
+            // In the FSV-6's cab the lower middle of the screen is the dashboard (live instruments): the info moves to the
+            // bottom right corner (everything below is centred on width / 2).
+            width = 2 * (guiGraphics.guiWidth() - 92);
+            y = guiGraphics.guiHeight() - 44;
+        }
         float healthRatio = vehicle.maxVehicleHealth() <= 0.0F ? 0.0F : Mth.clamp(vehicle.vehicleHealth() / vehicle.maxVehicleHealth(), 0.0F, 1.0F);
         int barWidth = 60;
         int x = width / 2 - barWidth / 2;
@@ -849,6 +859,118 @@ public final class VehicleHudOverlay {
         pose.popMatrix();
     }
 
+    private static int supportHintId = -1;
+    private static long supportHintStart, supportLastSeen;
+
+    /**
+     * The FSV-6 driver's panel, three-quarter size like the dozer's: the body's state (packed, deploying, deployed),
+     * what powers it, the hold, the R-hold bar while the key is held, why a deploy or pack-up was refused, and the key
+     * hints for a few seconds after boarding.
+     */
+    private static void renderSupportPanel(GuiGraphicsExtractor g, Minecraft mc, ttv.migami.jeg.vehicle.entity.SupportVehicleEntity truck) {
+        long now = mc.level.getGameTime();
+        if (truck.getId() != supportHintId || now - supportLastSeen > 20) {
+            supportHintId = truck.getId();
+            supportHintStart = now;
+        }
+        supportLastSeen = now;
+        long shown = now - supportHintStart;
+        float hints = shown < DOZER_HINT_TICKS ? 1F : Math.max(0F, 1F - (shown - DOZER_HINT_TICKS) / (float) DOZER_HINT_FADE);
+        var status = truck.status();
+        boolean refusal = status != ttv.migami.jeg.vehicle.support.SupportShell.Status.OK && truck.statusAge() < 80;
+        boolean holding = truck.holdTicks() > 0;
+        var towed = truck.towedEntityId() >= 0 ? mc.level.getEntity(truck.towedEntityId()) : null;
+        var towable = towed == null ? truck.towCandidate() : null;
+        Component towKey = KeyBindings.VEHICLE_TOW.getTranslatedKeyMessage();
+        Component towRow = towed != null ? Component.translatable("hud.jeg.support.tow_release", towKey)
+                : towable != null ? Component.translatable("hud.jeg.support.tow_ready", towKey, towable.getType().getDescription()) : null;
+        int rows = 3 + (towed != null ? 1 : 0) + (towRow != null ? 1 : 0) + (holding ? 1 : 0) + (refusal ? 1 : 0) + (hints > .05F ? 1 : 0);
+        var pose = g.pose();
+        pose.pushMatrix();
+        int guiScale = Math.max(1, mc.getWindow().getGuiScale());
+        float scale = Math.max(1, Math.round(guiScale * DOZER_PANEL_SCALE)) / (float) guiScale;
+        pose.scale(scale, scale);
+        int x = 10, y = 10, row = 11;
+        float progress = truck.deployProgress();
+        int percent = Math.round(progress * 100);
+        boolean starting = truck.powered() && !truck.engineRunning() && truck.isPacked();
+        Component state = starting ? Component.translatable("hud.jeg.support.starting")
+                : truck.isDeployed() ? Component.translatable("hud.jeg.support.deployed")
+                : truck.isPacked() ? Component.translatable("hud.jeg.support.packed")
+                : Component.translatable(truck.deployTarget() ? "hud.jeg.support.deploying" : "hud.jeg.support.packing", percent);
+        Component powerName = Component.translatable("hud.jeg.support.power"), holdName = Component.translatable("hud.jeg.support.hold");
+        Component powerValue = Component.translatable(truck.generatorRunning() ? "hud.jeg.support.generator"
+                : truck.engineRunning() ? "hud.jeg.support.engine" : "hud.jeg.support.off");
+        Component holdValue = Component.literal(truck.occupiedCargoSlots() + "/" + truck.vehicleContainerSlots());
+        Component key = KeyBindings.RELOAD.getTranslatedKeyMessage();
+        Component controls = truck.isPacked()
+                ? Component.translatable("hud.jeg.support.controls_packed", key, mc.options.keyAttack.getTranslatedKeyMessage())
+                : Component.translatable("hud.jeg.support.controls_deployed", key);
+        BlockPos at = truck.statusPos();
+        Component refusalText = status == ttv.migami.jeg.vehicle.support.SupportShell.Status.PLAYERS_INSIDE
+                ? Component.translatable("hud.jeg.support.status.PLAYERS_INSIDE", at.getX())
+                : Component.translatable("hud.jeg.support.status." + status.name(), at.getX() + " " + at.getY() + " " + at.getZ());
+        int names = Math.max(mc.font.width(powerName), mc.font.width(holdName));
+        int bx = x + names + 8, bw = 62;
+        int w = Math.max(128, bx - x + bw + 6 + mc.font.width(holdValue));
+        w = Math.max(w, 9 + mc.font.width(state));
+        w = Math.max(w, bx - x + mc.font.width(powerValue));
+        if (refusal) w = Math.max(w, mc.font.width(refusalText));
+        if (towRow != null) w = Math.max(w, mc.font.width(towRow) + 9);
+        if (hints > .05F) w = Math.max(w, mc.font.width(controls));
+        int light = refusal ? 0xFFE05A40 : starting || truck.isMovingParts() ? 0xFFE0B040 : truck.isDeployed() ? 0xFF6BD36B : 0xFF8C9490;
+        g.fill(x - 4, y - 4, x + w + 4, y + row * rows - 1, 0x88101414);
+        g.fill(x - 4, y - 4, x + w + 4, y - 3, 0xFF7A8A50);
+        g.fill(x, y + 2, x + 5, y + 7, light);
+        g.text(mc.font, state, x + 9, y, 0xFFECE3C4);
+        if (truck.isMovingParts()) {
+            int bar = x + 9 + mc.font.width(state) + 6;
+            int barEnd = x + w;
+            if (barEnd - bar > 12) {
+                g.fill(bar, y + 3, barEnd, y + 5, 0xFF3A3F3D);
+                g.fill(bar, y + 2, bar + Math.round((barEnd - bar) * progress), y + 6, 0xFFE0B040);
+            }
+        }
+        y += row;
+        g.text(mc.font, powerName, x, y, 0xFFB9B39E);
+        g.text(mc.font, powerValue, bx, y, truck.generatorRunning() || truck.engineRunning() ? 0xFF6BD36B : 0xFF8C9490);
+        y += row;
+        boolean full = truck.occupiedCargoSlots() >= truck.vehicleContainerSlots();
+        g.text(mc.font, holdName, x, y, 0xFFB9B39E);
+        g.fill(bx, y + 3, bx + bw, y + 5, 0xFF3A3F3D);
+        float filled = truck.occupiedCargoSlots() / (float) Math.max(1, truck.vehicleContainerSlots());
+        g.fill(bx, y + 2, bx + Math.round(bw * filled), y + 6, full ? 0xFFE05A40 : 0xFF8C9490);
+        g.text(mc.font, holdValue, bx + bw + 5, y, full ? 0xFFE0B040 : 0xFFECE3C4);
+        y += row;
+        if (towed != null) {
+            g.text(mc.font, Component.translatable("hud.jeg.support.towing"), x, y, 0xFFB9B39E);
+            g.text(mc.font, towed.getType().getDescription(), bx, y, 0xFFE0B040);
+            y += row;
+        }
+        if (towRow != null) {
+            // A vehicle within reach of the hitch (a pulsing amber lamp), or the key to drop the one in tow.
+            boolean pulse = towed == null && (now / 10) % 2 == 0;
+            g.fill(x, y + 2, x + 5, y + 7, towed != null ? 0xFF8C9490 : pulse ? 0xFFE0B040 : 0xFF6A5520);
+            g.text(mc.font, towRow, x + 9, y, towed != null ? 0xFFB9B39E : 0xFFE0B040);
+            y += row;
+        }
+        if (holding) {
+            Component holdKey = Component.translatable("hud.jeg.support.hold_key", key);
+            g.text(mc.font, holdKey, x, y, 0xFFE0B040);
+            g.fill(bx, y + 3, bx + bw, y + 5, 0xFF3A3F3D);
+            g.fill(bx, y + 2, bx + Math.round(bw * truck.holdTicks() / (float) ttv.migami.jeg.vehicle.entity.SupportVehicleEntity.HOLD_TICKS), y + 6, 0xFFE0B040);
+            y += row;
+        }
+        if (refusal) {
+            g.text(mc.font, refusalText, x, y, 0xFFE05A40);
+            y += row;
+        }
+        if (hints > .05F) {
+            g.text(mc.font, controls, x, y, ((int) (hints * 255) << 24) | 0x8C9490);
+        }
+        pose.popMatrix();
+    }
+
     private static void renderLandVehicleStatus(GuiGraphicsExtractor guiGraphics, Minecraft minecraft, VehicleEntity vehicle) {
         boolean focusedSight = isFocusedVehicleSight(vehicle);
         if (vehicle.vehicleData().defaults().vehicleType() != VehicleType.LAND && !focusedSight) {
@@ -872,13 +994,21 @@ public final class VehicleHudOverlay {
 
         int x = guiGraphics.guiWidth() / 2 + 96;
         int y = guiGraphics.guiHeight() - 72;
-        guiGraphics.blit(RenderPipelines.GUI_TEXTURED, LAND_LINE, guiGraphics.guiWidth() / 2 - 64, guiGraphics.guiHeight() - 56, 0.0F, 0.0F, 128, 1, 128, 1);
+        boolean fsv6Cab = vehicle instanceof ttv.migami.jeg.vehicle.entity.SupportVehicleEntity && minecraft.options.getCameraType().isFirstPerson();
+        if (fsv6Cab) {
+            // The FSV-6's dashboard fills the lower middle: the damage diagram sits left of the vehicle info (moved to the
+            // bottom right, see render), without the divider line.
+            x = guiGraphics.guiWidth() - 200;
+            y = guiGraphics.guiHeight() - 40;
+        } else {
+            guiGraphics.blit(RenderPipelines.GUI_TEXTURED, LAND_LINE, guiGraphics.guiWidth() / 2 - 64, guiGraphics.guiHeight() - 56, 0.0F, 0.0F, 128, 1, 128, 1);
+        }
         blitVehiclePart(guiGraphics, LAND_BODY, x, y, vehicle.vehicleHealth() <= vehicle.maxVehicleHealth() * 0.35F);
         blitVehiclePart(guiGraphics, LAND_LEFT_WHEEL, x, y, vehicle.isLeftWheelDamaged());
         blitVehiclePart(guiGraphics, LAND_RIGHT_WHEEL, x, y, vehicle.isRightWheelDamaged());
         blitVehiclePart(guiGraphics, LAND_ENGINE, x, y, vehicle.isEngineDamaged());
         if (vehicle.isTurretDamaged()) {
-            guiGraphics.fill(guiGraphics.guiWidth() / 2 + 112, guiGraphics.guiHeight() - 71, guiGraphics.guiWidth() / 2 + 113, guiGraphics.guiHeight() - 55, 0xFFFF4033);
+            guiGraphics.fill(x + 16, y + 1, x + 17, y + 17, 0xFFFF4033);
         }
     }
 

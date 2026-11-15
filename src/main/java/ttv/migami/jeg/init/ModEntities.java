@@ -234,7 +234,10 @@ public final class ModEntities {
                     .build(entityKey("test_aircraft"))
     );
 
-    public static final DeferredHolder<EntityType<?>, EntityType<ConfiguredVehicleEntity>> TRUCK = configuredVehicle("truck", 2.6F, 3.0F);
+    /** The FSV-6 field support vehicle. It keeps the old truck's id so trucks already in worlds load as FSV-6s. */
+    public static final DeferredHolder<EntityType<?>, EntityType<ttv.migami.jeg.vehicle.entity.SupportVehicleEntity>> TRUCK = REGISTER.register("truck",
+            () -> EntityType.Builder.<ttv.migami.jeg.vehicle.entity.SupportVehicleEntity>of(ttv.migami.jeg.vehicle.entity.SupportVehicleEntity::new, MobCategory.MISC)
+                    .sized(2.6F, 3.2F).clientTrackingRange(14).updateInterval(1).build(entityKey("truck")));
     public static final DeferredHolder<EntityType<?>, EntityType<ttv.migami.jeg.vehicle.entity.BulldozerEntity>> BULLDOZER = REGISTER.register("bulldozer",
             () -> EntityType.Builder.<ttv.migami.jeg.vehicle.entity.BulldozerEntity>of(ttv.migami.jeg.vehicle.entity.BulldozerEntity::new, MobCategory.MISC)
                     .sized(2.9F, 3.2F).clientTrackingRange(14).updateInterval(1).build(entityKey("bulldozer")));

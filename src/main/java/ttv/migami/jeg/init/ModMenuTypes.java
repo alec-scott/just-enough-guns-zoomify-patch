@@ -42,6 +42,18 @@ public final class ModMenuTypes {
             ), BlockPos.STREAM_CODEC)
     );
 
+    public static final DeferredHolder<MenuType<?>, MenuType<ttv.migami.jeg.vehicle.menu.SupportFitMenu>> SUPPORT_FIT_MENU = REGISTER.register(
+            "support_fit_menu",
+            () -> new ExtendedMenuType<>((windowId, inventory, vehicleId) -> new ttv.migami.jeg.vehicle.menu.SupportFitMenu(windowId, inventory, vehicleId),
+                    ByteBufCodecs.VAR_INT)
+    );
+
+    public static final DeferredHolder<MenuType<?>, MenuType<ttv.migami.jeg.vehicle.menu.SupportBeaconMenu>> SUPPORT_BEACON_MENU = REGISTER.register(
+            "support_beacon_menu",
+            () -> new ExtendedMenuType<>((windowId, inventory, vehicleId) -> new ttv.migami.jeg.vehicle.menu.SupportBeaconMenu(windowId, inventory, vehicleId),
+                    ByteBufCodecs.VAR_INT)
+    );
+
     public static final DeferredHolder<MenuType<?>, MenuType<VehicleChargingStationMenu>> VEHICLE_CHARGING_STATION_MENU = REGISTER.register(
             "vehicle_charging_station_menu",
             () -> new ExtendedMenuType<>((windowId, inventory, pos) -> new VehicleChargingStationMenu(

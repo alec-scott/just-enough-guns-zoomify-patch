@@ -717,7 +717,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         if (!this.usesObbBlockCollisionBounds()) {
             return null;
         }
-        var boxes = this.vehicleData().defaults().obb().boxes();
+        var boxes = this.envelopeBoxes();
         if (boxes.isEmpty()) {
             return null;
         }
@@ -748,6 +748,24 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
                 Math.max((maxX - minX) * 0.5D, this.getBbWidth() * 0.5D),
                 Math.max((maxZ - minZ) * 0.5D, this.getBbWidth() * 0.5D)
         );
+    }
+
+    /**
+     * The fitted hit and collision boxes in the vehicle's current pose. A vehicle that changes shape (the support
+     * vehicle's slide-outs) returns another set while deployed; the rest use the data's "obb" list.
+     */
+    protected java.util.List<OBBInfo.Box> obbBoxes() {
+        return this.vehicleData().defaults().obb().boxes();
+    }
+
+    /** Boxes whose rotated envelope is the entity's block-collision, picking and culling box. */
+    protected java.util.List<OBBInfo.Box> envelopeBoxes() {
+        return this.obbBoxes();
+    }
+
+    /** Boxes that push other entities out (players can walk inside a deployed support vehicle's room). */
+    protected java.util.List<OBBInfo.Box> entityPushBoxes() {
+        return this.obbBoxes();
     }
 
     private boolean usesObbBlockCollisionBounds() {
@@ -3713,7 +3731,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     private ObbCollisionCorrection obbCollisionCorrection(AABB entityBox) {
         LocalBounds entityBounds = this.toLocalBounds(entityBox);
         ObbCollisionCorrection best = null;
-        for (OBBInfo.Box box : this.vehicleData().defaults().obb().boxes()) {
+        for (OBBInfo.Box box : this.entityPushBoxes()) {
             double boxMinX = box.x() - box.halfWidth();
             double boxMaxX = box.x() + box.halfWidth();
             double boxMinY = box.y() - box.halfHeight();
@@ -4788,7 +4806,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
             return this.interpolatedVehiclePosition(partialTick).add(this.rotateLocalOffsetWithPose(WING_CAMERA_X, WING_CAMERA_Y, WING_CAMERA_Z, partialTick));
         }
         OBBInfo.Box tail = null;
-        for (OBBInfo.Box box : this.vehicleData().defaults().obb().boxes()) {
+        for (OBBInfo.Box box : this.obbBoxes()) {
             if (tail == null || box.z() - box.halfDepth() < tail.z() - tail.halfDepth()) {
                 tail = box;
             }
@@ -7216,7 +7234,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
             return null;
         }
         double best = Double.MAX_VALUE;
-        for (OBBInfo.Box box : this.vehicleData().defaults().obb().boxes()) {
+        for (OBBInfo.Box box : this.obbBoxes()) {
             AABB local = new AABB(box.x() - box.halfWidth(), box.y() - box.halfHeight(), box.z() - box.halfDepth(),
                     box.x() + box.halfWidth(), box.y() + box.halfHeight(), box.z() + box.halfDepth()).inflate(inflate);
             Vec3 hit = local.contains(localStart) ? localStart : local.clip(localStart, localEnd).orElse(null);
@@ -7233,7 +7251,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
             return OBBInfo.Part.BODY;
         }
         Vec3 local = this.toLocalVehiclePosition(direct.position());
-        for (OBBInfo.Box box : this.vehicleData().defaults().obb().boxes()) {
+        for (OBBInfo.Box box : this.obbBoxes()) {
             if (Math.abs(local.x - box.x()) <= box.halfWidth()
                     && Math.abs(local.y - box.y()) <= box.halfHeight()
                     && Math.abs(local.z - box.z()) <= box.halfDepth()) {

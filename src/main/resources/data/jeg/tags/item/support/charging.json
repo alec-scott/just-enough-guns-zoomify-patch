@@ -1,0 +1,9 @@
+{
+  "replace": false,
+  "values": [
+    {
+      "id": "jeg:vehicle_charging_station",
+      "required": false
+    }
+  ]
+}

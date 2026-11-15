@@ -29,6 +29,10 @@ public final class VehicleScreen extends AbstractContainerScreen<VehicleMenu> {
     private static final Identifier HUGE = Reference.id("textures/gui/vehicle/inventory/huge.png");
     private static final Identifier PLAYER_INVENTORY = Reference.id("textures/gui/vehicle/inventory/player_inventory.png");
 
+    /** The icons drawn on the support vehicle's module buttons. */
+    private record ModuleIcon(ItemStack stack, int x, int y) {}
+    private final java.util.List<ModuleIcon> moduleIcons = new java.util.ArrayList<>();
+
     public VehicleScreen(VehicleMenu menu, Inventory playerInventory, Component title) {
         super(menu, playerInventory, title, menu.vehicleColumns() > 13 ? 320 : 222, menu.screenHeight());
         this.titleLabelX = 15;
@@ -41,6 +45,21 @@ public final class VehicleScreen extends AbstractContainerScreen<VehicleMenu> {
     protected void init() {
         super.init();
         VehicleInputHandler.clearPendingVehicleInventoryClicks();
+        // Aboard a field support vehicle, the hold has one button: the Fit-out console. Each module's own screen (a
+        // furnace, the beacon) opens only by clicking it in the room, one at a time.
+        if (Minecraft.getInstance().player != null && Minecraft.getInstance().player.getVehicle() instanceof ttv.migami.jeg.vehicle.entity.SupportVehicleEntity truck) {
+            // One button beside the hold's top right corner: labelled when the screen has room, else an icon (name on hover).
+            int bx = this.leftPos + this.imageWidth + 2, by = this.topPos, size = 20;
+            int id = truck.getId();
+            Component label = Component.translatable("gui.jeg.support_fit.title");
+            int labelled = this.font.width(label) + 10;
+            boolean room = this.width - bx - 2 >= labelled;
+            this.moduleIcons.clear();
+            this.addRenderableWidget(net.minecraft.client.gui.components.Button.builder(room ? label : Component.empty(),
+                    b -> net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.send(new ttv.migami.jeg.vehicle.network.SupportModulePayload(id, -1)))
+                    .bounds(bx, by, room ? labelled : size, size).tooltip(net.minecraft.client.gui.components.Tooltip.create(label)).build());
+            if (!room) this.moduleIcons.add(new ModuleIcon(new ItemStack(Items.SMITHING_TABLE), bx + 2, by + 2));
+        }
     }
 
     @Override
@@ -77,6 +96,7 @@ public final class VehicleScreen extends AbstractContainerScreen<VehicleMenu> {
             guiGraphics.fill(right - 1, top, right, bottom, 0xFFE0A030);
         }
         super.extractContents(guiGraphics, mouseX, mouseY, partialTick);
+        for (ModuleIcon icon : this.moduleIcons) guiGraphics.item(icon.stack(), icon.x(), icon.y());
         if (bay != null) {
             boolean hoveringEmpty = false;
             for (int i = 0; i < this.menu.toolCount(); i++) {

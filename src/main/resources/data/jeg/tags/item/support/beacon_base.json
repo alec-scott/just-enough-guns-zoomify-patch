@@ -1,0 +1,19 @@
+{
+  "replace": false,
+  "values": [
+    "minecraft:iron_block",
+    "minecraft:gold_block",
+    "minecraft:emerald_block",
+    "minecraft:diamond_block",
+    "minecraft:netherite_block",
+    "minecraft:iron_ingot",
+    "minecraft:gold_ingot",
+    "minecraft:emerald",
+    "minecraft:diamond",
+    "minecraft:netherite_ingot",
+    "minecraft:raw_iron",
+    "minecraft:raw_gold",
+    "minecraft:raw_iron_block",
+    "minecraft:raw_gold_block"
+  ]
+}

@@ -98,7 +98,6 @@ import ttv.migami.jeg.vehicle.client.render.Lav150Renderer;
 import ttv.migami.jeg.vehicle.client.render.Mi28Renderer;
 import ttv.migami.jeg.vehicle.client.render.SpeedboatRenderer;
 import ttv.migami.jeg.vehicle.client.render.Tom6Renderer;
-import ttv.migami.jeg.vehicle.client.render.TruckRenderer;
 import ttv.migami.jeg.vehicle.client.render.VehicleDecoyRenderer;
 import ttv.migami.jeg.vehicle.client.render.VehicleGeoRenderer;
 import ttv.migami.jeg.vehicle.client.render.VehicleMissileRenderer;
@@ -300,7 +299,7 @@ public final class FabricClientBootstrap {
         EntityRendererRegistry.register(ModEntities.TEST_BOAT.get(), VehicleGeoRenderer::new);
         EntityRendererRegistry.register(ModEntities.TEST_ARTILLERY.get(), VehicleGeoRenderer::new);
         EntityRendererRegistry.register(ModEntities.TEST_AIRCRAFT.get(), VehicleGeoRenderer::new);
-        EntityRendererRegistry.register(ModEntities.TRUCK.get(), TruckRenderer::new);
+        EntityRendererRegistry.register(ModEntities.TRUCK.get(), ttv.migami.jeg.vehicle.client.render.SupportVehicleRenderer::new);
         EntityRendererRegistry.register(ModEntities.LAV150.get(), Lav150Renderer::new);
         EntityRendererRegistry.register(ModEntities.SPEEDBOAT.get(), SpeedboatRenderer::new);
         EntityRendererRegistry.register(ModEntities.AH6.get(), Ah6Renderer::new);
@@ -319,6 +318,8 @@ public final class FabricClientBootstrap {
         registerMenuScreen(ModMenuTypes.ATTACHMENT_MENU.get(), (menu, inventory, title) -> new AttachmentScreen((AttachmentMenu) menu, inventory, title));
         registerMenuScreen(ModMenuTypes.VEHICLE_MENU.get(), (menu, inventory, title) -> new VehicleScreen((VehicleMenu) menu, inventory, title));
         registerMenuScreen(ModMenuTypes.VEHICLE_ASSEMBLING_MENU.get(), (menu, inventory, title) -> new VehicleAssemblingScreen((VehicleAssemblingMenu) menu, inventory, title));
+        registerMenuScreen(ModMenuTypes.SUPPORT_FIT_MENU.get(), (menu, inventory, title) -> new ttv.migami.jeg.vehicle.client.screen.SupportFitScreen((ttv.migami.jeg.vehicle.menu.SupportFitMenu) menu, inventory, title));
+        registerMenuScreen(ModMenuTypes.SUPPORT_BEACON_MENU.get(), (menu, inventory, title) -> new ttv.migami.jeg.vehicle.client.screen.SupportBeaconScreen((ttv.migami.jeg.vehicle.menu.SupportBeaconMenu) menu, inventory, title));
         registerMenuScreen(ModMenuTypes.VEHICLE_CHARGING_STATION_MENU.get(), (menu, inventory, title) -> new VehicleChargingStationScreen((VehicleChargingStationMenu) menu, inventory, title));
 
         LevelRenderEvents.AFTER_SOLID_FEATURES.register(context -> {
@@ -347,6 +348,8 @@ public final class FabricClientBootstrap {
             ttv.migami.jeg.vehicle.client.audio.FarAircraftAudio.tick(client);
             ttv.migami.jeg.vehicle.client.render.AircraftLights.tick(client);
             ttv.migami.jeg.vehicle.client.audio.BulldozerAudio.tick(client);
+            ttv.migami.jeg.vehicle.client.audio.SupportAudio.tick(client);
+            ttv.migami.jeg.vehicle.client.SupportHints.tick(client);
             MedalManager.tick();
             if (NetworkHandler.shouldRenderLegacyBulletTrail()) {
                 BulletTrailRenderer.tick();
@@ -379,6 +382,7 @@ public final class FabricClientBootstrap {
             ttv.migami.jeg.vehicle.client.audio.JetAudio.clear(client);
             ttv.migami.jeg.vehicle.client.audio.FarAircraftAudio.clear(client);
             ttv.migami.jeg.vehicle.client.audio.BulldozerAudio.clear(client);
+            ttv.migami.jeg.vehicle.client.audio.SupportAudio.clear(client);
             VehicleRotaryGunAudio.clear(client);
             Config.setSyncedMagazineFeedEnabled(null);
             Config.setSyncedHelicopterFlight(null);
