@@ -19,12 +19,13 @@ import ttv.migami.jeg.vehicle.entity.base.VehicleEntity;
 public final class VehicleMenu extends AbstractContainerMenu {
     /**
      * What the client needs to build the menu: the hold's size and the bay feeding a vehicle's tool
-     * (the bulldozer's ripper paving row). The bay starts at -1 when it has none.
+     * (the bulldozer's ripper paving row). The bay starts at -1 when it has none. The vehicle's entity id lets the
+     * screen list who sits in each seat.
      */
-    public record OpeningData(int slots, int toolStart, int toolCount) {
+    public record OpeningData(int slots, int toolStart, int toolCount, int vehicleId) {
         public static final StreamCodec<ByteBuf, OpeningData> STREAM_CODEC = StreamCodec.composite(
                 ByteBufCodecs.VAR_INT, OpeningData::slots, ByteBufCodecs.VAR_INT, OpeningData::toolStart,
-                ByteBufCodecs.VAR_INT, OpeningData::toolCount, OpeningData::new);
+                ByteBufCodecs.VAR_INT, OpeningData::toolCount, ByteBufCodecs.VAR_INT, OpeningData::vehicleId, OpeningData::new);
     }
 
     /** A hold slot that feeds a tool: it takes only full solid blocks (what the ripper can lay), so nothing else lands there. */
@@ -64,6 +65,8 @@ public final class VehicleMenu extends AbstractContainerMenu {
     private final int toolStart, toolCount;
     @Nullable
     private final VehicleEntity vehicle;
+    /** The vehicle's entity id, so the client can list who sits where (-1 when unknown). */
+    private int vehicleId;
 
     public VehicleMenu(int containerId, Inventory playerInventory) {
         this(containerId, playerInventory, DEFAULT_VEHICLE_SLOT_COUNT);
@@ -75,6 +78,7 @@ public final class VehicleMenu extends AbstractContainerMenu {
 
     public VehicleMenu(int containerId, Inventory playerInventory, OpeningData data) {
         this(containerId, playerInventory, new SimpleContainer(data.slots()), data.slots(), null, data.toolStart(), data.toolCount());
+        this.vehicleId = data.vehicleId();
     }
 
     public VehicleMenu(int containerId, Inventory playerInventory, Container vehicleInventory) {
@@ -99,6 +103,7 @@ public final class VehicleMenu extends AbstractContainerMenu {
         checkContainerSize(vehicleInventory, this.vehicleSlotCount);
         this.vehicleInventory = vehicleInventory;
         this.vehicle = vehicle;
+        this.vehicleId = vehicle == null ? -1 : vehicle.getId();
         this.vehicleColumns = columnsFor(this.vehicleSlotCount);
         this.vehicleRows = this.vehicleColumns == 0 ? 0 : (this.vehicleSlotCount + this.vehicleColumns - 1) / this.vehicleColumns;
         this.vehicleInventory.startOpen(playerInventory.player);
@@ -181,6 +186,20 @@ public final class VehicleMenu extends AbstractContainerMenu {
             }
         }
         return copy;
+    }
+
+    public int vehicleId() {
+        return this.vehicleId;
+    }
+
+    /** A seat's eject button (the id is the seat index): puts the mob in that seat off the vehicle. Never a player. */
+    @Override
+    public boolean clickMenuButton(@NotNull Player player, int id) {
+        if (this.vehicle == null || !this.stillValid(player)) {
+            return false;
+        }
+        var passenger = this.vehicle.passengerForSeat(id);
+        return passenger != null && this.vehicle.ejectMobPassenger(passenger);
     }
 
     @Override

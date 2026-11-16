@@ -23,6 +23,8 @@ import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.effect.MobEffectInstance;
+import net.minecraft.world.effect.MobEffects;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.tags.FluidTags;
 import net.minecraft.util.Mth;
@@ -458,6 +460,13 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     private final AnimatableInstanceCache geckoCache = GeckoLibUtil.createInstanceCache(this);
     private final CompoundTag persistentData = new CompoundTag();
     private final Map<UUID, Integer> seatAssignments = new HashMap<>();
+    /** How far above a player's feet they sit when riding; seat heights are set for this. */
+    private static final double PLAYER_VEHICLE_ATTACHMENT_Y = net.minecraft.world.entity.EntityType.PLAYER.getDimensions().attachments()
+            .get(net.minecraft.world.entity.EntityAttachment.VEHICLE, 0, 0.0F).y;
+    /** The player whose right-click Carry On just used to put a carried mob aboard, and the game tick it happened. */
+    @Nullable
+    private UUID carryOnPlacer;
+    private long carryOnPlacementTime = Long.MIN_VALUE;
     private final Map<UUID, Integer> recentDismountSeatAssignments = new HashMap<>();
     private final Set<UUID> preservedSeatAssignments = new HashSet<>();
     private final Map<Integer, Integer> loadedAmmoByWeaponSlot = new HashMap<>();
@@ -1848,6 +1857,9 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         }
         this.applyPassengerYaw();
         if (!this.level().isClientSide()) {
+            if (this.tickCount % 10 == 0) {
+                this.evictMobsFromDriverSeats();
+            }
             this.clearStaleDriverInput();
             this.tickServerMovement();
             this.sendFarAircraftSound();
@@ -4251,7 +4263,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         var passengers = this.getPassengers();
         for (int index = 0; index < passengers.size(); index++) {
             Entity passenger = passengers.get(index);
-            if (passenger instanceof LivingEntity && weapon.usableBySeat(this.seatIndexForPassenger(passenger, index))) {
+            if (passenger instanceof LivingEntity && canCrewVehicle(passenger) && weapon.usableBySeat(this.seatIndexForPassenger(passenger, index))) {
                 return true;
             }
         }
@@ -6343,7 +6355,10 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         }
         int fallbackIndex = this.getPassengers().indexOf(passenger);
         SeatInfo seat = this.seatForPassenger(passenger, fallbackIndex);
-        Vec3 offset = this.seatOffset(seat, 0.0D, 1.0F);
+        // Seat heights are set for a player, whose attachment point (where they sit) is at the hips. Any other rider sits
+        // by its own attachment point, as in a vanilla boat, so a mob's feet don't sink below the seat.
+        double attachmentLift = PLAYER_VEHICLE_ATTACHMENT_Y - passenger.getVehicleAttachmentPoint(this).y;
+        Vec3 offset = this.seatOffset(seat, passenger instanceof Player ? 0.0D : attachmentLift, 1.0F);
         callback.accept(passenger, this.getX() + offset.x, this.getY() + offset.y, this.getZ() + offset.z);
         if (passenger instanceof LivingEntity living) {
             living.fallDistance = 0.0F;
@@ -7355,6 +7370,10 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         if (this.isWrecked()) {
             return InteractionResult.PASS;
         }
+        if (this.consumeCarryOnPlacement(player)) {
+            // This click put the player's carried mob aboard (or found no seat for it): it doesn't board the player too.
+            return InteractionResult.SUCCESS_SERVER;
+        }
         ItemStack stack = player.getItemInHand(hand);
         if (stack.getItem() instanceof RepairToolItem repairTool) {
             if (this.level().isClientSide()) {
@@ -7439,7 +7458,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
 
     @Override
     public VehicleMenu.OpeningData getScreenOpeningData(ServerPlayer player) {
-        return new VehicleMenu.OpeningData(this.vehicleContainerSlots(), this.toolSlotStart(), this.toolSlotCount());
+        return new VehicleMenu.OpeningData(this.vehicleContainerSlots(), this.toolSlotStart(), this.toolSlotCount(), this.getId());
     }
 
     /** First hold slot of a bay that feeds one of the vehicle's tools, shown and restricted in its menu; -1 for none. */
@@ -7465,7 +7484,109 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         if (this.isEnemyAiVehicle() && !passenger.entityTags().contains(EnemyVehicleController.ENEMY_VEHICLE_CREW_TAG)) {
             return false;
         }
-        return this.getPassengers().size() < this.vehicleData().defaults().seats().size();
+        if (this.getPassengers().size() >= this.vehicleData().defaults().seats().size()) {
+            return false;
+        }
+        // A mob (e.g. one placed by Carry On) only rides as a passenger, so it needs a free seat that isn't the pilot's.
+        return canCrewVehicle(passenger) || this.firstFreePassengerSeat(passenger) >= 0;
+    }
+
+    /**
+     * Whether this entity may sit in a pilot/driver seat and crew the vehicle: players, and the crews of JEG's enemy-AI
+     * vehicles. Any other mob only rides along as a passenger.
+     */
+    public static boolean canCrewVehicle(Entity passenger) {
+        return passenger instanceof Player || passenger.entityTags().contains(EnemyVehicleController.ENEMY_VEHICLE_CREW_TAG);
+    }
+
+    /** A pilot/driver seat; in a vehicle with none flagged, the first seat is the one that steers. */
+    public boolean isDriverSeat(int seatIndex) {
+        var seats = this.vehicleData().defaults().seats();
+        if (seatIndex < 0 || seatIndex >= seats.size()) {
+            return false;
+        }
+        if (seats.get(seatIndex).driver()) {
+            return true;
+        }
+        return seatIndex == 0 && seats.stream().noneMatch(SeatInfo::driver);
+    }
+
+    private boolean canTakeSeat(Entity passenger, int seatIndex) {
+        return canCrewVehicle(passenger) || !this.isDriverSeat(seatIndex);
+    }
+
+    private int firstFreePassengerSeat(@Nullable Entity except) {
+        int seatCount = this.vehicleData().defaults().seats().size();
+        for (int seat = 0; seat < seatCount; seat++) {
+            if (!this.isDriverSeat(seat) && !this.isSeatOccupied(seat, except)) {
+                return seat;
+            }
+        }
+        return -1;
+    }
+
+    /**
+     * Moves any mob found in a pilot/driver seat (e.g. from a world saved before mobs were kept out of them), or aboard
+     * without a seat of its own (a forced mount, such as /ride, skips canAddPassenger), to a free passenger seat, or
+     * puts it off the vehicle when there is none.
+     */
+    private void evictMobsFromDriverSeats() {
+        int seatCount = this.vehicleData().defaults().seats().size();
+        for (Entity passenger : java.util.List.copyOf(this.getPassengers())) {
+            if (canCrewVehicle(passenger)) {
+                continue;
+            }
+            int assigned = this.seatAssignments.getOrDefault(passenger.getUUID(), -1);
+            if (assigned >= 0 && assigned < seatCount && !this.isDriverSeat(assigned)) {
+                continue;
+            }
+            int seat = this.firstFreePassengerSeat(passenger);
+            if (seat >= 0) {
+                this.seatAssignments.put(passenger.getUUID(), seat);
+                this.syncSeatAssignments();
+            } else {
+                this.ejectMobPassenger(passenger);
+            }
+        }
+    }
+
+    /** Whether a mob could board now: a free seat that isn't a pilot's/driver's. */
+    public boolean hasFreePassengerSeat() {
+        return !this.isWrecked() && !this.isEnemyAiVehicle() && this.firstFreePassengerSeat(null) >= 0;
+    }
+
+    /**
+     * Called (through the Carry On compat mixin) when a player carrying a mob right-clicks this vehicle: Carry On puts
+     * the mob in a passenger seat, and this click must not also board the player.
+     */
+    public void markCarryOnPlacement(Player player) {
+        this.carryOnPlacer = player.getUUID();
+        this.carryOnPlacementTime = this.level().getGameTime();
+    }
+
+    private boolean consumeCarryOnPlacement(Player player) {
+        if (this.level().isClientSide() || !player.getUUID().equals(this.carryOnPlacer) || this.level().getGameTime() != this.carryOnPlacementTime) {
+            return false;
+        }
+        this.carryOnPlacer = null;
+        return true;
+    }
+
+    /**
+     * Puts a mob off the vehicle (the inventory's eject buttons, or a mob found in the pilot's seat). Never ejects a
+     * player or an enemy-AI crew member. A mob put off an airborne vehicle gets Slow Falling so it lands safely.
+     * Returns whether the mob was ejected.
+     */
+    public boolean ejectMobPassenger(Entity passenger) {
+        if (this.level().isClientSide() || canCrewVehicle(passenger) || passenger.getVehicle() != this) {
+            return false;
+        }
+        boolean airborne = !this.onGround() && !this.isInWater();
+        passenger.stopRiding();
+        if (airborne && passenger instanceof LivingEntity living) {
+            living.addEffect(new MobEffectInstance(MobEffects.SLOW_FALLING, 20 * 30, 0));
+        }
+        return true;
     }
 
     @Override
@@ -7473,13 +7594,13 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         super.addPassenger(passenger);
         int seatCount = this.vehicleData().defaults().seats().size();
         int savedSeat = this.seatAssignments.getOrDefault(passenger.getUUID(), -1);
-        if (savedSeat >= 0 && savedSeat < seatCount && !this.isSeatOccupied(savedSeat, passenger)) {
+        if (savedSeat >= 0 && savedSeat < seatCount && !this.isSeatOccupied(savedSeat, passenger) && this.canTakeSeat(passenger, savedSeat)) {
             this.alignPassengerViewToVehicle(passenger, savedSeat);
             this.syncSeatAssignments();
             return;
         }
         for (int seat = 0; seat < seatCount; seat++) {
-            if (!this.isSeatOccupied(seat, passenger)) {
+            if (!this.isSeatOccupied(seat, passenger) && this.canTakeSeat(passenger, seat)) {
                 this.seatAssignments.put(passenger.getUUID(), seat);
                 this.alignPassengerViewToVehicle(passenger, seat);
                 this.syncSeatAssignments();
@@ -7509,7 +7630,10 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
             living.fallDistance = 0.0F;
         }
         super.removePassenger(passenger);
-        if (!preserveSeatAssignment) {
+        // Only the server drops a seat: the client takes its seats from the server's map. On any change of riders the
+        // client removes every passenger and adds them back (vanilla's set-passengers handling), so dropping seats here
+        // re-seated everyone in boarding order and the screen showed riders in seats they weren't in.
+        if (!preserveSeatAssignment && !this.level().isClientSide()) {
             this.seatAssignments.remove(passenger.getUUID());
         }
         this.syncSeatAssignments();
@@ -7616,8 +7740,9 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         Entity passenger = null;
         boolean hasDriverSeat = false;
         for (int index = 0; index < this.getPassengers().size(); index++) {
-            if (this.seatForPassenger(this.getPassengers().get(index), index).driver()) {
-                passenger = this.getPassengers().get(index);
+            Entity candidate = this.getPassengers().get(index);
+            if (canCrewVehicle(candidate) && this.seatForPassenger(candidate, index).driver()) {
+                passenger = candidate;
                 break;
             }
         }
@@ -7625,7 +7750,13 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
             hasDriverSeat |= seat.driver();
         }
         if (passenger == null && !hasDriverSeat) {
-            passenger = this.getFirstPassenger();
+            // No seat is flagged as the driver's: the first crew member aboard steers; a mob never does.
+            for (Entity candidate : this.getPassengers()) {
+                if (canCrewVehicle(candidate)) {
+                    passenger = candidate;
+                    break;
+                }
+            }
         }
         return passenger instanceof LivingEntity living ? living : null;
     }
