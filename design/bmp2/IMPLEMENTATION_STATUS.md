@@ -17,6 +17,9 @@ Brief: [BRIEF.md](BRIEF.md).
   blocks; dismount at the rear doors (0.1 up: the hull sits 0.03 into the ground, so a spot at its own height is
   refused); entity box 3.4 × 2.4.
 - **Muzzle flashes** show only while their gun fires (they were drawn all the time).
+- **Markings painted out** (user, 2026-11-17): SBW's "Z" (bow and stern) and St. George ribbon with star (both sides)
+  were decal cubes on transparent ground; the refit drops them (`drop_markings`), and the hull paint shows. The other
+  vehicles' textures were checked: no such markings (the Mi-28 carries only a tail number).
 - **Kept for the enemy AI:** the id, the turret seat (0) and its pitch limits.
 
 ## Played (mcpfabric, pack client with Photon)
@@ -46,5 +49,4 @@ Found while writing the raid test:
   taking the gun from the driver, swimming, dual-feed 30 mm, long-range rounds for the 30 mm and coax, the rear doors
   and hatches opening, ground-vehicle audio, lights, damage states.
 - The tracks seen moving on the BMP-2 itself (the shared driver is pinned by `Plz05ClientGameTest`).
-- The "Z" and St. George ribbon markings in SBW's texture: waiting on the user (recommended: paint them out).
 - Night view, the dedicated server, multiplayer.

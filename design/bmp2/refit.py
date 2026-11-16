@@ -102,8 +102,37 @@ def sbw_path(t):
     return y, z
 
 
+# Political markings painted out (user, 2026-11-17): SBW's texture carries a "Z" (bow and stern) and a St. George ribbon
+# with a star (both sides) as decals on transparent ground. Their cubes are dropped; the hull paint shows beneath.
+# Regions in the geometry's UV units (128 across a 512 texture).
+MARKINGS = [("ribbon and star", (0.0, 106.0, 128.0, 128.0)), ("Z", (92.5, 84.0, 100.5, 93.0))]
+
+
+def drop_markings(geo):
+    """Remove every cube that samples a marking decal; returns the geometry and how many went."""
+    dropped = 0
+    for b in L.bones_of(geo):
+        kept = []
+        for c in b.get("cubes", []):
+            marked = False
+            for face in c["uv"].values():
+                u, v = face["uv"]
+                w, h = face["uv_size"]
+                u1, u2 = sorted((u, u + w))
+                v1, v2 = sorted((v, v + h))
+                marked |= any(x1 <= u1 and u2 <= x2 and y1 <= v1 and v2 <= y2 for _, (x1, y1, x2, y2) in MARKINGS)
+            if marked:
+                dropped += 1
+            else:
+                kept.append(c)
+        if "cubes" in b:
+            b["cubes"] = kept
+    return geo, dropped
+
+
 def refit(raw, identifier, mapping):
-    face = L.to_face_uv(raw)
+    face, dropped = drop_markings(L.to_face_uv(raw))
+    print(f"{identifier}: {dropped} marking decal cubes dropped")
     return L.scale(L.rename_bones(face, mapping, identifier), SCALE)
 
 
