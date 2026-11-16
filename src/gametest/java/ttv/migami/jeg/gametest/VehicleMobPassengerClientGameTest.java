@@ -103,6 +103,36 @@ public class VehicleMobPassengerClientGameTest implements FabricClientGameTest {
             });
             report.append("after clicking seat 1's X: seat 1 ").append(ejected).append('\n');
             if (!"empty".equals(ejected)) failures.append("seat 1's X did not put the cow off (seat holds ").append(ejected).append(")\n");
+            // The client must agree: the other cows stay in their seats on screen, so their X buttons still work.
+            String rowsAfter = context.computeOnClient(mc -> {
+                StringBuilder out = new StringBuilder();
+                for (VehicleScreen.SeatRow row : ((VehicleScreen) mc.screen).seatRows()) {
+                    out.append(row.seat()).append(row.ejectable() ? "x " : "- ");
+                }
+                return out.toString().trim();
+            });
+            report.append("seat panel after the eject: ").append(rowsAfter).append('\n');
+            if (!"0- 1- 2x 3x".equals(rowsAfter)) failures.append("after the eject the screen shows ").append(rowsAfter).append(", expected 0- 1- 2x 3x\n");
+            // And clicking seat 3's X (Cow 2, still in seat 3) puts that cow off.
+            double[] at3 = context.computeOnClient(mc -> {
+                for (VehicleScreen.SeatRow row : ((VehicleScreen) mc.screen).seatRows()) {
+                    if (row.seat() == 2) {
+                        double scale = mc.getWindow().getGuiScale();
+                        return new double[]{(row.ejectX() + 4.5) * scale, (row.ejectY() + 4.5) * scale};
+                    }
+                }
+                return null;
+            });
+            context.getInput().setCursorPos(at3[0], at3[1]);
+            context.waitTick();
+            context.getInput().pressMouse(GLFW.GLFW_MOUSE_BUTTON_LEFT);
+            context.waitTicks(5);
+            boolean cow2Off = server.computeOnServer(s -> tagged(s, "cow2").getVehicle() == null);
+            report.append("clicking seat 3's X next puts Cow 2 off: ").append(cow2Off).append('\n');
+            if (!cow2Off) failures.append("the second eject (seat 3) did nothing\n");
+            context.takeScreenshot("vehicle_mob_seat_second_eject");
+            server.runCommand("ride @e[tag=cow2,limit=1] mount " + HELI);
+            context.waitTicks(15);
 
             // The pilot's seat button does nothing to a player, even sent directly.
             boolean playerKept = server.computeOnServer(s -> {
@@ -118,7 +148,7 @@ public class VehicleMobPassengerClientGameTest implements FabricClientGameTest {
             // Put off while airborne: the cow gets Slow Falling.
             boolean slowFalling = server.computeOnServer(s -> {
                 VehicleEntity heli = heli(s);
-                Entity cow = heli.passengerForSeat(2);
+                Entity cow = tagged(s, "cow2");
                 heli.setOnGround(false);
                 boolean ejectedCow = heli.ejectMobPassenger(cow);
                 return ejectedCow && cow instanceof LivingEntity living && living.hasEffect(MobEffects.SLOW_FALLING);

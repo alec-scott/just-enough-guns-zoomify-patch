@@ -7630,7 +7630,10 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
             living.fallDistance = 0.0F;
         }
         super.removePassenger(passenger);
-        if (!preserveSeatAssignment) {
+        // Only the server drops a seat: the client takes its seats from the server's map. On any change of riders the
+        // client removes every passenger and adds them back (vanilla's set-passengers handling), so dropping seats here
+        // re-seated everyone in boarding order and the screen showed riders in seats they weren't in.
+        if (!preserveSeatAssignment && !this.level().isClientSide()) {
             this.seatAssignments.remove(passenger.getUUID());
         }
         this.syncSeatAssignments();
