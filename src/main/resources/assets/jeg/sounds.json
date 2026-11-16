@@ -2219,5 +2219,48 @@
         "name": "jeg:vehicle/plz05/engine"
       }
     ]
+  },
+  "vehicle.leopard2.fire": {
+    "subtitle": "subtitle.jeg.vehicle.fire",
+    "sounds": [
+      {
+        "name": "jeg:vehicle/leopard2/fire"
+      }
+    ]
+  },
+  "vehicle.leopard2.fire_distant": {
+    "subtitle": "subtitle.jeg.vehicle.fire",
+    "sounds": [
+      {
+        "name": "jeg:vehicle/leopard2/fire_distant"
+      },
+      {
+        "name": "jeg:vehicle/leopard2/fire_very_far"
+      }
+    ]
+  },
+  "vehicle.leopard2.fire_interior": {
+    "subtitle": "subtitle.jeg.vehicle.fire",
+    "sounds": [
+      {
+        "name": "jeg:vehicle/leopard2/fire_interior"
+      }
+    ]
+  },
+  "vehicle.leopard2.load": {
+    "subtitle": "subtitle.jeg.leopard2.load",
+    "sounds": [
+      {
+        "name": "jeg:vehicle/leopard2/load"
+      }
+    ]
+  },
+  "vehicle.leopard2.engine": {
+    "subtitle": "subtitle.jeg.vehicle.engine",
+    "sounds": [
+      {
+        "name": "jeg:vehicle/leopard2/engine"
+      }
+    ]
   }
 }

@@ -269,6 +269,10 @@ public final class ModEntities {
     public static final DeferredHolder<EntityType<?>, EntityType<ttv.migami.jeg.vehicle.entity.Type63Entity>> TYPE63 = REGISTER.register("type63",
             () -> EntityType.Builder.<ttv.migami.jeg.vehicle.entity.Type63Entity>of(ttv.migami.jeg.vehicle.entity.Type63Entity::new, MobCategory.MISC)
                     .sized(1.6F, 1.2F).clientTrackingRange(14).updateInterval(1).build(entityKey("type63")));
+    /** The Leopard 2A7 main battle tank (design/leopard2/rig.json). */
+    public static final DeferredHolder<EntityType<?>, EntityType<ttv.migami.jeg.vehicle.entity.Leopard2Entity>> LEOPARD2 = REGISTER.register("leopard2",
+            () -> EntityType.Builder.<ttv.migami.jeg.vehicle.entity.Leopard2Entity>of(ttv.migami.jeg.vehicle.entity.Leopard2Entity::new, MobCategory.MISC)
+                    .sized(3.7F, 2.6F).clientTrackingRange(16).updateInterval(1).build(entityKey("leopard2")));
     /** The PLZ-05 155 mm self-propelled howitzer (design/plz05/rig.json). */
     public static final DeferredHolder<EntityType<?>, EntityType<ttv.migami.jeg.vehicle.entity.Plz05Entity>> PLZ05 = REGISTER.register("plz05",
             () -> EntityType.Builder.<ttv.migami.jeg.vehicle.entity.Plz05Entity>of(ttv.migami.jeg.vehicle.entity.Plz05Entity::new, MobCategory.MISC)

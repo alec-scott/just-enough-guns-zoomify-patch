@@ -481,11 +481,15 @@ once, and the type in the release after (the waveforce tower, retired 2026-11-16
   move); `firesLongRangeRounds(weapon)` puts a ground vehicle's gun on the aircraft guns' far path;
   `seatGunMuzzle(weapon, direction)` places a pintle gun's muzzle from its own pivot along its gunner's view.
 - **Weapon ids pick the muzzle flash.** An id without `machine_gun` got the cannon flare (fire and smoke blocks wide):
-  the PLZ-05's roof gun first threw a fireball into its gunner's face. Pintle guns (`*_hmg`) get the helicopters'
+  the PLZ-05's roof gun first threw a fireball into its gunner's face. Pintle guns and weapon stations (`*_hmg`, `*_rws`: name new ones so) get the helicopters'
   medium flash.
 - **The gun's panel goes to whoever lays the gun**, not the driver: `ShellGunEntity.laysGun(passenger)` (the PLZ-05's
   gunner is seat 1). Look seats up with `seatOf(passenger)`, never the passenger list's order: after a seat change the
   two differ (the bore marker compared them).
+- **Limit elevation by bearing where the hull is in the way** (`clampTurretPitch`): the Leopard's gun stays level
+  within 70° of straight back, over the rear deck. Check the gun against the hull's real top (each cube, sloped plates by
+  their slope) over the whole elevation and traverse range in the generator: a deck-height check flagged the glacis
+  falsely and missed the headlights, which the gun struck at full depression until they moved down onto the glacis.
 - **Lift a dismount point 0.1 off the ground.** Hulls sit a few hundredths into the ground, so a dismount point at the
   hull's own height overlaps the block below and is refused; the player then lands on the roof (the BMP-2's rear-door
   exit, first try).

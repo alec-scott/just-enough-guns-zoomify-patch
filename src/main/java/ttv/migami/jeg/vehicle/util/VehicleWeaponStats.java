@@ -33,6 +33,7 @@ public final class VehicleWeaponStats {
     private static final Identifier BL132_LOAD = Reference.id("vehicle.bl132.load");
     private static final Identifier TYPE63_LOAD = Reference.id("vehicle.type63.load");
     private static final Identifier PLZ05_LOAD = Reference.id("vehicle.plz05.load");
+    private static final Identifier LEOPARD2_LOAD = Reference.id("vehicle.leopard2.load");
 
     private static final Map<Identifier, GunStats> STATS = createStats();
 
@@ -450,6 +451,24 @@ public final class VehicleWeaponStats {
                     1.0F
             ));
         }
+        // The Leopard 2A7 (design/leopard2/BRIEF.md): the Mk42's 5-inch shells fired flat and fast (Leopard2Entity's
+        // ballistics), one in the breech, loaded in 3.5 s (SBW's YX-100: 70 ticks, stat 109 * 0.64).
+        for (String kind : new String[]{"he", "ap", "cm", "gs"}) {
+            Identifier id = Reference.id("vehicle_leopard2_" + kind);
+            stats.put(id, new GunStats(id, Reference.id("shell_5in_" + kind), "jeg:magazine", 1, 109, 0, 20,
+                    switch (kind) {
+                        case "ap" -> 450.0F;
+                        case "cm" -> 300.0F;
+                        case "gs" -> 1000.0F;
+                        default -> 250.0F;
+                    },
+                    40.0F, 150, true, false, 0.02F, 1, null, null, null, LEOPARD2_LOAD, null, LEOPARD2_LOAD, null, null,
+                    0.2F, 0xFFC040, 1.0F));
+        }
+        // The Leopard's FLW 200 weapon station: a 12.7 mm, as the PLZ-05's roof gun.
+        stats.put(Reference.id("vehicle_leopard2_rws"), new GunStats(Reference.id("vehicle_leopard2_rws"), RIFLE_AMMO, "jeg:magazine",
+                100, 125, 0, 2, 14.0F, 30.0F, 60, false, false, 0.4F, 1, MACHINE_GUN_FIRE, null, MACHINE_GUN_FIRE,
+                null, null, null, null, null, GunStats.STANDARD_BULLET_PROJECTILE_SIZE, 0xFFAA33, 1.5F));
         // The PLZ-05's roof 12.7 mm: about 600 rounds a minute from a 100-round box (8 s to change: stat 125 / 0.64), on
         // the long-range path (Plz05Entity#firesLongRangeRounds).
         stats.put(Reference.id("vehicle_plz05_hmg"), new GunStats(

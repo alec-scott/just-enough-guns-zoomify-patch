@@ -1794,6 +1794,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         }
         float yaw = this.turretYaw();
         float pitch = this.turretPitch();
+        this.turretAimTargetPitch = this.clampTurretPitch(yaw, this.turretAimTargetPitch);
         float yawStep = Mth.wrapDegrees(this.turretAimTargetYaw - yaw);
         float pitchStep = this.turretAimTargetPitch - pitch;
         if (turret.traverseRate() > 0.0F) {
@@ -1817,6 +1818,15 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     @Nullable
     protected float[] turretAutoLay() {
         return null;
+    }
+
+    /**
+     * Server: the pitch a slew-limited turret may be laid to at this turret yaw (both in the turret's own terms, pitch
+     * negative is up): a tank's gun can't depress over its rear deck (the Leopard 2's). Called with the turret's present
+     * yaw each tick, so the gun rises as the turret swings into the arc.
+     */
+    protected float clampTurretPitch(float turretYaw, float pitch) {
+        return pitch;
     }
 
     /** Whether the vehicle's weapons can fire now (a towed gun only once it is deployed). */
@@ -3137,7 +3147,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
             this.spawnVehicleMuzzleFlareParticle(serverLevel, new CannonMuzzleFlareOption(0.55F, 0.45F, 0.4F, 18, 0.82F, 2, 0.025F), muzzle, direction, 1, 0.0D, 0.10D);
             return;
         }
-        if (weaponPath.endsWith("_hmg")) {
+        if (weaponPath.endsWith("_hmg") || weaponPath.endsWith("_rws")) {
             // A pintle gun fired from an open hatch sits in its gunner's face: a modest flash, as the helicopters' guns.
             Vec3 forward = direction.normalize();
             serverLevel.sendParticles(ModParticleTypes.MEDIUM_GUN_MUZZLE_FLASH.get(), muzzle.x, muzzle.y, muzzle.z, 0,

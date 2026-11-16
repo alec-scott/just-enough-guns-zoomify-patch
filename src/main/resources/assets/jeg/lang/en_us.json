@@ -1040,5 +1040,13 @@
   "message.jeg.plz05.out_of_reach": "Out of reach of this charge and arc (V to change)",
   "message.jeg.plz05.mode_low": "Charge %s, low arc: reaches about %s m",
   "message.jeg.plz05.mode_high": "Charge %s, high arc: reaches about %s m",
-  "subtitle.jeg.plz05.load": "Autoloader rams a shell"
+  "subtitle.jeg.plz05.load": "Autoloader rams a shell",
+  "entity.jeg.leopard2": "Leopard 2A7 Main Battle Tank",
+  "item.jeg.vehicle_leopard2_he": "120 mm HE",
+  "item.jeg.vehicle_leopard2_ap": "120 mm AP",
+  "item.jeg.vehicle_leopard2_cm": "120 mm CM",
+  "item.jeg.vehicle_leopard2_gs": "120 mm GS",
+  "item.jeg.vehicle_leopard2_rws": "12.7 mm RWS",
+  "hud.jeg.leopard2.title": "Leopard 2A7",
+  "subtitle.jeg.leopard2.load": "Loader rams a round"
 }

@@ -319,6 +319,7 @@ public final class FabricClientBootstrap {
         EntityRendererRegistry.register(ModEntities.TYPE63.get(), ttv.migami.jeg.vehicle.client.render.Type63Renderer::new);
         EntityRendererRegistry.register(ModEntities.HOWITZER.get(), ttv.migami.jeg.vehicle.client.render.HowitzerRenderer::new);
         EntityRendererRegistry.register(ModEntities.PLZ05.get(), ttv.migami.jeg.vehicle.client.render.Plz05Renderer::new);
+        EntityRendererRegistry.register(ModEntities.LEOPARD2.get(), ttv.migami.jeg.vehicle.client.render.Leopard2Renderer::new);
         EntityRendererRegistry.register(ModEntities.CANNON_SHELL.get(), net.minecraft.client.renderer.entity.NoopRenderer::new);
         EntityRendererRegistry.register(ModEntities.WAVEFORCE_TOWER.get(), WaveforceTowerRenderer::new);
         EntityRendererRegistry.register(ModEntities.VEHICLE_DECOY.get(), VehicleDecoyRenderer::new);

@@ -249,9 +249,34 @@ abstract class AbstractVehicleGeoRenderer<T extends VehicleEntity> extends GeoEn
                     if (gun instanceof ttv.migami.jeg.vehicle.entity.Plz05Entity plz05) {
                         updatePlz05(plz05, partialTick, snapshots);
                     }
+                    if (gun instanceof ttv.migami.jeg.vehicle.entity.Leopard2Entity leopard) {
+                        updatePintleGun(leopard, leopard.passengerIn(ttv.migami.jeg.vehicle.entity.Leopard2Entity.COMMANDER_SEAT),
+                                "rws_mount", "rws", ttv.migami.jeg.vehicle.util.Leopard2Rig.RWS_MIN_ELEVATION,
+                                ttv.migami.jeg.vehicle.util.Leopard2Rig.RWS_MAX_ELEVATION, partialTick, snapshots);
+                    }
                 }
             }
         }
+    }
+
+    /**
+     * A gun on the turret roof aimed by its own gunner's view (the PLZ-05's 12.7 mm, the Leopard's weapon station): the
+     * mount turns to the view's bearing, taken off the turret's (it rides the turret), and the gun elevates within its
+     * limits; with nobody at it, it rests straight ahead.
+     */
+    private static void updatePintleGun(VehicleEntity vehicle, @org.jetbrains.annotations.Nullable net.minecraft.world.entity.Entity gunner,
+                                        String mountBone, String gunBone, float minElevation, float maxElevation, float partialTick,
+                                        com.geckolib.renderer.base.BoneSnapshots snapshots) {
+        float yaw = 0.0F, elevation = 0.0F;
+        if (gunner != null) {
+            float hullYaw = Mth.rotLerp(partialTick, vehicle.yRotO, vehicle.getYRot());
+            yaw = -Mth.wrapDegrees(gunner.getViewYRot(partialTick) - hullYaw) - vehicle.turretYaw(partialTick);
+            elevation = Mth.clamp(-gunner.getViewXRot(partialTick), minElevation, maxElevation);
+        }
+        float mountYaw = Mth.wrapDegrees(yaw) * Mth.DEG_TO_RAD;
+        float gunElevation = elevation * Mth.DEG_TO_RAD;
+        snapshots.ifPresent(mountBone, snapshot -> snapshot.setRotY(mountYaw));
+        snapshots.ifPresent(gunBone, snapshot -> snapshot.setRotX(gunElevation));
     }
 
     /** Bone names of each side's links ({prefix + i, prefix + i + "_turn"}), by link count. */
@@ -308,18 +333,9 @@ abstract class AbstractVehicleGeoRenderer<T extends VehicleEntity> extends GeoEn
      * taken off the turret's), and the gunner's sight isn't drawn in the gunner's own first-person view.
      */
     private static void updatePlz05(ttv.migami.jeg.vehicle.entity.Plz05Entity gun, float partialTick, com.geckolib.renderer.base.BoneSnapshots snapshots) {
-        net.minecraft.world.entity.Entity roof = gun.passengerIn(ttv.migami.jeg.vehicle.entity.Plz05Entity.ROOF_GUNNER_SEAT);
-        float yaw = 0.0F, elevation = 0.0F;
-        if (roof != null) {
-            float hullYaw = Mth.rotLerp(partialTick, gun.yRotO, gun.getYRot());
-            yaw = -Mth.wrapDegrees(roof.getViewYRot(partialTick) - hullYaw) - gun.turretYaw(partialTick);
-            elevation = Mth.clamp(-roof.getViewXRot(partialTick), ttv.migami.jeg.vehicle.util.Plz05Rig.HMG_MIN_ELEVATION,
-                    ttv.migami.jeg.vehicle.util.Plz05Rig.HMG_MAX_ELEVATION);
-        }
-        float mountYaw = Mth.wrapDegrees(yaw) * Mth.DEG_TO_RAD;
-        float gunElevation = elevation * Mth.DEG_TO_RAD;
-        snapshots.ifPresent("hmg_mount", snapshot -> snapshot.setRotY(mountYaw));
-        snapshots.ifPresent("hmg", snapshot -> snapshot.setRotX(gunElevation));
+        updatePintleGun(gun, gun.passengerIn(ttv.migami.jeg.vehicle.entity.Plz05Entity.ROOF_GUNNER_SEAT), "hmg_mount", "hmg",
+                ttv.migami.jeg.vehicle.util.Plz05Rig.HMG_MIN_ELEVATION, ttv.migami.jeg.vehicle.util.Plz05Rig.HMG_MAX_ELEVATION,
+                partialTick, snapshots);
         var mc = net.minecraft.client.Minecraft.getInstance();
         hideIf(snapshots, "sight", mc.player != null && gun.passengerIn(ttv.migami.jeg.vehicle.entity.Plz05Entity.GUNNER_SEAT) == mc.player
                 && mc.options.getCameraType().isFirstPerson());

@@ -36,7 +36,8 @@ public final class VehicleAssemblyRecipeManager {
             Reference.id("bl132"),
             Reference.id("type63"),
             Reference.id("howitzer"),
-            Reference.id("plz05")
+            Reference.id("plz05"),
+            Reference.id("leopard2")
     );
     private static volatile Map<Identifier, VehicleAssemblyRecipe> recipes = defaultsOnly();
     private static volatile Map<Identifier, String> syncedJson = Map.of();

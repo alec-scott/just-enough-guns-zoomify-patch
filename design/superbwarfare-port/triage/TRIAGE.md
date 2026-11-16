@@ -6,7 +6,7 @@ the real machine. Nothing here is in the mod yet.
 **Decided 2026-11-15:**
 - The proposed verdicts are accepted, **for vehicles only**: standalone explosives are out of scope (the
   explosives section below is kept for reference).
-- YX-100: **remodel** as a real MBT.
+- YX-100: **remodel** as a real MBT (built 2026-11-17 as the Leopard 2A7, `design/leopard2/`).
 - Mle1934: **drop**.
 
 - **keep:** port the geometry as is (plus `rig.json` and a generated hitbox).

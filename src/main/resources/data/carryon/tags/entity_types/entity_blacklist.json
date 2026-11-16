@@ -100,6 +100,10 @@
     {
       "id": "jeg:plz05",
       "required": false
+    },
+    {
+      "id": "jeg:leopard2",
+      "required": false
     }
   ]
 }

@@ -21,7 +21,10 @@ Status, 2026-11-15:
   brought the shared track driver (path from the running gear, `"tracks"` in the vehicle data) and shared fire missions
   (`FireMissions`).
 - **BMP-2 refit pass 1 done** (fleet plan section 2, [../bmp2/BRIEF.md](../bmp2/BRIEF.md)): 1:1, the shared track
-  driver, rescaled data. Next: the MBT.
+  driver, rescaled data.
+- **MBT built** (2026-11-17, [../leopard2/BRIEF.md](../leopard2/BRIEF.md)): a Leopard 2A7, our own generated model,
+  keeping the YX-100's behaviour on the Mk42's shells (user decisions). With it every vehicle in the port's scope is
+  built; none since the mortar is released.
 - The track driver is built with the PLZ-05; the weapon station's driver comes with the MBT.
 
 Create Big Cannons: checked. It builds fixed multi-block guns, including a drop mortar, so the carried mortar, the
