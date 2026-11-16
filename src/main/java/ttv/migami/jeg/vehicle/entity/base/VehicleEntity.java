@@ -460,6 +460,13 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     private final AnimatableInstanceCache geckoCache = GeckoLibUtil.createInstanceCache(this);
     private final CompoundTag persistentData = new CompoundTag();
     private final Map<UUID, Integer> seatAssignments = new HashMap<>();
+    /** How far above a player's feet they sit when riding; seat heights are set for this. */
+    private static final double PLAYER_VEHICLE_ATTACHMENT_Y = net.minecraft.world.entity.EntityType.PLAYER.getDimensions().attachments()
+            .get(net.minecraft.world.entity.EntityAttachment.VEHICLE, 0, 0.0F).y;
+    /** The player whose right-click Carry On just used to put a carried mob aboard, and the game tick it happened. */
+    @Nullable
+    private UUID carryOnPlacer;
+    private long carryOnPlacementTime = Long.MIN_VALUE;
     private final Map<UUID, Integer> recentDismountSeatAssignments = new HashMap<>();
     private final Set<UUID> preservedSeatAssignments = new HashSet<>();
     private final Map<Integer, Integer> loadedAmmoByWeaponSlot = new HashMap<>();
@@ -6348,7 +6355,10 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         }
         int fallbackIndex = this.getPassengers().indexOf(passenger);
         SeatInfo seat = this.seatForPassenger(passenger, fallbackIndex);
-        Vec3 offset = this.seatOffset(seat, 0.0D, 1.0F);
+        // Seat heights are set for a player, whose attachment point (where they sit) is at the hips. Any other rider sits
+        // by its own attachment point, as in a vanilla boat, so a mob's feet don't sink below the seat.
+        double attachmentLift = PLAYER_VEHICLE_ATTACHMENT_Y - passenger.getVehicleAttachmentPoint(this).y;
+        Vec3 offset = this.seatOffset(seat, passenger instanceof Player ? 0.0D : attachmentLift, 1.0F);
         callback.accept(passenger, this.getX() + offset.x, this.getY() + offset.y, this.getZ() + offset.z);
         if (passenger instanceof LivingEntity living) {
             living.fallDistance = 0.0F;
@@ -7360,6 +7370,10 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         if (this.isWrecked()) {
             return InteractionResult.PASS;
         }
+        if (this.consumeCarryOnPlacement(player)) {
+            // This click put the player's carried mob aboard (or found no seat for it): it doesn't board the player too.
+            return InteractionResult.SUCCESS_SERVER;
+        }
         ItemStack stack = player.getItemInHand(hand);
         if (stack.getItem() instanceof RepairToolItem repairTool) {
             if (this.level().isClientSide()) {
@@ -7534,6 +7548,28 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
                 this.ejectMobPassenger(passenger);
             }
         }
+    }
+
+    /** Whether a mob could board now: a free seat that isn't a pilot's/driver's. */
+    public boolean hasFreePassengerSeat() {
+        return !this.isWrecked() && !this.isEnemyAiVehicle() && this.firstFreePassengerSeat(null) >= 0;
+    }
+
+    /**
+     * Called (through the Carry On compat mixin) when a player carrying a mob right-clicks this vehicle: Carry On puts
+     * the mob in a passenger seat, and this click must not also board the player.
+     */
+    public void markCarryOnPlacement(Player player) {
+        this.carryOnPlacer = player.getUUID();
+        this.carryOnPlacementTime = this.level().getGameTime();
+    }
+
+    private boolean consumeCarryOnPlacement(Player player) {
+        if (this.level().isClientSide() || !player.getUUID().equals(this.carryOnPlacer) || this.level().getGameTime() != this.carryOnPlacementTime) {
+            return false;
+        }
+        this.carryOnPlacer = null;
+        return true;
     }
 
     /**

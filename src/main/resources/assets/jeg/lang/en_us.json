@@ -738,6 +738,7 @@
   "message.jeg.vehicle.need_crowbar": "Use a crowbar to deploy this vehicle",
   "message.jeg.vehicle.repaired": "Vehicle repaired",
   "message.jeg.vehicle.occupied": "Cannot recover an occupied vehicle",
+  "message.jeg.vehicle.no_passenger_seat": "No free passenger seat",
   "message.jeg.vehicle.lock_warning": "Missile lock warning",
   "message.jeg.vehicle.missile_warning": "Missile incoming",
   "message.jeg.vehicle.helicopter_low_speed_warning": "Airspeed too low",

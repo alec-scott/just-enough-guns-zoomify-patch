@@ -62,6 +62,10 @@ public class VehicleMobPassengerClientGameTest implements FabricClientGameTest {
             boolean playerPilots = server.computeOnServer(s -> heli(s).getControllingPassenger() == player(s) && heli(s).getSeatIndex(player(s)) == 0);
             report.append("player boards: ").append(server.computeOnServer(VehicleMobPassengerClientGameTest::describeSeats)).append('\n');
             if (!playerPilots) failures.append("the player did not take the free pilot's seat\n");
+            // Seats 0 and 1 are level in the AH-6: the cow sits by its own attachment point, 0.6 above a player's feet.
+            double lift = server.computeOnServer(s -> heli(s).passengerForSeat(1).getY() - player(s).getY());
+            report.append(String.format("cow in seat 2 sits %.2f above the pilot's feet%n", lift));
+            if (Math.abs(lift - 0.6D) > 0.05D) failures.append(String.format("cow sits %.2f above the pilot's feet, expected 0.60%n", lift));
 
             // The hold, opened from the seat: one X per cow, none for the player.
             server.runOnServer(s -> player(s).openMenu(heli(s)));
