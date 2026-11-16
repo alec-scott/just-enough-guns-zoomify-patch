@@ -106,6 +106,10 @@ public final class FarFlight {
      * its motor and trail from that.
      */
     public static void sendTrack(ServerLevel level, Entity entity, boolean heavy, int age) {
+        sendTrack(level, entity, heavy, age, false);
+    }
+
+    public static void sendTrack(ServerLevel level, Entity entity, boolean heavy, int age, boolean lowSmoke) {
         MissileTrackPayload track = null;
         for (ServerPlayer player : level.players()) {
             double dx = player.getX() - entity.getX();
@@ -117,7 +121,7 @@ public final class FarFlight {
                 continue;
             }
             if (track == null) {
-                track = new MissileTrackPayload(entity.getId(), entity.position(), entity.getDeltaMovement(), heavy, age);
+                track = new MissileTrackPayload(entity.getId(), entity.position(), entity.getDeltaMovement(), heavy, age, lowSmoke);
             }
             ServerPlayNetworking.send(player, track);
         }

@@ -32,6 +32,9 @@ public class ModParticleTypes {
             REGISTER.register("smoke", FabricParticleTypes::simple);
     public static final DeferredHolder<ParticleType<?>, SimpleParticleType> FIRE =
             REGISTER.register("fire", FabricParticleTypes::simple);
+    /** A smoke shell's screen: the flare's big puff in grey, lit by the world (not full bright), long-lived. */
+    public static final DeferredHolder<ParticleType<?>, SimpleParticleType> SMOKE_SCREEN =
+            REGISTER.register("smoke_screen", () -> FabricParticleTypes.simple(true));
     public static final DeferredHolder<ParticleType<?>, SimpleParticleType> FLARE_SMOKE =
             REGISTER.register("flare_smoke", FabricParticleTypes::simple);
     public static final DeferredHolder<ParticleType<?>, SimpleParticleType> FLARE =

@@ -10,6 +10,9 @@ import net.minecraft.util.RandomSource;
 import ttv.migami.jeg.particle.ColoredFlareOption;
 
 public final class FlareSmokeParticle extends ExplodeParticle {
+    /** Flares glow (full bright); a smoke screen is lit by the world, or shaders tint it as block light and it glows at night. */
+    private boolean glows = true;
+
     private FlareSmokeParticle(
             ClientLevel level,
             double x,
@@ -34,7 +37,25 @@ public final class FlareSmokeParticle extends ExplodeParticle {
 
     @Override
     protected int getLightCoords(float partialTick) {
-        return 240;
+        return this.glows ? 240 : super.getLightCoords(partialTick);
+    }
+
+    /** A smoke shell's screen (SmokeGrenadeEntity#smokeScreen): big grey puffs that hang 10 to 16 seconds. */
+    public static final class ScreenProvider implements ParticleProvider<SimpleParticleType> {
+        private final SpriteSet sprites;
+
+        public ScreenProvider(SpriteSet sprites) {
+            this.sprites = sprites;
+        }
+
+        @Override
+        public Particle createParticle(SimpleParticleType type, ClientLevel level, double x, double y, double z,
+                                       double xSpeed, double ySpeed, double zSpeed, RandomSource random) {
+            FlareSmokeParticle particle = new FlareSmokeParticle(level, x, y, z, xSpeed, ySpeed, zSpeed, this.sprites,
+                    0.82F, 0.82F, 0.8F, 7.0F, 200, 121);
+            particle.glows = false;
+            return particle;
+        }
     }
 
     public static final class SmokeProvider implements ParticleProvider<SimpleParticleType> {

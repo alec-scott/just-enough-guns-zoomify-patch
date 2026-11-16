@@ -1,0 +1,82 @@
+{
+  "model": "jeg:entity/vehicle/tow",
+  "source": "Superb Warfare tow, CrawKatt/SuperbWarfareReFabricated@952d73c (used with the SBW team's permission)",
+  "units_per_block": 16,
+  "front": "-Z in the model, +Z in vehicle data",
+  "scale_from_source": 1.0,
+  "elevation_degrees": [
+    -40.0,
+    40.0
+  ],
+  "turret_origin": [
+    0.0,
+    0.9689,
+    0.0
+  ],
+  "trunnion": [
+    0.0,
+    1.1748,
+    0.0
+  ],
+  "barrel_offset_from_turret": [
+    0.0,
+    0.2059,
+    0.0
+  ],
+  "muzzle_rest": [
+    0.0,
+    1.2093,
+    1.0429
+  ],
+  "tube_length_blocks": 1.691,
+  "model_bounds": [
+    [
+      -0.4021,
+      -0.0054,
+      -0.648
+    ],
+    [
+      0.687,
+      1.3853,
+      1.0429
+    ]
+  ],
+  "hitbox": [
+    {
+      "part": "body",
+      "covers": "tripod",
+      "x": 0.1425,
+      "y": 0.4845,
+      "z": -0.0,
+      "half_width": 0.5445,
+      "half_height": 0.4845,
+      "half_depth": 0.6288
+    },
+    {
+      "part": "body",
+      "covers": "traversing unit and sight",
+      "x": 0.0609,
+      "y": 1.1771,
+      "z": 0.0203,
+      "half_width": 0.2641,
+      "half_height": 0.2082,
+      "half_depth": 0.1422,
+      "follows": "turret"
+    },
+    {
+      "part": "turret",
+      "covers": "tube",
+      "x": -0.0388,
+      "y": 1.2327,
+      "z": 0.1975,
+      "half_width": 0.1438,
+      "half_height": 0.1493,
+      "half_depth": 0.8455,
+      "follows": "barrel"
+    }
+  ],
+  "coplanar_face_pairs": {
+    "in_source": 0,
+    "after_refit": 0
+  }
+}

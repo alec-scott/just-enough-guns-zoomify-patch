@@ -1,0 +1,9 @@
+{
+  "format_version": "1.8.0",
+  "animations": {
+    "animation.bl132.rest": {
+      "loop": true,
+      "bones": {}
+    }
+  }
+}

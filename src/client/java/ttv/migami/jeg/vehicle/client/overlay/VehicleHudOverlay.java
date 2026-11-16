@@ -127,6 +127,13 @@ public final class VehicleHudOverlay {
         if (vehicle instanceof ttv.migami.jeg.vehicle.entity.MortarEntity mortar && vehicle.getControllingPassenger() == minecraft.player) {
             renderMortarPanel(guiGraphics, minecraft, mortar);
         }
+        if (vehicle instanceof ttv.migami.jeg.vehicle.entity.ShellGunEntity gun && gun.laysGun(minecraft.player)) {
+            renderShellGunPanel(guiGraphics, minecraft, gun);
+        }
+        var turretInfo = vehicle.vehicleData().defaults().turret();
+        if (turretInfo.slewLimited() && turretInfo.seatIndex() == vehicle.seatOf(minecraft.player)) {
+            renderBoreMarker(guiGraphics, minecraft, vehicle);
+        }
         boolean focusedSight = isFocusedVehicleSight(vehicle);
         renderLandVehicleStatus(guiGraphics, minecraft, vehicle);
         if (vehicle.hasVehicleWeapons() && vehicle.canPassengerUseSelectedVehicleWeapon(minecraft.player)) {
@@ -461,6 +468,33 @@ public final class VehicleHudOverlay {
      * that point is on screen and turned with the jet's bank against the view. The chase camera lags the jet a little, so
      * in a turn the marker swings ahead of the screen's centre with the nose.
      */
+    /**
+     * Where a slew-limited gun points now (the Mk42's): the gunner's view leads and the gun follows at its real rate,
+     * so this marker, 250 blocks along the bore, shows when the gun has caught up with the crosshair.
+     */
+    private static void renderBoreMarker(GuiGraphicsExtractor guiGraphics, Minecraft minecraft, VehicleEntity vehicle) {
+        float partialTick = minecraft.getDeltaTracker().getGameTimeDeltaPartialTick(false);
+        var turret = vehicle.vehicleData().defaults().turret();
+        net.minecraft.world.phys.Vec3 pivot = vehicle.barrelPoint(new net.minecraft.world.phys.Vec3(turret.barrelX(),
+                turret.originY() + turret.barrelY(), turret.originZ() + turret.barrelZ()), partialTick);
+        net.minecraft.world.phys.Vec3 point = pivot.add(vehicle.barrelDirection(partialTick).scale(250.0D));
+        net.minecraft.client.Camera camera = minecraft.gameRenderer.getMainCamera();
+        net.minecraft.world.phys.Vec3 eye = camera.position();
+        org.joml.Vector3f local = new org.joml.Vector3f((float) (point.x - eye.x), (float) (point.y - eye.y), (float) (point.z - eye.z));
+        camera.rotation().conjugate(new org.joml.Quaternionf()).transform(local);
+        if (local.z >= -0.5F) {
+            return;
+        }
+        float x = local.x / -local.z;
+        float y = local.y / -local.z;
+        float width = guiGraphics.guiWidth();
+        float height = guiGraphics.guiHeight();
+        float tanHalf = (float) Math.tan(Math.toRadians(camera.getFov() * 0.5D));
+        float screenX = width * 0.5F + x / (tanHalf * width / height) * width * 0.5F;
+        float screenY = height * 0.5F - y / tanHalf * height * 0.5F;
+        preciseBlit(guiGraphics, CROSSHAIR_THIRD_CAMERA, screenX - 12.0F, screenY - 12.0F, 24, 24, 0.0F, 0.0F, 64.0F, 64.0F, 64.0F, 64.0F);
+    }
+
     private static void renderJetGunMarker(GuiGraphicsExtractor guiGraphics, Minecraft minecraft, VehicleEntity jet) {
         float partialTick = minecraft.getDeltaTracker().getGameTimeDeltaPartialTick(false);
         net.minecraft.client.Camera camera = minecraft.gameRenderer.getMainCamera();
@@ -987,6 +1021,95 @@ public final class VehicleHudOverlay {
         pose.popMatrix();
     }
 
+    /**
+     * A shell gun's fire-control panel (the Mk42's, the BL-132's), in the mortar panel's style: the shell selected,
+     * the gun's elevation (on its own scale) and bearing, and where a shell fired now lands (ShellGunAim, against
+     * terrain while it is loaded). The weapon list shows the drum and the hold as for every vehicle gun.
+     */
+    private static void renderShellGunPanel(GuiGraphicsExtractor g, Minecraft mc, ttv.migami.jeg.vehicle.entity.ShellGunEntity gun) {
+        float partial = mc.getDeltaTracker().getGameTimeDeltaPartialTick(true);
+        var prediction = ttv.migami.jeg.vehicle.client.ShellGunAim.predict(gun, partial);
+        var shell = gun.selectedShell(mc.player);
+        var pose = g.pose();
+        pose.pushMatrix();
+        int guiScale = Math.max(1, mc.getWindow().getGuiScale());
+        float scale = Math.max(1, Math.round(guiScale * DOZER_PANEL_SCALE)) / (float) guiScale;
+        pose.scale(scale, scale);
+        int x = 10, y = 10, row = 11;
+        Component shellName = Component.translatable("hud.jeg.mk42.shell");
+        Component elevationName = Component.translatable("hud.jeg.mk42.elevation");
+        Component bearingName = Component.translatable("hud.jeg.mk42.bearing");
+        Component rangeName = Component.translatable("hud.jeg.mk42.range");
+        Component shellValue = Component.translatable(shell.hudName());
+        Component rangeValue = Component.translatable("hud.jeg.mortar.range_value", Math.round(prediction.range()),
+                String.format(java.util.Locale.ROOT, "%.1f", prediction.ticks() / 20.0F));
+        Component assumed = Component.translatable("hud.jeg.mk42.assumed");
+        Component title = Component.translatable(gun.hudTitle());
+        int names = Math.max(Math.max(mc.font.width(elevationName), mc.font.width(bearingName)),
+                Math.max(mc.font.width(rangeName), mc.font.width(shellName)));
+        // Narrow (about 140 wide), so the vehicle info at the top middle clears it (vehicleInfoAtTop).
+        int bx = x + names + 8, bw = 46;
+        int w = Math.max(120, bx - x + bw + 6 + mc.font.width("-15.0°"));
+        w = Math.max(w, bx - x + mc.font.width(rangeValue));
+        w = Math.max(w, mc.font.width(title));
+        if (prediction.assumedLevel()) {
+            w = Math.max(w, mc.font.width(assumed));
+        }
+        var warhead = shell.warhead();
+        boolean dangerClose = !warhead.kinetic() && warhead.dispense() == null
+                && !ttv.migami.jeg.vehicle.projectile.ShellEntity.safeDistance(gun, prediction.impact(), warhead);
+        Component dud = Component.translatable("hud.jeg.mk42.too_close");
+        if (dangerClose) {
+            w = Math.max(w, mc.font.width(dud));
+        }
+        var extra = gun.panelRows(mc.player, partial);
+        int extraNames = 0;
+        for (var r : extra) {
+            extraNames = Math.max(extraNames, mc.font.width(r.label()));
+        }
+        int ex = x + extraNames + 8;
+        for (var r : extra) {
+            w = Math.max(w, ex - x + mc.font.width(r.value()));
+        }
+        int rows = 5 + (prediction.assumedLevel() ? 1 : 0) + (dangerClose ? 1 : 0) + extra.size();
+        g.fill(x - 4, y - 4, x + w + 4, y + row * rows - 1, 0x88101414);
+        g.fill(x - 4, y - 4, x + w + 4, y - 3, 0xFFD6A024);
+        g.fill(x, y + 2, x + 5, y + 7, gun.isTurretDamaged() ? 0xFFE05A40 : 0xFF6BD36B);
+        g.text(mc.font, title, x + 9, y, 0xFFECE3C4);
+        y += row;
+        g.text(mc.font, shellName, x, y, 0xFFB9B39E);
+        g.text(mc.font, shellValue, bx, y, 0xFFECE3C4);
+        y += row;
+        float elevation = gun.elevation(partial);
+        float min = gun.minElevation(), max = gun.maxElevation();
+        g.text(mc.font, elevationName, x, y, 0xFFB9B39E);
+        g.fill(bx, y + 3, bx + bw, y + 5, 0xFF3A3F3D);
+        int marker = bx + Math.round(bw * (Mth.clamp(elevation, min, max) - min) / (max - min));
+        g.fill(marker - 1, y, marker + 2, y + 8, 0xFFD6A024);
+        g.text(mc.font, Component.literal(String.format(java.util.Locale.ROOT, "%.1f°", elevation)), bx + bw + 5, y, 0xFFECE3C4);
+        y += row;
+        g.text(mc.font, bearingName, x, y, 0xFFB9B39E);
+        g.text(mc.font, Component.literal(gun.bearing(partial) + "°"), bx, y, 0xFFECE3C4);
+        y += row;
+        g.text(mc.font, rangeName, x, y, 0xFFB9B39E);
+        g.text(mc.font, rangeValue, bx, y, prediction.assumedLevel() ? 0xFFE0B040 : 0xFFECE3C4);
+        y += row;
+        if (prediction.assumedLevel()) {
+            g.text(mc.font, assumed, x, y, 0xFFE0B040);
+            y += row;
+        }
+        if (dangerClose) {
+            g.text(mc.font, dud, x, y, 0xFFE05A40);
+            y += row;
+        }
+        for (var r : extra) {
+            g.text(mc.font, r.label(), x, y, 0xFFB9B39E);
+            g.text(mc.font, r.value(), ex, y, r.colour());
+            y += row;
+        }
+        pose.popMatrix();
+    }
+
     private static int supportHintId = -1;
     private static long supportHintStart, supportLastSeen;
 
@@ -1166,7 +1289,11 @@ public final class VehicleHudOverlay {
     private static boolean vehicleInfoAtTop(Minecraft minecraft, VehicleEntity vehicle) {
         if (vehicleInfoInCorner(minecraft, vehicle)) return false;
         boolean aircraft = vehicle.isJet() || vehicle.vehicleData().defaults().vehicleType() == VehicleType.HELICOPTER;
-        return !minecraft.options.getCameraType().isFirstPerson() || aircraft;
+        // The Mk42's gunner looks along the barrel, which the lower middle covered; its panel is kept narrow so the top
+        // middle stays clear of it.
+        return !minecraft.options.getCameraType().isFirstPerson() || aircraft
+                || vehicle instanceof ttv.migami.jeg.vehicle.entity.ShellGunEntity
+                || vehicle instanceof ttv.migami.jeg.vehicle.entity.TowEntity;
     }
 
     private static boolean hasApcWeaponHud(VehicleEntity vehicle) {

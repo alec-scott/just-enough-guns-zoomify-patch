@@ -28,6 +28,11 @@ public final class VehicleWeaponStats {
     private static final Identifier BMP2_MISSILE_FIRE = Reference.id("vehicle.bmp2.missile_fire");
     private static final Identifier MACHINE_GUN_FIRE = Reference.id("item.light_machine_gun.fire");
     private static final Identifier A10_GUN_FIRE = Reference.id("vehicle.a10.fire");
+    private static final Identifier MK42_LOAD = Reference.id("vehicle.mk42.load");
+    private static final Identifier HOWITZER_LOAD = Reference.id("vehicle.howitzer.load");
+    private static final Identifier BL132_LOAD = Reference.id("vehicle.bl132.load");
+    private static final Identifier TYPE63_LOAD = Reference.id("vehicle.type63.load");
+    private static final Identifier PLZ05_LOAD = Reference.id("vehicle.plz05.load");
 
     private static final Map<Identifier, GunStats> STATS = createStats();
 
@@ -299,6 +304,247 @@ public final class VehicleWeaponStats {
                 Reference.id("vehicle_9m336_missile"),
                 vehicleMissileStats(Reference.id("vehicle_9m336_missile"), MEDIUM_ANTI_AIR_MISSILE, 4, 260, 50, 260.0F)
         );
+        // The Mk42's 5"/54 (design/mk42/BRIEF.md): fires ShellEntity shells (Mk42Entity#fireShell), not bullets, so
+        // damage, speed and life here only describe it; the warheads and ballistics are in Mk42Entity. A 20-round
+        // loader drum, 30 ticks a shot (40 a minute), 6 s to refill the drum from the hold. Vehicle reloads run at 0.64 of
+        // the stat (VehicleEntity.vehicleReloadDuration), so the stat is 120 / 0.64.
+        for (String kind : new String[]{"he", "ap", "cm", "gs"}) {
+            Identifier id = Reference.id("vehicle_mk42_" + kind);
+            stats.put(id, new GunStats(
+                    id,
+                    Reference.id("shell_5in_" + kind),
+                    "jeg:magazine",
+                    20,
+                    188,
+                    0,
+                    30,
+                    switch (kind) {
+                        case "ap" -> 450.0F;
+                        case "cm" -> 300.0F;
+                        case "gs" -> 1000.0F;
+                        default -> 250.0F;
+                    },
+                    15.0F,
+                    400,
+                    true,
+                    false,
+                    0.05F,
+                    1,
+                    null,
+                    null,
+                    null,
+                    MK42_LOAD,
+                    null,
+                    MK42_LOAD,
+                    null,
+                    null,
+                    0.2F,
+                    0xFFC040,
+                    1.0F
+            ));
+        }
+        // The BL-132's 130 mm/58 (design/bl132/BRIEF.md): four guns fired in turn, SBW's 300 rounds a minute (4 ticks),
+        // then SBW's 90 ticks to reload all four from the hold (stat 90 / 0.64, see the Mk42's). It loads the Mk42's
+        // 5-inch shells.
+        for (String kind : new String[]{"he", "ap", "cm", "gs"}) {
+            Identifier id = Reference.id("vehicle_bl132_" + kind);
+            stats.put(id, new GunStats(
+                    id,
+                    Reference.id("shell_5in_" + kind),
+                    "jeg:magazine",
+                    4,
+                    141,
+                    0,
+                    4,
+                    switch (kind) {
+                        case "ap" -> 470.0F;
+                        case "cm" -> 360.0F;
+                        case "gs" -> 1100.0F;
+                        default -> 250.0F;
+                    },
+                    15.0F,
+                    400,
+                    true,
+                    false,
+                    0.05F,
+                    1,
+                    null,
+                    null,
+                    null,
+                    BL132_LOAD,
+                    null,
+                    BL132_LOAD,
+                    null,
+                    null,
+                    0.2F,
+                    0xFFC040,
+                    1.0F
+            ));
+        }
+        // The 105 mm howitzer (design/howitzer/BRIEF.md): one round in the breech, fired as a ShellEntity (HowitzerEntity,
+        // whose charge sets the muzzle velocity); the crew loads the next in 4 s (stat 125 / 0.64 = 80 ticks).
+        for (String kind : new String[]{"he", "smoke"}) {
+            Identifier id = Reference.id("vehicle_howitzer_" + kind);
+            stats.put(id, new GunStats(
+                    id,
+                    Reference.id("shell_105mm_" + kind),
+                    "jeg:magazine",
+                    1,
+                    125,
+                    0,
+                    20,
+                    kind.equals("he") ? 300.0F : 60.0F,
+                    10.0F,
+                    600,
+                    true,
+                    false,
+                    0.15F,
+                    1,
+                    null,
+                    null,
+                    null,
+                    HOWITZER_LOAD,
+                    null,
+                    HOWITZER_LOAD,
+                    null,
+                    null,
+                    0.2F,
+                    0xFFC040,
+                    1.0F
+            ));
+        }
+        // The PLZ-05 (design/plz05/BRIEF.md): the Mk42's 5-inch shells, fired as ShellEntity shells (Plz05Entity, whose
+        // charge sets the muzzle velocity). One in the breech; the autoloader loads the next in 6 s (stat 188 * 0.64).
+        for (String kind : new String[]{"he", "ap", "cm", "gs"}) {
+            Identifier id = Reference.id("vehicle_plz05_" + kind);
+            stats.put(id, new GunStats(
+                    id,
+                    Reference.id("shell_5in_" + kind),
+                    "jeg:magazine",
+                    1,
+                    188,
+                    0,
+                    20,
+                    switch (kind) {
+                        case "ap" -> 450.0F;
+                        case "cm" -> 300.0F;
+                        case "gs" -> 1000.0F;
+                        default -> 250.0F;
+                    },
+                    19.0F,
+                    700,
+                    true,
+                    false,
+                    0.06F,
+                    1,
+                    null,
+                    null,
+                    null,
+                    PLZ05_LOAD,
+                    null,
+                    PLZ05_LOAD,
+                    null,
+                    null,
+                    0.2F,
+                    0xFFC040,
+                    1.0F
+            ));
+        }
+        // The PLZ-05's roof 12.7 mm: about 600 rounds a minute from a 100-round box (8 s to change: stat 125 / 0.64), on
+        // the long-range path (Plz05Entity#firesLongRangeRounds).
+        stats.put(Reference.id("vehicle_plz05_hmg"), new GunStats(
+                Reference.id("vehicle_plz05_hmg"),
+                RIFLE_AMMO,
+                "jeg:magazine",
+                100,
+                125,
+                0,
+                2,
+                14.0F,
+                30.0F,
+                60,
+                false,
+                false,
+                0.6F,
+                1,
+                MACHINE_GUN_FIRE,
+                null,
+                MACHINE_GUN_FIRE,
+                null,
+                null,
+                null,
+                null,
+                null,
+                GunStats.STANDARD_BULLET_PROJECTILE_SIZE,
+                0xFFAA33,
+                1.5F
+        ));
+        // The Type-63's 107 mm rockets (design/type63/BRIEF.md): fired as ShellEntity rockets (Type63Entity), twelve in a
+        // ripple 14 ticks apart (all twelve in about 8 s, the real rate), then 30 s for the crew to reload the tubes
+        // from the crate (stat 600 / 0.64).
+        for (String kind : new String[]{"he", "ap", "cm"}) {
+            Identifier id = Reference.id("vehicle_type63_" + kind);
+            stats.put(id, new GunStats(
+                    id,
+                    Reference.id("rocket_107mm_" + kind),
+                    "jeg:magazine",
+                    12,
+                    938,
+                    0,
+                    14,
+                    switch (kind) {
+                        case "ap" -> 500.0F;
+                        case "cm" -> 300.0F;
+                        default -> 200.0F;
+                    },
+                    10.0F,
+                    400,
+                    true,
+                    true,
+                    0.5F,
+                    1,
+                    null,
+                    null,
+                    null,
+                    TYPE63_LOAD,
+                    null,
+                    TYPE63_LOAD,
+                    null,
+                    null,
+                    0.2F,
+                    0xFFC040,
+                    1.0F
+            ));
+        }
+        // The TOW (design/tow/BRIEF.md): one missile in the tube, a wire-guided round every 7.5 s (SBW's 8 a minute), loaded
+        // from the crate in its hold. The stat is 150 / 0.64 (vehicle reloads run at 0.64, see the Mk42's).
+        stats.put(Reference.id("vehicle_tow_missile"), new GunStats(
+                Reference.id("vehicle_tow_missile"),
+                MEDIUM_ANTI_GROUND_MISSILE,
+                "jeg:magazine",
+                1,
+                234,
+                0,
+                20,
+                600.0F,
+                4.0F,
+                400,
+                false,
+                true,
+                0.0F,
+                1,
+                BMP2_MISSILE_FIRE,
+                null,
+                BMP2_MISSILE_FIRE,
+                ROCKET_RELOAD_START,
+                ROCKET_RELOAD_LOAD,
+                ROCKET_RELOAD_END,
+                null,
+                null,
+                0.2F,
+                0xFFFFFF,
+                1.0F
+        ));
         return Map.copyOf(stats);
     }
 

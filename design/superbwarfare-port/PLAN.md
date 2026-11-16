@@ -4,8 +4,23 @@ Status, 2026-11-15:
 - Scope and triage decided ([triage/TRIAGE.md](triage/TRIAGE.md)).
 - Refit tooling built (`fetch_sbw.py`, `refit_lib.py`), and the mortar refit done ([../mortar/](../mortar/)).
 - Mortar brief drafted, waiting on the user's answers.
-- The bone driver for tracks, wheels and the weapon station is built with its first user (Type-63 wheels, PLZ-05
-  tracks), so it is tested when written; the mortar needs only `barrel` and the bipod table.
+- Mortar shipped in yftm.21. **Mk42 and BL-132 built and tested, not yet released** (2026-11-16,
+  [../mk42/BRIEF.md](../mk42/BRIEF.md), [../bl132/BRIEF.md](../bl132/BRIEF.md)). They brought the shared shell path
+  (`ShellEntity` with cluster/grapeshot dispense and a safe-distance fuze, `ShellBallistics`, `ShellAim`,
+  `GunReportPayload`), the `ShellGunEntity` base for gun mounts, turret slew limits with a turret-mounted gunner
+  camera, and the fleet plan's turret-following hitboxes.
+- **TOW built and tested, not yet released** ([../tow/BRIEF.md](../tow/BRIEF.md)): shared wire (SACLOS) guidance,
+  low-smoke missiles and a deployable-weapon item.
+- **Type-63 built and tested, not yet released** ([../type63/BRIEF.md](../type63/BRIEF.md)): salvo sequencing on
+  `ShellGunEntity` (tube order, rockets hidden as they fire), rocket shells, a swinging carriage; towed by the FSV-6
+  trail first.
+- **Towed howitzer** (fleet plan section 7, our own model) built and tested, not yet released:
+  [../howitzer/BRIEF.md](../howitzer/BRIEF.md).
+- **PLZ-05 being built** (2026-11-17, [../plz05/BRIEF.md](../plz05/BRIEF.md)): user decisions were a self-propelled
+  howitzer whose fire control lays itself, the Mk42's 5-inch shells, about 6 km, and a roof 12.7 mm with a rider. It
+  brought the shared track driver (path from the running gear, `"tracks"` in the vehicle data) and shared fire missions
+  (`FireMissions`). Next after it: the BMP-2 tracked-chassis refit (fleet plan section 2), then the MBT.
+- The track driver is built with the PLZ-05; the weapon station's driver comes with the MBT.
 
 Create Big Cannons: checked. It builds fixed multi-block guns, including a drop mortar, so the carried mortar, the
 towed Type-63 and the self-propelled PLZ-05 fill different roles.

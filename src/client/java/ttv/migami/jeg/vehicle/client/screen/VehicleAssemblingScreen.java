@@ -325,7 +325,7 @@ public final class VehicleAssemblingScreen extends AbstractContainerScreen<Vehic
     @Nullable
     private static Identifier vehicleIcon(Identifier vehicleId) {
         return switch (vehicleId.getPath()) {
-            case "a10", "ah6", "bmp2", "hpj11", "laser_tower", "lav150", "mi28", "speedboat", "tom6", "truck", "waveforce_tower" ->
+            case "a10", "ah6", "bmp2", "hpj11", "laser_tower", "lav150", "mi28", "speedboat", "tom6", "truck", "howitzer", "plz05" ->
                     Reference.id("textures/vehicle_icon/" + vehicleId.getPath() + "_icon.png");
             default -> null;
         };

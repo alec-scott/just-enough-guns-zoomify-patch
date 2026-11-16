@@ -187,7 +187,7 @@ public final class VehicleInputHandler {
         VehicleClientState.update(vehicle, freeLook, vehicleZoom, seek);
         boolean towPressed = false;
         while (KeyBindings.VEHICLE_TOW.consumeClick()) towPressed = true;
-        if (towPressed && vehicle instanceof ttv.migami.jeg.vehicle.entity.SupportVehicleEntity && vehicle.getControllingPassenger() == player) {
+        if (towPressed && vehicle.hasTowKeyAction() && vehicle.takesTowKeyFrom(player)) {
             net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.send(new ttv.migami.jeg.vehicle.network.SupportModulePayload(vehicle.getId(), -3));
         }
         if (KeyBindings.VEHICLE_CHANGE_SEAT.consumeClick()) {

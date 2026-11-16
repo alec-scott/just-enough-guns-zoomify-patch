@@ -1,0 +1,17 @@
+{
+  "result_vehicle": "jeg:mk42",
+  "ingredients": [
+    {
+      "item": "minecraft:iron_ingot",
+      "count": 56
+    },
+    {
+      "item": "minecraft:copper_ingot",
+      "count": 16
+    },
+    {
+      "item": "minecraft:redstone",
+      "count": 12
+    }
+  ]
+}

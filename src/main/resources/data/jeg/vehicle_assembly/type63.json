@@ -1,0 +1,17 @@
+{
+  "result_vehicle": "jeg:type63",
+  "ingredients": [
+    {
+      "item": "minecraft:iron_ingot",
+      "count": 24
+    },
+    {
+      "item": "minecraft:copper_ingot",
+      "count": 8
+    },
+    {
+      "item": "minecraft:redstone",
+      "count": 6
+    }
+  ]
+}

@@ -18,7 +18,7 @@ import org.slf4j.LoggerFactory;
 import ttv.migami.jeg.client.KeyBindings;
 import ttv.migami.jeg.init.ModItems;
 import ttv.migami.jeg.vehicle.client.MortarAim;
-import ttv.migami.jeg.vehicle.client.audio.MortarAudio;
+import ttv.migami.jeg.vehicle.client.audio.GunReportAudio;
 import ttv.migami.jeg.vehicle.entity.MortarEntity;
 import ttv.migami.jeg.vehicle.projectile.MortarRoundEntity;
 import ttv.migami.jeg.vehicle.util.MortarRig;
@@ -128,8 +128,8 @@ public class MortarClientGameTest implements FabricClientGameTest {
             check(far.drillTicks >= MortarEntity.DRILL_TICKS - 2 && far.drillTicks <= MortarEntity.DRILL_TICKS + 4,
                     "the round must leave about a second after loading, took " + far.drillTicks + " ticks");
             check(far.roundsUsed == 1, "loading must use one round from the inventory, used " + far.roundsUsed);
-            check(MortarAudio.played() > 0 && MortarAudio.lastNear() > 0.3F, "the gunner must hear the report, played "
-                    + MortarAudio.played() + " near " + MortarAudio.lastNear());
+            check(GunReportAudio.played() > 0 && GunReportAudio.lastNear() > 0.3F, "the gunner must hear the report, played "
+                    + GunReportAudio.played() + " near " + GunReportAudio.lastNear());
 
             // 4. Short range at 85 degrees, landing on loaded terrain where the HUD's marker is. The client sees as far as
             // the server sends (12 chunks on yftm, set at the top), so the 130-block impact is in its loaded world.
@@ -223,7 +223,7 @@ public class MortarClientGameTest implements FabricClientGameTest {
         // Undo this tick's movement to recover the muzzle and launch velocity the mortar gave it.
         Vec3 velocity = spawn[1].add(0.0D, MortarRig.GRAVITY, 0.0D);
         Vec3 muzzle = spawn[0].subtract(spawn[1]);
-        MortarRig.Impact predicted = MortarRig.predictToHeight(muzzle, velocity, GROUND);
+        ttv.migami.jeg.vehicle.util.ShellBallistics.Impact predicted = MortarRig.predictToHeight(muzzle, velocity, GROUND);
         Vec3 last = spawn[0];
         int ticks = 0;
         while (true) {
@@ -313,5 +313,5 @@ public class MortarClientGameTest implements FabricClientGameTest {
         }
     }
 
-    private record Shot(Vec3 muzzle, Vec3 impact, MortarRig.Impact predicted, double range, int ticks, int drillTicks, int roundsUsed) {}
+    private record Shot(Vec3 muzzle, Vec3 impact, ttv.migami.jeg.vehicle.util.ShellBallistics.Impact predicted, double range, int ticks, int drillTicks, int roundsUsed) {}
 }

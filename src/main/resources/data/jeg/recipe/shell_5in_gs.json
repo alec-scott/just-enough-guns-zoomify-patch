@@ -1,0 +1,18 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "equipment",
+  "key": {
+    "N": "minecraft:iron_nugget",
+    "G": "minecraft:gunpowder",
+    "C": "minecraft:copper_ingot"
+  },
+  "pattern": [
+    "NNN",
+    "NCN",
+    " G "
+  ],
+  "result": {
+    "id": "jeg:shell_5in_gs",
+    "count": 2
+  }
+}

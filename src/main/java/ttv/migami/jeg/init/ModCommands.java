@@ -76,7 +76,24 @@ public final class ModCommands {
                         .then(unlockGunRecipesCommand())
                         .then(spawnPatrolCommand())
                         .then(simulatePatrolCommand())
-                        .then(configCommand()));
+                        .then(configCommand())
+                        .then(fireMissionCommand()));
+    }
+
+    /** A fire mission by coordinates, for the gun the player is crewing (the howitzer, the PLZ-05). */
+    private static LiteralArgumentBuilder<CommandSourceStack> fireMissionCommand() {
+        return Commands.literal("firemission")
+                .then(Commands.argument("x", IntegerArgumentType.integer())
+                        .then(Commands.argument("z", IntegerArgumentType.integer())
+                                .executes(context -> {
+                                    ServerPlayer player = context.getSource().getPlayerOrException();
+                                    if (!(player.getVehicle() instanceof ttv.migami.jeg.vehicle.util.FireMissions.Gun gun)) {
+                                        context.getSource().sendFailure(Component.translatable("message.jeg.howitzer.not_crewing"));
+                                        return 0;
+                                    }
+                                    gun.setTargetByCoordinates(IntegerArgumentType.getInteger(context, "x"), IntegerArgumentType.getInteger(context, "z"));
+                                    return 1;
+                                })));
     }
 
     private static LiteralArgumentBuilder<CommandSourceStack> unlockGunRecipesCommand() {

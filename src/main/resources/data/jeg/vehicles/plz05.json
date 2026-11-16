@@ -1,0 +1,67 @@
+{
+  "entity_type": "jeg:plz05",
+  "vehicle_type": "land",
+  "max_health": 450.0,
+  "auto_repair_per_tick": 0.012,
+  "auto_repair_cooldown_ticks": 200,
+  "max_energy": 5000000,
+  "up_step": 1.25,
+  "allow_free_cam": true,
+  "has_decoy": true,
+  "container_type": "medium",
+  "seats": [
+    {"index": 0, "x": 0.65, "y": 0.15, "z": 1.55, "driver": true, "enclosed": true, "hide_passenger": true, "ban_hand": true,
+     "min_pitch": -30.0, "max_pitch": 30.0, "min_yaw": -100.0, "max_yaw": 100.0,
+     "sensitivity_x": 0.6, "sensitivity_y": 0.7, "sensitivity_z": 0.9},
+    {"index": 1, "x": 0.0, "y": 1.0, "z": -0.7, "driver": false, "enclosed": true, "hide_passenger": true, "ban_hand": true,
+     "min_pitch": -68.0, "max_pitch": 3.0, "min_yaw": -180.0, "max_yaw": 180.0,
+     "sensitivity_x": 0.42, "sensitivity_y": 0.55, "sensitivity_z": 0.9,
+     "zoom_camera": {"x": 0.89, "y": 1.65, "z": 0.95, "use_fixed_camera_pos": true, "transform": "turret"}},
+    {"index": 2, "x": -0.92, "y": 1.9, "z": -1.56, "driver": false, "enclosed": false, "hide_passenger": false, "ban_hand": true,
+     "min_pitch": -60.0, "max_pitch": 10.0, "min_yaw": -180.0, "max_yaw": 180.0,
+     "sensitivity_x": 0.7, "sensitivity_y": 0.8, "sensitivity_z": 0.9},
+    {"index": 3, "x": 0.89, "y": 1.4, "z": -1.09, "driver": false, "enclosed": false, "hide_passenger": false, "ban_hand": false,
+     "min_pitch": -60.0, "max_pitch": 60.0, "min_yaw": -180.0, "max_yaw": 180.0,
+     "sensitivity_x": 1.0, "sensitivity_y": 1.0, "sensitivity_z": 1.0}
+  ],
+  "engine": {"type": "track", "acceleration": 0.028, "max_forward_speed": 0.6, "max_reverse_speed": 0.3, "friction": 0.82, "steering_speed": 0.07, "energy_cost_rate": 128},
+  "third_person_camera": {"x": 0.0, "y": 4.5, "z": -13.0},
+  "dismount": {"x": 2.6, "y": 0.0, "z": 0.0},
+  "collision_level": "heavy",
+  "turret": {"seat": 1, "render_pivot_y": 0.0, "origin_x": 0.0, "origin_y": 1.4865, "origin_z": -0.6757,
+             "barrel_x": 0.0, "barrel_y": 0.6757, "barrel_z": 0.7433, "guided_uses_turret": false,
+             "traverse_rate": 2.0, "elevation_rate": 1.5},
+  "obb": [
+    {"part": "body", "x": 0.0, "y": 0.9777, "z": 1.0169, "half_width": 1.7167, "half_height": 0.7452, "half_depth": 3.8525},
+    {"part": "wheel_left", "x": 1.3364, "y": 0.5127, "z": 0.6525, "half_width": 0.3409, "half_height": 0.5094, "half_depth": 3.4192},
+    {"part": "wheel_right", "x": -1.3364, "y": 0.5127, "z": 0.6525, "half_width": 0.3409, "half_height": 0.5094, "half_depth": 3.4192},
+    {"part": "main_engine", "x": -1.1914, "y": 1.3888, "z": 2.5101, "half_width": 0.4482, "half_height": 0.2103, "half_depth": 0.7628},
+    {"part": "turret", "x": 0.0, "y": 2.2344, "z": -1.0146, "half_width": 1.6033, "half_height": 0.7479, "half_depth": 2.071, "follows": "turret"},
+    {"part": "turret", "x": 0.0, "y": 2.1622, "z": 4.5372, "half_width": 0.4041, "half_height": 0.6243, "half_depth": 3.4808, "follows": "barrel"}
+  ],
+  "tracks": {"links": 50, "rest": [-62.0116, 15.6084], "rest_s": 230.05, "half_width": 1.3964,
+    "path": [[-65.845,11.171],[-65.837,10.863],[-65.812,10.556],[-65.772,10.251],[-65.716,9.948],[-65.644,9.649],[-65.557,9.354],[-65.454,9.064],[-65.336,8.779],[-65.204,8.501],[-65.057,8.231],[-64.896,7.968],[-64.722,7.715],[-64.534,7.47],[-64.334,7.236],[-64.122,7.013],[-63.899,6.801],[-63.665,6.601],[-63.421,6.413],[-63.167,6.239],[-62.904,6.078],[-62.634,5.931],[-62.356,5.799],[-62.071,5.681],[-61.781,5.578],[-43.657,-0.087],[-43.355,-0.176],[-43.05,-0.249],[-42.741,-0.307],[-42.429,-0.348],[-42.116,-0.372],[-41.802,-0.381],[28.108,-0.381],[28.422,-0.372],[28.735,-0.348],[29.047,-0.307],[29.356,-0.249],[29.662,-0.176],[29.963,-0.087],[30.259,0.018],[30.549,0.138],[41.523,5.319],[41.792,5.447],[42.054,5.59],[42.308,5.745],[42.553,5.914],[42.79,6.096],[43.016,6.289],[43.233,6.494],[43.438,6.71],[43.631,6.937],[43.813,7.174],[43.981,7.419],[44.137,7.673],[44.279,7.935],[44.408,8.204],[44.522,8.48],[44.621,8.761],[44.706,9.046],[44.776,9.336],[44.83,9.629],[44.869,9.925],[44.892,10.222],[44.9,10.52],[44.892,10.818],[44.869,11.115],[44.83,11.41],[44.776,11.703],[44.706,11.993],[44.621,12.279],[44.522,12.56],[44.408,12.835],[44.279,13.104],[44.137,13.366],[43.981,13.62],[43.813,13.866],[43.631,14.102],[43.438,14.329],[43.233,14.545],[43.016,14.75],[42.79,14.944],[42.553,15.125],[42.308,15.294],[42.054,15.45],[41.792,15.592],[41.523,15.72],[41.247,15.834],[40.966,15.934],[40.681,16.018],[40.391,16.088],[40.098,16.142],[39.802,16.181],[39.505,16.205],[39.207,16.212],[-59.964,17.052],[-60.272,17.044],[-60.579,17.02],[-60.884,16.98],[-61.187,16.924],[-61.486,16.852],[-61.781,16.764],[-62.071,16.661],[-62.356,16.544],[-62.634,16.411],[-62.904,16.264],[-63.167,16.103],[-63.421,15.929],[-63.665,15.742],[-63.899,15.541],[-64.122,15.33],[-64.334,15.106],[-64.534,14.872],[-64.722,14.628],[-64.896,14.374],[-65.057,14.112],[-65.204,13.841],[-65.336,13.563],[-65.454,13.279],[-65.557,12.989],[-65.644,12.693],[-65.716,12.394],[-65.772,12.091],[-65.812,11.786],[-65.837,11.479]],
+    "wheels": [{"bones": ["sprocket_left", "sprocket_right"], "radius": 5.183}, {"bones": ["road_wheel_left_1", "road_wheel_left_2", "road_wheel_left_3", "road_wheel_left_4", "road_wheel_left_5", "road_wheel_left_6", "road_wheel_right_1", "road_wheel_right_2", "road_wheel_right_3", "road_wheel_right_4", "road_wheel_right_5", "road_wheel_right_6"], "radius": 5.305}, {"bones": ["idler_left", "idler_right"], "radius": 4.995}, {"bones": ["return_roller_left_1", "return_roller_left_2", "return_roller_left_3", "return_roller_right_1", "return_roller_right_2", "return_roller_right_3"], "radius": 1.698}]},
+  "weapons": [
+    {"weapon": "jeg:vehicle_plz05_he", "ammo": "jeg:shell_5in_he", "energy_cost": 0, "guided": false, "seat": 1,
+     "muzzle": {"x": 0.0, "y": 2.1622, "z": 8.018}},
+    {"weapon": "jeg:vehicle_plz05_ap", "ammo": "jeg:shell_5in_ap", "energy_cost": 0, "guided": false, "seat": 1,
+     "muzzle": {"x": 0.0, "y": 2.1622, "z": 8.018}},
+    {"weapon": "jeg:vehicle_plz05_cm", "ammo": "jeg:shell_5in_cm", "energy_cost": 0, "guided": false, "seat": 1,
+     "muzzle": {"x": 0.0, "y": 2.1622, "z": 8.018}},
+    {"weapon": "jeg:vehicle_plz05_gs", "ammo": "jeg:shell_5in_gs", "energy_cost": 0, "guided": false, "seat": 1,
+     "muzzle": {"x": 0.0, "y": 2.1622, "z": 8.018}},
+    {"weapon": "jeg:vehicle_plz05_hmg", "ammo": "jeg:rifle_ammo", "energy_cost": 1, "guided": false, "seat": 2, "turret_mounted": false,
+     "muzzle": {"x": -0.9234, "y": 3.1388, "z": 0.1163}}
+  ],
+  "destroy": {"explodes": true, "explosion_power": 5.0},
+  "armor": {
+    "fallback": {"rating": 9.5, "undermatch_multiplier": 0.10, "overmatch_multiplier": 0.86, "passenger_leak_multiplier": 0.08, "part_damage_multiplier": 0.72},
+    "parts": {
+      "turret": {"rating": 9.5, "undermatch_multiplier": 0.10, "overmatch_multiplier": 0.86, "passenger_leak_multiplier": 0.06, "part_damage_multiplier": 0.5},
+      "wheel_left": {"rating": 4.8, "undermatch_multiplier": 0.24, "overmatch_multiplier": 1.0, "passenger_leak_multiplier": 0.0, "part_damage_multiplier": 1.45},
+      "wheel_right": {"rating": 4.8, "undermatch_multiplier": 0.24, "overmatch_multiplier": 1.0, "passenger_leak_multiplier": 0.0, "part_damage_multiplier": 1.45},
+      "main_engine": {"rating": 6.5, "undermatch_multiplier": 0.18, "overmatch_multiplier": 0.96, "passenger_leak_multiplier": 0.05, "part_damage_multiplier": 1.2}
+    }
+  }
+}

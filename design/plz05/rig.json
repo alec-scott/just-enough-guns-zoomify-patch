@@ -1,0 +1,215 @@
+{
+  "model": "jeg:entity/vehicle/plz05",
+  "source": "Superb Warfare plz_05, CrawKatt/SuperbWarfareReFabricated@952d73c (used with the SBW team's permission)",
+  "units_per_block": 16,
+  "front": "-Z in the model, +Z in vehicle data",
+  "scale_from_source": 0.77,
+  "elevation_degrees": [
+    -3.0,
+    68.0
+  ],
+  "turret_origin": [
+    0.0,
+    1.4865,
+    -0.6757
+  ],
+  "trunnion": [
+    -0.0,
+    2.1622,
+    0.0676
+  ],
+  "barrel_offset_from_turret": [
+    -0.0,
+    0.6757,
+    0.7433
+  ],
+  "muzzle_rest": [
+    -0.0,
+    2.1622,
+    8.018
+  ],
+  "bore_from_trunnion_blocks": 7.9504,
+  "recoil_pixels": 8.47,
+  "sight_top": [
+    0.8874,
+    2.9823,
+    0.2387
+  ],
+  "hmg_mount_pivot": [
+    -0.9234,
+    2.7638,
+    -1.1087
+  ],
+  "hmg_trunnion": [
+    -0.9234,
+    3.1388,
+    -1.1087
+  ],
+  "hmg_muzzle_rest": [
+    -0.9234,
+    3.1388,
+    0.1163
+  ],
+  "tracks": {
+    "links": 50,
+    "rest": [
+      -62.0116,
+      15.6084
+    ],
+    "rest_s": 230.05,
+    "half_width": 1.3964,
+    "wheels": [
+      {
+        "bones": [
+          "sprocket_left",
+          "sprocket_right"
+        ],
+        "radius": 5.183
+      },
+      {
+        "bones": [
+          "road_wheel_left_1",
+          "road_wheel_left_2",
+          "road_wheel_left_3",
+          "road_wheel_left_4",
+          "road_wheel_left_5",
+          "road_wheel_left_6",
+          "road_wheel_right_1",
+          "road_wheel_right_2",
+          "road_wheel_right_3",
+          "road_wheel_right_4",
+          "road_wheel_right_5",
+          "road_wheel_right_6"
+        ],
+        "radius": 5.305
+      },
+      {
+        "bones": [
+          "idler_left",
+          "idler_right"
+        ],
+        "radius": 4.995
+      },
+      {
+        "bones": [
+          "return_roller_left_1",
+          "return_roller_left_2",
+          "return_roller_left_3",
+          "return_roller_right_1",
+          "return_roller_right_2",
+          "return_roller_right_3"
+        ],
+        "radius": 1.698
+      }
+    ],
+    "path_points": 124,
+    "path_length_px": 236.732,
+    "link_pitch_px": 4.735,
+    "rest_off_path_px": 0.992,
+    "worst_distance_from_sbw_path_px": 1.452
+  },
+  "model_bounds": [
+    [
+      -1.7167,
+      0.0033,
+      -3.0856
+    ],
+    [
+      1.7167,
+      3.2763,
+      8.018
+    ]
+  ],
+  "hull_bounds": [
+    [
+      -1.7167,
+      0.2325,
+      -2.8356
+    ],
+    [
+      1.7167,
+      1.7229,
+      4.8693
+    ]
+  ],
+  "turret_house_bounds": [
+    [
+      -1.6033,
+      1.4865,
+      -3.0856
+    ],
+    [
+      1.6033,
+      2.9823,
+      1.0563
+    ]
+  ],
+  "hitbox": [
+    {
+      "part": "body",
+      "covers": "hull",
+      "x": 0.0,
+      "y": 0.9777,
+      "z": 1.0169,
+      "half_width": 1.7167,
+      "half_height": 0.7452,
+      "half_depth": 3.8525
+    },
+    {
+      "part": "wheel_left",
+      "covers": "left track and running gear",
+      "x": 1.3364,
+      "y": 0.5127,
+      "z": 0.6525,
+      "half_width": 0.3409,
+      "half_height": 0.5094,
+      "half_depth": 3.4192
+    },
+    {
+      "part": "wheel_right",
+      "covers": "right track and running gear",
+      "x": -1.3364,
+      "y": 0.5127,
+      "z": 0.6525,
+      "half_width": 0.3409,
+      "half_height": 0.5094,
+      "half_depth": 3.4192
+    },
+    {
+      "part": "main_engine",
+      "covers": "engine deck",
+      "x": -1.1914,
+      "y": 1.3888,
+      "z": 2.5101,
+      "half_width": 0.4482,
+      "half_height": 0.2103,
+      "half_depth": 0.7628
+    },
+    {
+      "part": "turret",
+      "covers": "turret house",
+      "x": 0.0,
+      "y": 2.2344,
+      "z": -1.0146,
+      "half_width": 1.6033,
+      "half_height": 0.7479,
+      "half_depth": 2.071,
+      "follows": "turret"
+    },
+    {
+      "part": "turret",
+      "covers": "gun, outside the house",
+      "x": 0.0,
+      "y": 2.1622,
+      "z": 4.5372,
+      "half_width": 0.4041,
+      "half_height": 0.6243,
+      "half_depth": 3.4808,
+      "follows": "barrel"
+    }
+  ],
+  "coplanar_face_pairs": {
+    "in_source": 99,
+    "after_refit": 0
+  }
+}

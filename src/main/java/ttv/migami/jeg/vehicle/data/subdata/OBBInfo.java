@@ -17,5 +17,24 @@ public record OBBInfo(List<Box> boxes) {
         MODULE
     }
 
-    public record Box(Part part, double x, double y, double z, double halfWidth, double halfHeight, double halfDepth) {}
+    /**
+     * What a box moves with. Boxes are written at rest (turret yaw 0, barrel level) in hull coordinates; a box that
+     * follows the turret turns with its yaw about the turret origin, and one that follows the barrel also elevates
+     * about the barrel's pivot (VehicleEntity carries the test point into the box's rest frame).
+     */
+    public enum Follows {
+        HULL,
+        TURRET,
+        BARREL
+    }
+
+    public record Box(Part part, double x, double y, double z, double halfWidth, double halfHeight, double halfDepth, Follows follows) {
+        public Box(Part part, double x, double y, double z, double halfWidth, double halfHeight, double halfDepth) {
+            this(part, x, y, z, halfWidth, halfHeight, halfDepth, Follows.HULL);
+        }
+
+        public boolean followsHull() {
+            return this.follows == Follows.HULL;
+        }
+    }
 }

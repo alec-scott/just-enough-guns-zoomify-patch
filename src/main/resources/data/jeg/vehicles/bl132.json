@@ -1,0 +1,47 @@
+{
+  "entity_type": "jeg:bl132",
+  "vehicle_type": "artillery",
+  "max_health": 400.0,
+  "auto_repair_per_tick": 0.0,
+  "auto_repair_cooldown_ticks": 200,
+  "max_energy": 0,
+  "allow_free_cam": true,
+  "container_type": "small",
+  "seats": [
+    {"index": 0, "x": 0.0, "y": 2.0, "z": -1.0, "driver": true, "enclosed": true, "hide_passenger": true, "ban_hand": true,
+     "min_pitch": -85.0, "max_pitch": 5.0, "min_yaw": -180.0, "max_yaw": 180.0,
+     "sensitivity_x": 0.42, "sensitivity_y": 0.7, "sensitivity_z": 0.9,
+     "zoom_camera": {"x": 0.0, "y": 5.0, "z": 2.5, "use_fixed_camera_pos": true, "transform": "turret"}}
+  ],
+  "engine": {"type": "static", "acceleration": 0.0, "max_forward_speed": 0.0, "max_reverse_speed": 0.0, "friction": 1.0},
+  "third_person_camera": {"x": 0.0, "y": 7.5, "z": -18.0},
+  "dismount": {"x": 4.6, "y": 0.0, "z": 0.0},
+  "collision_level": "heavy",
+  "turret": {"seat": 0, "render_pivot_y": 0.0, "origin_x": 0.0, "origin_y": 0.375, "origin_z": 0.0,
+             "barrel_x": 0.0, "barrel_y": 2.25, "barrel_z": -0.3938, "guided_uses_turret": false,
+             "traverse_rate": 1.25, "elevation_rate": 2.0},
+  "obb": [
+    {"part": "body", "x": 0.0, "y": 0.1875, "z": 0.0, "half_width": 2.8201, "half_height": 0.1875, "half_depth": 2.8201},
+    {"part": "body", "x": 0.0, "y": 2.4477, "z": -0.4401, "half_width": 3.6266, "half_height": 2.0752, "half_depth": 4.1978, "follows": "turret"},
+    {"part": "body", "x": -0.0001, "y": 4.6646, "z": 2.4938, "half_width": 0.8662, "half_height": 0.1417, "half_depth": 0.8662, "follows": "turret"},
+    {"part": "turret", "x": 0.0, "y": 2.6344, "z": 5.4507, "half_width": 1.5, "half_height": 0.8063, "half_depth": 1.693, "follows": "barrel"}
+  ],
+  "weapons": [
+    {"weapon": "jeg:vehicle_bl132_he", "ammo": "jeg:shell_5in_he", "energy_cost": 0, "guided": false, "seat": 0,
+     "muzzle": {"x": 1.2469, "y": 2.0813, "z": 7.1438}},
+    {"weapon": "jeg:vehicle_bl132_ap", "ammo": "jeg:shell_5in_ap", "energy_cost": 0, "guided": false, "seat": 0,
+     "muzzle": {"x": 1.2469, "y": 2.0813, "z": 7.1438}},
+    {"weapon": "jeg:vehicle_bl132_cm", "ammo": "jeg:shell_5in_cm", "energy_cost": 0, "guided": false, "seat": 0,
+     "muzzle": {"x": 1.2469, "y": 2.0813, "z": 7.1438}},
+    {"weapon": "jeg:vehicle_bl132_gs", "ammo": "jeg:shell_5in_gs", "energy_cost": 0, "guided": false, "seat": 0,
+     "muzzle": {"x": 1.2469, "y": 2.0813, "z": 7.1438}}
+  ],
+  "has_decoy": false,
+  "destroy": {"explodes": true, "explosion_power": 4.0},
+  "armor": {
+    "fallback": {"rating": 7.0, "undermatch_multiplier": 0.14, "overmatch_multiplier": 0.88, "passenger_leak_multiplier": 0.06, "part_damage_multiplier": 0.6},
+    "parts": {
+      "turret": {"rating": 6.0, "undermatch_multiplier": 0.16, "overmatch_multiplier": 0.9, "passenger_leak_multiplier": 0.06, "part_damage_multiplier": 0.25}
+    }
+  }
+}

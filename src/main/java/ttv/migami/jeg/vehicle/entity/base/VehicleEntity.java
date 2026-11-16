@@ -732,7 +732,8 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         if (!this.usesObbBlockCollisionBounds()) {
             return null;
         }
-        var boxes = this.envelopeBoxes();
+        // Turret parts as they stand now, gun included: bullets find a vehicle by its entity box.
+        var boxes = this.posedHullBoxes(this.envelopeBoxes(), true);
         if (boxes.isEmpty()) {
             return null;
         }
@@ -1710,6 +1711,9 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
             return;
         }
         VehicleWeaponInfo selectedWeapon = this.selectedWeapon(living);
+        if (this.vehicleData().defaults().turret().slewLimited()) {
+            return;
+        }
         if (selectedWeapon != null && this.canUseSelectedWeapon(living, selectedWeapon) && this.controlsTurret(living)) {
             // Aim from the frame-interpolated aircraft heading and view so the turret camera does not step once per tick.
             this.setTurretAimFromView(living, Mth.rotLerp(partialTick, this.yRotO, this.getYRot()),
@@ -1751,8 +1755,115 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
             turretYaw = -Mth.clamp(-turretYaw, seat.minYaw(), seat.maxYaw());
             turretPitch = Mth.clamp(turretPitch, seat.minPitch(), seat.maxPitch());
         }
+        if (this.vehicleData().defaults().turret().slewLimited()) {
+            // A powered mount: the gunner sets where it should point, and tickTurretSlew turns it there at its rates.
+            this.turretAimTargetYaw = Mth.wrapDegrees(turretYaw);
+            this.turretAimTargetPitch = turretPitch;
+            return;
+        }
         this.entityData.set(DATA_TURRET_YAW, Mth.wrapDegrees(turretYaw));
         this.entityData.set(DATA_TURRET_PITCH, turretPitch);
+    }
+
+    /** Where a slew-limited turret is being turned to (the gunner's view), or NaN when nobody has aimed it. */
+    private float turretAimTargetYaw = Float.NaN;
+    private float turretAimTargetPitch = Float.NaN;
+
+    /** Server: turns a slew-limited turret toward its gunner's aim at the data's traverse and elevation rates. */
+    private void tickTurretSlew() {
+        var turret = this.vehicleData().defaults().turret();
+        if (!this.level().isClientSide() && turret.slewLimited() && this.turretTravelLock()) {
+            // Stowed for travel: the gun goes back to its lock, whatever the gunner looks at.
+            this.turretAimTargetYaw = 0.0F;
+            this.turretAimTargetPitch = 0.0F;
+        } else if (!this.level().isClientSide() && turret.slewLimited()) {
+            float[] lay = this.turretAutoLay();
+            if (lay != null) {
+                // The fire control lays the gun, whatever its gunner looks at.
+                this.turretAimTargetYaw = Mth.wrapDegrees(lay[0]);
+                this.turretAimTargetPitch = lay[1];
+            }
+        }
+        if (this.level().isClientSide() || !turret.slewLimited() || Float.isNaN(this.turretAimTargetYaw)) {
+            return;
+        }
+        float yaw = this.turretYaw();
+        float pitch = this.turretPitch();
+        float yawStep = Mth.wrapDegrees(this.turretAimTargetYaw - yaw);
+        float pitchStep = this.turretAimTargetPitch - pitch;
+        if (turret.traverseRate() > 0.0F) {
+            yawStep = Mth.clamp(yawStep, -turret.traverseRate(), turret.traverseRate());
+        }
+        if (turret.elevationRate() > 0.0F) {
+            pitchStep = Mth.clamp(pitchStep, -turret.elevationRate(), turret.elevationRate());
+        }
+        if (yawStep != 0.0F) {
+            this.entityData.set(DATA_TURRET_YAW, Mth.wrapDegrees(yaw + yawStep));
+        }
+        if (pitchStep != 0.0F) {
+            this.entityData.set(DATA_TURRET_PITCH, pitch + pitchStep);
+        }
+    }
+
+    /**
+     * Server: where a fire control lays a slew-limited turret this tick instead of the gunner's view, as {turret yaw,
+     * turret pitch} in the turret's own terms (pitch negative is up), or null to follow the gunner (the PLZ-05).
+     */
+    @Nullable
+    protected float[] turretAutoLay() {
+        return null;
+    }
+
+    /** Whether the vehicle's weapons can fire now (a towed gun only once it is deployed). */
+    protected boolean canFireWeapons() {
+        return true;
+    }
+
+    /** Whether this one weapon can fire now (the PLZ-05's gun only at a halt, its roof gun on the move). */
+    protected boolean canFireWeapon(VehicleWeaponInfo weapon) {
+        return this.canFireWeapons();
+    }
+
+    /** A slew-limited turret held at its travel lock (yaw 0, level) whatever its gunner aims at (a packed towed gun). */
+    protected boolean turretTravelLock() {
+        return false;
+    }
+
+    /**
+     * Where a towing vehicle hitches this one, in vehicle data coordinates (blocks, +Z forward), or null to be towed by
+     * the nose. A towed gun's tow eye is on its trail, so it is towed trail first (SupportVehicleEntity#tickTow).
+     */
+    @Nullable
+    public Vec3 towEye() {
+        return null;
+    }
+
+    /** Whether a towing vehicle may hitch this one now (it must also be empty). */
+    public boolean canBeTowed() {
+        return true;
+    }
+
+    /** Whether the driver's tow key (N) does something in this vehicle: hitching on the FSV-6, packing up a towed gun. */
+    public boolean hasTowKeyAction() {
+        return false;
+    }
+
+    /** The driver pressed the tow key (N). */
+    public void towKey(ServerPlayer player) {
+    }
+
+    /** Whose tow key (N) this vehicle answers: the driver's, or a gun's crew where the key works the gun (the PLZ-05). */
+    public boolean takesTowKeyFrom(net.minecraft.world.entity.player.Player player) {
+        return this.getControllingPassenger() == player;
+    }
+
+    /** True while a slew-limited turret is still turning toward its gunner's aim. */
+    public boolean turretSlewing() {
+        if (Float.isNaN(this.turretAimTargetYaw) || !this.vehicleData().defaults().turret().slewLimited()) {
+            return false;
+        }
+        return Math.abs(Mth.wrapDegrees(this.turretAimTargetYaw - this.turretYaw())) > 0.05F
+                || Math.abs(this.turretAimTargetPitch - this.turretPitch()) > 0.05F;
     }
 
     /** With a turret, only its seat aims it; other armed seats (the Mi-28 pilot's rockets) overwrote the gunner's aim. */
@@ -1833,8 +1944,11 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         }
         this.updateLastTickMovementSpeed();
         super.tick();
+        this.tickTurretSlew();
+        this.followTurretWithEntityBox();
         if (this.level().isClientSide()) {
             this.tickDamageEffects();
+            this.tickTrackTravel();
         }
         if (this.isWrecked()) {
             // A wreck only falls, burns and breaks apart: no controls, weapons, repairs or recharging.
@@ -2865,7 +2979,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     private boolean tryFireVehicleWeapon(@Nullable LivingEntity shooter, @Nullable VehicleWeaponInfo selectedWeapon, boolean fireInput, boolean seekInput, int aiSeatIndex) {
         int selectedSlot = shooter == null ? -1 : this.selectedVehicleWeaponIndex(shooter);
         // Only this weapon's own reload holds it back: another one reloading in the background does not.
-        if (!fireInput || shooter == null || selectedWeapon == null || this.isWeaponSlotReloading(selectedSlot)) {
+        if (!fireInput || shooter == null || selectedWeapon == null || this.isWeaponSlotReloading(selectedSlot) || !this.canFireWeapon(selectedWeapon)) {
             return false;
         }
         if (this.weaponFireCooldown(selectedSlot, aiSeatIndex) > 0 || this.isTurretDamaged()) {
@@ -2911,7 +3025,8 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         boolean helicopterGun = VehicleSoundHelper.isHelicopterGun(this, weapon);
         boolean jetGun = VehicleSoundHelper.isJetGun(this, weapon);
         // A helicopter's or jet's gun is heard through the firing loop alone (see VehicleFireSoundInstance).
-        if (!helicopterGun && !jetGun && (this.vehicleData().defaults().vehicleType() == VehicleType.HELICOPTER || !this.shouldLoopVehicleFireSound(shooter, weapon, fireInput))) {
+        if (!helicopterGun && !jetGun && !this.firesShell(weapon)
+                && (this.vehicleData().defaults().vehicleType() == VehicleType.HELICOPTER || !this.shouldLoopVehicleFireSound(shooter, weapon, fireInput))) {
             this.playWeaponFireSound(weapon, stats);
         }
         if (weapon.guided()) {
@@ -2922,6 +3037,13 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         Vec3 muzzle = this.weaponMuzzlePosition(weapon, direction, 1.15D, 0.9D);
         this.mirroredShot = false;
         this.spawnVehicleMuzzleFlare(weapon, muzzle, direction);
+        if (this.firesShell(weapon)) {
+            if (this.level() instanceof ServerLevel serverLevel) {
+                this.fireShell(serverLevel, shooter, weapon, stats, muzzle);
+            }
+            this.setWeaponFireCooldown(selectedSlot, aiSeatIndex, stats.fireDelay());
+            return true;
+        }
         float damage = helicopterGun ? stats.damage() * HELICOPTER_GUN_DAMAGE_MULTIPLIER : stats.damage();
         Vec3 shot = helicopterGun ? this.withGunDispersion(direction, HELICOPTER_GUN_DISPERSION_DEGREES)
                 : jetGun ? this.withGunDispersion(this.jetGunBore(1.0F), stats.spread()) : direction;
@@ -2932,7 +3054,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         }
         BulletEntity bullet = new BulletEntity(this.level(), shooter, stats, shotVelocity, damage, false);
         bullet.setVehicleRound();
-        if (helicopterGun || jetGun) {
+        if (helicopterGun || jetGun || this.firesLongRangeRounds(weapon)) {
             bullet.setHelicopterGunRound();
         }
         bullet.initialisePosition(muzzle);
@@ -2942,6 +3064,38 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         }
         this.setWeaponFireCooldown(selectedSlot, aiSeatIndex, stats.fireDelay());
         return true;
+    }
+
+    /**
+     * Whether this weapon fires a shell (a gun's ShellEntity on a ballistic arc, with its own report) rather than the
+     * bullet path below. The gun path still handles its ammo, drum, energy, cooldown and muzzle flash.
+     */
+    protected boolean firesShell(VehicleWeaponInfo weapon) {
+        return false;
+    }
+
+    /** Fires a shell for {@link #firesShell}: spawn it from {@code muzzle} along the bore and send the report. */
+    protected void fireShell(ServerLevel level, LivingEntity shooter, VehicleWeaponInfo weapon, GunStats stats, Vec3 muzzle) {
+    }
+
+    /** Where the barrel points now (turret yaw and elevation), as a unit vector: a shell leaves along it. */
+    protected Vec3 barrelDirection() {
+        return this.barrelDirection(1.0F);
+    }
+
+    /** Where the barrel points this frame (client: interpolated), as a unit vector. */
+    public Vec3 barrelDirection(float partialTick) {
+        return this.articulatedBarrelDirection(partialTick).normalize();
+    }
+
+    /**
+     * A point fixed to the barrel (a muzzle), given in hull coordinates with the turret at rest, carried to where the
+     * turret and barrel hold it this frame, in the world. The same placement fires the vehicle's guns.
+     */
+    public Vec3 barrelPoint(Vec3 rest, float partialTick) {
+        var turret = this.vehicleData().defaults().turret();
+        return this.articulatedBarrelPosition(rest.x - turret.barrelX(), rest.y - turret.originY() - turret.barrelY(),
+                rest.z - turret.originZ() - turret.barrelZ(), partialTick);
     }
 
     /** A mounted gun on a vibrating airframe throws a tight cone around the crosshair rather than a single line. */
@@ -2976,6 +3130,13 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         if (weapon.guided() || weaponPath.contains("rocket") || weaponPath.contains("missile")) {
             this.spawnVehicleMuzzleFlareParticle(serverLevel, new CannonMuzzleFlareOption(1.0F, 0.86F, 0.55F, 6, 0.70F, 1, 0.10F), muzzle, direction, 3, 0.08D, 0.18D);
             this.spawnVehicleMuzzleFlareParticle(serverLevel, new CannonMuzzleFlareOption(0.55F, 0.45F, 0.4F, 18, 0.82F, 2, 0.025F), muzzle, direction, 1, 0.0D, 0.10D);
+            return;
+        }
+        if (weaponPath.endsWith("_hmg")) {
+            // A pintle gun fired from an open hatch sits in its gunner's face: a modest flash, as the helicopters' guns.
+            Vec3 forward = direction.normalize();
+            serverLevel.sendParticles(ModParticleTypes.MEDIUM_GUN_MUZZLE_FLASH.get(), muzzle.x, muzzle.y, muzzle.z, 0,
+                    forward.x, forward.y, forward.z, 0.12D);
             return;
         }
         if (this.usesGunMuzzleFlash(weaponPath)) {
@@ -3089,7 +3250,25 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         return this.hasAmmo(weapon.ammoId());
     }
 
+    /**
+     * A gun on a pintle aimed by its own seat's view (the PLZ-05's roof machine gun): its muzzle in the world for a shot
+     * along {@code direction}, or null to place the muzzle from the data.
+     */
+    @Nullable
+    protected Vec3 seatGunMuzzle(VehicleWeaponInfo weapon, Vec3 direction) {
+        return null;
+    }
+
+    /** Whether this weapon's bullets fly flat to their full range past the loaded world, as aircraft guns' do. */
+    protected boolean firesLongRangeRounds(VehicleWeaponInfo weapon) {
+        return false;
+    }
+
     private Vec3 weaponMuzzlePosition(VehicleWeaponInfo weapon, Vec3 direction, double fallbackForwardOffset, double fallbackHeight) {
+        Vec3 seatGun = this.seatGunMuzzle(weapon, direction);
+        if (seatGun != null) {
+            return seatGun;
+        }
         Vec3 articulatedMuzzle = this.articulatedWeaponMuzzlePosition(weapon);
         if (articulatedMuzzle != null) {
             return articulatedMuzzle;
@@ -3266,8 +3445,13 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
                 missile.setTargetPoint(designated);
             }
         }
+        this.onMissileLaunched(missile, shooter, weapon);
         this.level().addFreshEntity(missile);
         this.spawnVehicleMuzzleFlare(weapon, muzzle, direction);
+    }
+
+    /** Called as a guided weapon's missile leaves, before it is added: a launcher can set how it is guided (the TOW's wire). */
+    protected void onMissileLaunched(VehicleMissileEntity missile, LivingEntity shooter, VehicleWeaponInfo weapon) {
     }
 
     /** Remembers what this crew member's crosshair is on. */
@@ -3746,7 +3930,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     private ObbCollisionCorrection obbCollisionCorrection(AABB entityBox) {
         LocalBounds entityBounds = this.toLocalBounds(entityBox);
         ObbCollisionCorrection best = null;
-        for (OBBInfo.Box box : this.entityPushBoxes()) {
+        for (OBBInfo.Box box : this.posedHullBoxes(this.entityPushBoxes(), false)) {
             double boxMinX = box.x() - box.halfWidth();
             double boxMaxX = box.x() + box.halfWidth();
             double boxMinY = box.y() - box.halfHeight();
@@ -4633,6 +4817,9 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
             Vec3 helicopterZoomRotation = this.helicopterZoomCameraRotation(passenger, partialTick);
             if (helicopterZoomRotation != null) {
                 return helicopterZoomRotation;
+            }
+            if (this.usesArticulatedSeatTransform(seat) && this.vehicleData().defaults().turret().slewLimited()) {
+                return new Vec3(passenger.getViewYRot(partialTick), this.seatBoundViewPitch(passenger, seat, partialTick), 0.0D);
             }
             Vec3 articulatedRotation = this.articulatedCameraRotation(seat, partialTick);
             if (articulatedRotation != null) {
@@ -6358,7 +6545,67 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         if (this.usesVehiclePoseTransform()) {
             return this.rotateLocalOffsetWithPose(seat.x(), seat.y() + eyeHeight, seat.z(), partialTick);
         }
+        if (this.seatRidesTurret(seat)) {
+            var turret = this.vehicleData().defaults().turret();
+            return this.articulatedTurretOffset(seat.x() - turret.originX(), seat.y() + eyeHeight - turret.originY(),
+                    seat.z() - turret.originZ(), partialTick);
+        }
         return this.rotateLocalOffset(seat.x(), seat.y() + eyeHeight, seat.z(), partialTick);
+    }
+
+    /** Client: how far each track has run (model pixels; left, right), now and a tick ago, for the track driver. */
+    private float trackTravelLeft, trackTravelRight, trackTravelLeftO, trackTravelRightO;
+    /** Client: where the hull was at the end of the last tick (a watched vehicle moves by interpolation, early in the tick). */
+    private double trackLastX = Double.NaN, trackLastZ;
+    private float trackLastYaw;
+
+    /**
+     * Client: runs each track by the distance its side of the hull moved over the ground this tick: forward motion
+     * plus, turning, the turn times the track's distance from the centre line (turning right runs the left track
+     * forward and the right one back, so a pivot on the spot counter-rotates them).
+     */
+    private void tickTrackTravel() {
+        this.trackTravelLeftO = this.trackTravelLeft;
+        this.trackTravelRightO = this.trackTravelRight;
+        var tracks = this.vehicleData().tracks();
+        if (tracks == null) {
+            return;
+        }
+        double xo = Double.isNaN(this.trackLastX) ? this.getX() : this.trackLastX;
+        double zo = Double.isNaN(this.trackLastX) ? this.getZ() : this.trackLastZ;
+        float yawO = Double.isNaN(this.trackLastX) ? this.getYRot() : this.trackLastYaw;
+        this.trackLastX = this.getX();
+        this.trackLastZ = this.getZ();
+        this.trackLastYaw = this.getYRot();
+        Vec3 forward = Vec3.directionFromRotation(0.0F, this.getYRot());
+        double moved = (this.getX() - xo) * forward.x + (this.getZ() - zo) * forward.z;
+        if (Math.abs(moved) > 4.0D) {
+            moved = 0.0D; // a teleport or resync, not driving
+        }
+        double turn = Mth.wrapDegrees(this.getYRot() - yawO) * Mth.DEG_TO_RAD * tracks.halfWidth();
+        this.trackTravelLeft += (float) ((moved + turn) * 16.0D);
+        this.trackTravelRight += (float) ((moved - turn) * 16.0D);
+        // Keep the floats precise (a step in the wheels' turn every 60 km driven is not seen).
+        if (Math.abs(this.trackTravelLeft) > 1.0E6F || Math.abs(this.trackTravelRight) > 1.0E6F) {
+            this.trackTravelLeft %= tracks.length();
+            this.trackTravelRight %= tracks.length();
+            this.trackTravelLeftO = this.trackTravelLeft;
+            this.trackTravelRightO = this.trackTravelRight;
+        }
+    }
+
+    /** Client: how far a track has run, model pixels along its path (the track driver's input). */
+    public float trackTravel(boolean left, float partialTick) {
+        return left ? Mth.lerp(partialTick, this.trackTravelLeftO, this.trackTravelLeft)
+                : Mth.lerp(partialTick, this.trackTravelRightO, this.trackTravelRight);
+    }
+
+    /**
+     * Whether a seat rides on the turret (a hatch in its roof, the PLZ-05's): its position, given in hull coordinates
+     * with the turret straight ahead, turns with the turret.
+     */
+    protected boolean seatRidesTurret(SeatInfo seat) {
+        return false;
     }
 
     public boolean usesVehiclePoseTransform() {
@@ -6419,6 +6666,11 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     private Vec3 fixedSeatCameraPosition(CameraPos camera, float partialTick) {
         if ("barrel".equalsIgnoreCase(camera.transform())) {
             return this.articulatedBarrelPosition(camera.x(), camera.y(), camera.z(), partialTick);
+        }
+        if ("turret".equalsIgnoreCase(camera.transform())) {
+            // On the turret (its origin plus the offset), turning with its yaw but not its gun's elevation: the place
+            // for the gunner of a slew-limited mount, whose view leads the gun (the Mk42's roof sight).
+            return this.interpolatedVehiclePosition(partialTick).add(this.articulatedTurretOffset(camera.x(), camera.y(), camera.z(), partialTick));
         }
         Vec3 offset = this.usesVehiclePoseTransform()
                 ? this.seatEyeOffsetWithPose(camera.x(), camera.y(), camera.z(), partialTick)
@@ -7196,6 +7448,12 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         return this.seatForPassenger(this.seatIndexForPassenger(passenger, fallbackIndex));
     }
 
+    /** The seat a passenger sits in (its index in the vehicle data), or -1 if it isn't aboard. */
+    public int seatOf(Entity passenger) {
+        int index = this.getPassengers().indexOf(passenger);
+        return index < 0 ? -1 : this.seatIndexForPassenger(passenger, index);
+    }
+
     private int seatIndexForPassenger(Entity passenger, int fallbackIndex) {
         int seatCount = this.vehicleData().defaults().seats().size();
         int assignedSeat = this.seatAssignments.getOrDefault(passenger.getUUID(), fallbackIndex);
@@ -7252,9 +7510,13 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         for (OBBInfo.Box box : this.obbBoxes()) {
             AABB local = new AABB(box.x() - box.halfWidth(), box.y() - box.halfHeight(), box.z() - box.halfDepth(),
                     box.x() + box.halfWidth(), box.y() + box.halfHeight(), box.z() + box.halfDepth()).inflate(inflate);
-            Vec3 hit = local.contains(localStart) ? localStart : local.clip(localStart, localEnd).orElse(null);
+            // A box on the turret or barrel is tested in its own rest frame; the move is rigid, so the share of the
+            // segment where it enters is the same in every frame.
+            Vec3 boxStart = this.toBoxRestFrame(box, localStart);
+            Vec3 boxEnd = this.toBoxRestFrame(box, localEnd);
+            Vec3 hit = local.contains(boxStart) ? boxStart : local.clip(boxStart, boxEnd).orElse(null);
             if (hit != null) {
-                best = Math.min(best, hit.distanceTo(localStart) / length);
+                best = Math.min(best, hit.distanceTo(boxStart) / length);
             }
         }
         return best == Double.MAX_VALUE ? null : start.add(end.subtract(start).scale(best));
@@ -7265,14 +7527,16 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         if (direct == null) {
             return OBBInfo.Part.BODY;
         }
-        Vec3 local = this.toLocalVehiclePosition(direct.position());
+        Vec3 hullLocal = this.toLocalVehiclePosition(direct.position());
         for (OBBInfo.Box box : this.obbBoxes()) {
+            Vec3 local = this.toBoxRestFrame(box, hullLocal);
             if (Math.abs(local.x - box.x()) <= box.halfWidth()
                     && Math.abs(local.y - box.y()) <= box.halfHeight()
                     && Math.abs(local.z - box.z()) <= box.halfDepth()) {
                 return box.part();
             }
         }
+        Vec3 local = hullLocal;
         if (local.y < 0.65D && Math.abs(local.x) > 0.35D) {
             return local.x < 0.0D ? OBBInfo.Part.WHEEL_LEFT : OBBInfo.Part.WHEEL_RIGHT;
         }
@@ -7290,6 +7554,115 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         double cos = Math.cos(yaw);
         double sin = Math.sin(yaw);
         return new Vec3(dx * cos + dz * sin, dy, -dx * sin + dz * cos);
+    }
+
+    /**
+     * A hull-local point carried into a box's rest frame (turret yaw 0, barrel level), where the box's data is written
+     * (OBBInfo.Follows). The same turret and barrel geometry places the muzzle (articulatedBarrelPosition).
+     */
+    private Vec3 toBoxRestFrame(OBBInfo.Box box, Vec3 hullLocal) {
+        if (box.followsHull()) {
+            return hullLocal;
+        }
+        var turret = this.vehicleData().defaults().turret();
+        Vec3 origin = new Vec3(turret.originX(), turret.originY(), turret.originZ());
+        Vec3 turretLocal = this.rotateLocalOffsetByYaw(hullLocal.x - origin.x, hullLocal.y - origin.y, hullLocal.z - origin.z, this.turretYaw());
+        if (box.follows() == OBBInfo.Follows.BARREL) {
+            Vec3 pivot = new Vec3(turret.barrelX(), turret.barrelY(), turret.barrelZ());
+            double pitch = Math.toRadians(this.turretPitch());
+            double cos = Math.cos(pitch);
+            double sin = Math.sin(pitch);
+            double y = turretLocal.y - pivot.y;
+            double z = turretLocal.z - pivot.z;
+            turretLocal = new Vec3(turretLocal.x, pivot.y + y * cos + z * sin, pivot.z - y * sin + z * cos);
+        }
+        return origin.add(turretLocal);
+    }
+
+    /** A point of a box's rest frame carried to where the turret and barrel hold it now, in hull-local coordinates. */
+    private Vec3 fromBoxRestFrame(OBBInfo.Box box, Vec3 rest) {
+        if (box.followsHull()) {
+            return rest;
+        }
+        var turret = this.vehicleData().defaults().turret();
+        Vec3 origin = new Vec3(turret.originX(), turret.originY(), turret.originZ());
+        Vec3 turretLocal = rest.subtract(origin);
+        if (box.follows() == OBBInfo.Follows.BARREL) {
+            Vec3 pivot = new Vec3(turret.barrelX(), turret.barrelY(), turret.barrelZ());
+            double pitch = Math.toRadians(this.turretPitch());
+            double cos = Math.cos(pitch);
+            double sin = Math.sin(pitch);
+            double y = turretLocal.y - pivot.y;
+            double z = turretLocal.z - pivot.z;
+            turretLocal = new Vec3(turretLocal.x, pivot.y + y * cos - z * sin, pivot.z + y * sin + z * cos);
+        }
+        return origin.add(this.rotateLocalOffsetByYaw(turretLocal.x, turretLocal.y, turretLocal.z, -this.turretYaw()));
+    }
+
+    /**
+     * The boxes as hull-aligned boxes where they stand now: a box on the turret or barrel becomes the hull-aligned
+     * box round it as posed. Used for the block and entity envelopes, which only take hull-aligned boxes.
+     */
+    protected java.util.List<OBBInfo.Box> posedHullBoxes(java.util.List<OBBInfo.Box> boxes, boolean includeBarrel) {
+        if (boxes.stream().allMatch(OBBInfo.Box::followsHull)) {
+            return boxes;
+        }
+        java.util.ArrayList<OBBInfo.Box> posed = new java.util.ArrayList<>(boxes.size());
+        for (OBBInfo.Box box : boxes) {
+            if (box.followsHull()) {
+                posed.add(box);
+                continue;
+            }
+            if (box.follows() == OBBInfo.Follows.BARREL && !includeBarrel) {
+                continue;
+            }
+            double minX = Double.POSITIVE_INFINITY;
+            double minY = Double.POSITIVE_INFINITY;
+            double minZ = Double.POSITIVE_INFINITY;
+            double maxX = Double.NEGATIVE_INFINITY;
+            double maxY = Double.NEGATIVE_INFINITY;
+            double maxZ = Double.NEGATIVE_INFINITY;
+            for (int corner = 0; corner < 8; corner++) {
+                Vec3 at = this.fromBoxRestFrame(box, new Vec3(
+                        box.x() + ((corner & 1) == 0 ? -box.halfWidth() : box.halfWidth()),
+                        box.y() + ((corner & 2) == 0 ? -box.halfHeight() : box.halfHeight()),
+                        box.z() + ((corner & 4) == 0 ? -box.halfDepth() : box.halfDepth())));
+                minX = Math.min(minX, at.x);
+                minY = Math.min(minY, at.y);
+                minZ = Math.min(minZ, at.z);
+                maxX = Math.max(maxX, at.x);
+                maxY = Math.max(maxY, at.y);
+                maxZ = Math.max(maxZ, at.z);
+            }
+            posed.add(new OBBInfo.Box(box.part(), (minX + maxX) * 0.5D, (minY + maxY) * 0.5D, (minZ + maxZ) * 0.5D,
+                    (maxX - minX) * 0.5D, (maxY - minY) * 0.5D, (maxZ - minZ) * 0.5D));
+        }
+        return posed;
+    }
+
+    /** True when some box follows the turret or barrel, so the entity box must follow the aim. */
+    private boolean hasTurretBoxes() {
+        for (OBBInfo.Box box : this.obbBoxes()) {
+            if (!box.followsHull()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private float boxesTurretYaw = Float.NaN;
+    private float boxesTurretPitch = Float.NaN;
+
+    /** Refits the entity box when the turret has moved, for vehicles with turret-following boxes. */
+    private void followTurretWithEntityBox() {
+        float yaw = this.turretYaw();
+        float pitch = this.turretPitch();
+        if (yaw == this.boxesTurretYaw && pitch == this.boxesTurretPitch || !this.hasTurretBoxes()) {
+            return;
+        }
+        this.boxesTurretYaw = yaw;
+        this.boxesTurretPitch = pitch;
+        this.updateVehicleBoundingBox();
     }
 
     private void applyPartDamage(OBBInfo.Part hitPart, float finalDamage) {

@@ -1,0 +1,25 @@
+{
+  "result_vehicle": "jeg:howitzer",
+  "ingredients": [
+    {
+      "item": "minecraft:iron_ingot",
+      "count": 32
+    },
+    {
+      "item": "minecraft:iron_block",
+      "count": 2
+    },
+    {
+      "item": "minecraft:copper_ingot",
+      "count": 8
+    },
+    {
+      "item": "minecraft:black_dye",
+      "count": 2
+    },
+    {
+      "item": "minecraft:redstone",
+      "count": 4
+    }
+  ]
+}

@@ -1,0 +1,173 @@
+{
+  "model": "jeg:entity/vehicle/type63",
+  "source": "Superb Warfare type_63, CrawKatt/SuperbWarfareReFabricated@952d73c (used with the SBW team's permission)",
+  "units_per_block": 16,
+  "front": "-Z in the model, +Z in vehicle data",
+  "scale_from_source": 0.78,
+  "elevation_degrees": [
+    -5.0,
+    60.0
+  ],
+  "turret_origin": [
+    0.0,
+    0.3565,
+    -0.1268
+  ],
+  "trunnion": [
+    0.0,
+    0.8635,
+    -0.2852
+  ],
+  "barrel_offset_from_turret": [
+    0.0,
+    0.507,
+    -0.1584
+  ],
+  "muzzles_in_firing_order": [
+    [
+      -0.2851,
+      1.0535,
+      0.6021
+    ],
+    [
+      -0.095,
+      1.0535,
+      0.6021
+    ],
+    [
+      0.0952,
+      1.0535,
+      0.6021
+    ],
+    [
+      0.2853,
+      1.0535,
+      0.6021
+    ],
+    [
+      -0.2853,
+      0.8634,
+      0.6021
+    ],
+    [
+      -0.0952,
+      0.8634,
+      0.6021
+    ],
+    [
+      0.0952,
+      0.8634,
+      0.6021
+    ],
+    [
+      0.2853,
+      0.8634,
+      0.6021
+    ],
+    [
+      -0.2853,
+      0.6732,
+      0.6021
+    ],
+    [
+      -0.0952,
+      0.6732,
+      0.6021
+    ],
+    [
+      0.095,
+      0.6732,
+      0.6021
+    ],
+    [
+      0.2851,
+      0.6732,
+      0.6021
+    ]
+  ],
+  "handwheel_elevation_pivot": [
+    0.61,
+    0.8064,
+    -0.1458
+  ],
+  "handwheel_traverse_pivot": [
+    0.4833,
+    0.3882,
+    -0.4817
+  ],
+  "wheel_left_pivot": [
+    0.7082,
+    0.301,
+    0.0833
+  ],
+  "model_bounds": [
+    [
+      -0.8114,
+      -0.0032,
+      -1.9686
+    ],
+    [
+      0.8114,
+      1.1411,
+      0.6021
+    ]
+  ],
+  "hitbox": [
+    {
+      "part": "body",
+      "covers": "axle, trail and traverse ring",
+      "x": 0.0,
+      "y": 0.2652,
+      "z": -0.9111,
+      "half_width": 0.7407,
+      "half_height": 0.1643,
+      "half_depth": 1.0575
+    },
+    {
+      "part": "wheel_left",
+      "covers": "left wheel",
+      "x": 0.7069,
+      "y": 0.3026,
+      "z": 0.0833,
+      "half_width": 0.1046,
+      "half_height": 0.3026,
+      "half_depth": 0.3042
+    },
+    {
+      "part": "wheel_right",
+      "covers": "right wheel",
+      "x": -0.7069,
+      "y": 0.3026,
+      "z": 0.0833,
+      "half_width": 0.1046,
+      "half_height": 0.3026,
+      "half_depth": 0.3042
+    },
+    {
+      "part": "body",
+      "covers": "carriage and handwheels",
+      "x": 0.1252,
+      "y": 0.449,
+      "z": -0.2586,
+      "half_width": 0.6163,
+      "half_height": 0.1369,
+      "half_depth": 0.2928,
+      "follows": "turret"
+    },
+    {
+      "part": "turret",
+      "covers": "tube pack",
+      "x": -0.0,
+      "y": 0.8635,
+      "z": -0.0397,
+      "half_width": 0.3961,
+      "half_height": 0.2776,
+      "half_depth": 0.6418,
+      "follows": "barrel"
+    }
+  ],
+  "coplanar_face_pairs": {
+    "in_source": 40,
+    "after_refit": 0
+  }
+}

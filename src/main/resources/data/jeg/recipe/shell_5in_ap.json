@@ -1,0 +1,17 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "equipment",
+  "key": {
+    "I": "minecraft:iron_ingot",
+    "C": "minecraft:copper_ingot"
+  },
+  "pattern": [
+    "I",
+    "I",
+    "C"
+  ],
+  "result": {
+    "id": "jeg:shell_5in_ap",
+    "count": 2
+  }
+}

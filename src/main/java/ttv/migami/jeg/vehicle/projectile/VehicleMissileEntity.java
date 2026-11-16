@@ -66,6 +66,7 @@ public final class VehicleMissileEntity extends Entity {
      */
     private static final Map<Identifier, Float> BLOCK_RESISTANCE_SCALE = Map.of(
             Reference.id("vehicle_bmp2_missile"), 0.45F,
+            Reference.id("vehicle_tow_missile"), 0.45F,
             Reference.id("vehicle_9m120_driver_missile"), 0.45F,
             Reference.id("vehicle_9m120_passenger_missile"), 0.45F,
             Reference.id("vehicle_9m336_missile"), 0.45F,
@@ -116,6 +117,73 @@ public final class VehicleMissileEntity extends Entity {
 
     public void setPodGuided() {
         this.podGuided = true;
+    }
+
+    /**
+     * A launcher that guides its missile along its sight line (SACLOS, the TOW): each tick the missile is steered back
+     * onto the line from {@link #sightOrigin} along {@link #sightDirection}, so it goes where the gunner looks.
+     */
+    public interface LineOfSightLauncher {
+        Vec3 sightOrigin(float partialTick);
+
+        Vec3 sightDirection(float partialTick);
+
+        /** True while the gunner who fired is still at the sight. */
+        boolean gunnerAtSight(Entity owner);
+
+        /** How far the wire runs out, in blocks. */
+        double wireLength();
+    }
+
+    /** The launcher guiding this missile by wire, or -1; and whether the wire still holds. */
+    private int sightLauncherId = -1;
+    private boolean wireIntact;
+    @Nullable
+    private Vec3 launchPoint;
+
+    /** Guides this missile by wire from {@code launcher} (see LineOfSightLauncher). */
+    public void setLineOfSightGuided(Entity launcher) {
+        this.sightLauncherId = launcher.getId();
+        this.wireIntact = true;
+        this.launchPoint = this.position();
+    }
+
+    /** Whether the wire still holds (the missile is under command); for tests and the HUD. */
+    public boolean wireIntact() {
+        return this.sightLauncherId >= 0 && this.wireIntact;
+    }
+
+    /**
+     * Steers a wire-guided missile back onto the sight line, a little ahead of where it is along it. The wire breaks for
+     * good (the missile flies on unguided) when the gunner leaves the sight, the launcher is lost, the missile runs past
+     * the wire's length, or the sight loses it behind a block.
+     */
+    private boolean steerLineOfSight(VehicleMissileProfile profile, @Nullable Entity owner) {
+        if (this.sightLauncherId < 0) {
+            return false;
+        }
+        if (!this.wireIntact) {
+            return true;
+        }
+        Entity found = this.level().getEntity(this.sightLauncherId);
+        if (!(found instanceof LineOfSightLauncher launcher) || !found.isAlive() || owner == null || !launcher.gunnerAtSight(owner)
+                || this.launchPoint != null && this.position().distanceTo(this.launchPoint) > launcher.wireLength()) {
+            this.wireIntact = false;
+            return true;
+        }
+        Vec3 origin = launcher.sightOrigin(1.0F);
+        Vec3 direction = launcher.sightDirection(1.0F).normalize();
+        if (this.tickCount % 2 == 0 && this.position().distanceToSqr(origin) > 4.0D
+                && this.level().clip(new ClipContext(origin, this.position(), ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, this))
+                .getType() != HitResult.Type.MISS) {
+            this.wireIntact = false;
+            return true;
+        }
+        double along = Math.max(0.0D, this.position().subtract(origin).dot(direction));
+        Vec3 aim = origin.add(direction.scale(along + profile.maxSpeed() * 3.0D));
+        Vec3 desired = aim.subtract(this.position()).normalize().scale(profile.maxSpeed());
+        this.setDeltaMovement(this.getDeltaMovement().scale(1.0D - profile.turnRate()).add(desired.scale(profile.turnRate())));
+        return true;
     }
 
     /** Follows the targeting pod's crosshair while the pilot still looks through it. */
@@ -181,7 +249,7 @@ public final class VehicleMissileEntity extends Entity {
         // The motor's glow and smoke trail are drawn client-side by MissileTrailRenderer.
         if (this.level() instanceof ServerLevel serverLevel) {
             this.farFlight.keepTicking(serverLevel, this, this.profile().lifeTicks() - this.tickCount);
-            FarFlight.sendTrack(serverLevel, this, isHeavy(this.weaponId), this.tickCount);
+            FarFlight.sendTrack(serverLevel, this, isHeavy(this.weaponId), this.tickCount, isLowSmoke(this.weaponId));
         }
     }
 
@@ -199,6 +267,17 @@ public final class VehicleMissileEntity extends Entity {
     public boolean shouldBeSaved() {
         return false;
     }
+
+    /**
+     * The TOW's flight motor burns about 1.6 s with little smoke, then the missile coasts on its tracking lamp: the gunner
+     * has to see it all the way down the sight line, which a thick trail lying along that line would hide.
+     */
+    public static boolean isLowSmoke(Identifier weaponId) {
+        return weaponId.getPath().equals("vehicle_tow_missile");
+    }
+
+    /** Ticks the TOW's flight motor burns (smoke only meanwhile). */
+    public static final int LOW_SMOKE_MOTOR_TICKS = 32;
 
     /** The KH-39 and the A-10's AGM-65G are the big ones: a larger body, motor and trail. */
     public static boolean isHeavy(Identifier weaponId) {
@@ -238,6 +317,9 @@ public final class VehicleMissileEntity extends Entity {
         }
         Entity owner = this.ownerId < 0 ? null : this.level().getEntity(this.ownerId);
         Entity ownerVehicle = owner == null ? null : owner.getVehicle();
+        if (this.steerLineOfSight(profile, owner)) {
+            return;
+        }
         this.followPod(profile, owner, ownerVehicle);
         target = this.currentTarget();
         boolean validTarget = target instanceof VehicleDecoyEntity

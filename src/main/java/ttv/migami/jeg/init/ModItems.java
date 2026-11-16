@@ -84,6 +84,41 @@ public final class ModItems {
             "mortar_round",
             () -> new Item(baseProperties(Reference.id("mortar_round")).stacksTo(16))
     );
+    /** The Type-63's 107 mm rockets, loaded from its crate: high-explosive, armour-piercing and cluster. */
+    public static final DeferredHolder<Item, Item> ROCKET_107MM_HE = REGISTER.register("rocket_107mm_he",
+            () -> new Item(baseProperties(Reference.id("rocket_107mm_he")).stacksTo(12)));
+    public static final DeferredHolder<Item, Item> ROCKET_107MM_AP = REGISTER.register("rocket_107mm_ap",
+            () -> new Item(baseProperties(Reference.id("rocket_107mm_ap")).stacksTo(12)));
+    public static final DeferredHolder<Item, Item> ROCKET_107MM_CM = REGISTER.register("rocket_107mm_cm",
+            () -> new Item(baseProperties(Reference.id("rocket_107mm_cm")).stacksTo(12)));
+    /** The TOW launcher, carried: right-click the ground to set it up (DeployableWeaponItem). */
+    public static final DeferredHolder<Item, ttv.migami.jeg.item.DeployableWeaponItem> TOW = REGISTER.register(
+            "tow",
+            () -> new ttv.migami.jeg.item.DeployableWeaponItem(baseProperties(Reference.id("tow")).stacksTo(1), ModEntities.TOW)
+    );
+    /** The 105 mm howitzer's rounds, loaded from its crate: high-explosive and smoke. */
+    public static final DeferredHolder<Item, Item> SHELL_105MM_HE = REGISTER.register("shell_105mm_he",
+            () -> new Item(baseProperties(Reference.id("shell_105mm_he")).stacksTo(8)));
+    public static final DeferredHolder<Item, Item> SHELL_105MM_SMOKE = REGISTER.register("shell_105mm_smoke",
+            () -> new Item(baseProperties(Reference.id("shell_105mm_smoke")).stacksTo(8)));
+    /** The Mk42's 5-inch shells, loaded from its hold: armour-piercing and high-explosive (proximity fuzed). */
+    public static final DeferredHolder<Item, Item> SHELL_5IN_AP = REGISTER.register(
+            "shell_5in_ap",
+            () -> new Item(baseProperties(Reference.id("shell_5in_ap")).stacksTo(16))
+    );
+    public static final DeferredHolder<Item, Item> SHELL_5IN_HE = REGISTER.register(
+            "shell_5in_he",
+            () -> new Item(baseProperties(Reference.id("shell_5in_he")).stacksTo(16))
+    );
+    /** The Mk42's cluster shell (18 bomblets near the target) and grapeshot (36 pellets from the muzzle). */
+    public static final DeferredHolder<Item, Item> SHELL_5IN_CM = REGISTER.register(
+            "shell_5in_cm",
+            () -> new Item(baseProperties(Reference.id("shell_5in_cm")).stacksTo(16))
+    );
+    public static final DeferredHolder<Item, Item> SHELL_5IN_GS = REGISTER.register(
+            "shell_5in_gs",
+            () -> new Item(baseProperties(Reference.id("shell_5in_gs")).stacksTo(16))
+    );
     public static final DeferredHolder<Item, Item> REPAIR_KIT = REGISTER.register(
             "repair_kit",
             () -> new RepairKitItem(baseProperties(Reference.id("repair_kit")).stacksTo(16))
@@ -696,6 +731,16 @@ public final class ModItems {
             AMMO.values().forEach(holder -> event.accept(holder.get()));
             event.accept(MORTAR.get());
             event.accept(MORTAR_ROUND.get());
+            event.accept(TOW.get());
+            event.accept(ROCKET_107MM_HE.get());
+            event.accept(ROCKET_107MM_AP.get());
+            event.accept(ROCKET_107MM_CM.get());
+            event.accept(SHELL_105MM_HE.get());
+            event.accept(SHELL_105MM_SMOKE.get());
+            event.accept(SHELL_5IN_HE.get());
+            event.accept(SHELL_5IN_AP.get());
+            event.accept(SHELL_5IN_CM.get());
+            event.accept(SHELL_5IN_GS.get());
             event.accept(PISTOL_MAGAZINE.get());
             event.accept(SMG_MAGAZINE.get());
             event.accept(SMG_EXTENDED_MAGAZINE.get());

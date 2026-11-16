@@ -76,6 +76,30 @@
     {
       "id": "jeg:test_artillery",
       "required": false
+    },
+    {
+      "id": "jeg:mk42",
+      "required": false
+    },
+    {
+      "id": "jeg:bl132",
+      "required": false
+    },
+    {
+      "id": "jeg:tow",
+      "required": false
+    },
+    {
+      "id": "jeg:type63",
+      "required": false
+    },
+    {
+      "id": "jeg:howitzer",
+      "required": false
+    },
+    {
+      "id": "jeg:plz05",
+      "required": false
     }
   ]
 }

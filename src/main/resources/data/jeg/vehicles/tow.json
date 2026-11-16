@@ -1,0 +1,39 @@
+{
+  "entity_type": "jeg:tow",
+  "vehicle_type": "artillery",
+  "max_health": 60.0,
+  "auto_repair_per_tick": 0.0,
+  "auto_repair_cooldown_ticks": 200,
+  "max_energy": 0,
+  "allow_free_cam": true,
+  "container_type": "mini",
+  "seats": [
+    {"index": 0, "x": 0.3, "y": -0.35, "z": -0.6, "driver": true, "enclosed": false, "hide_passenger": false, "ban_hand": true,
+     "min_pitch": -40.0, "max_pitch": 40.0, "min_yaw": -90.0, "max_yaw": 90.0,
+     "sensitivity_x": 0.55, "sensitivity_y": 0.75, "sensitivity_z": 1.0,
+     "zoom_camera": {"x": 0.2536, "y": 0.158, "z": 0.1219, "use_fixed_camera_pos": true, "transform": "barrel"}}
+  ],
+  "engine": {"type": "static", "acceleration": 0.0, "max_forward_speed": 0.0, "max_reverse_speed": 0.0, "friction": 1.0},
+  "third_person_camera": {"x": 0.0, "y": 1.6, "z": -4.0},
+  "dismount": {"x": 0.9, "y": 0.0, "z": -0.9},
+  "collision_level": "light",
+  "turret": {"seat": 0, "render_pivot_y": 0.0, "origin_x": 0.0, "origin_y": 0.9689, "origin_z": 0.0,
+             "barrel_x": 0.0, "barrel_y": 0.2059, "barrel_z": 0.0, "guided_uses_turret": true},
+  "obb": [
+    {"part": "body", "x": 0.1425, "y": 0.4845, "z": -0.0, "half_width": 0.5445, "half_height": 0.4845, "half_depth": 0.6288},
+    {"part": "body", "x": 0.0609, "y": 1.1771, "z": 0.0203, "half_width": 0.2641, "half_height": 0.2082, "half_depth": 0.1422, "follows": "turret"},
+    {"part": "turret", "x": -0.0388, "y": 1.2327, "z": 0.1975, "half_width": 0.1438, "half_height": 0.1493, "half_depth": 0.8455, "follows": "barrel"}
+  ],
+  "weapons": [
+    {"weapon": "jeg:vehicle_tow_missile", "ammo": "jeg:medium_anti_ground_missile", "energy_cost": 0, "guided": true, "seat": 0,
+     "muzzle": {"x": 0.0, "y": 1.2094, "z": 1.0438}}
+  ],
+  "has_decoy": false,
+  "destroy": {"explodes": false, "explosion_power": 0.0},
+  "armor": {
+    "fallback": {"rating": 2.0, "undermatch_multiplier": 0.3, "overmatch_multiplier": 0.9, "passenger_leak_multiplier": 0.6, "part_damage_multiplier": 1.0},
+    "parts": {
+      "turret": {"rating": 2.0, "undermatch_multiplier": 0.3, "overmatch_multiplier": 0.9, "passenger_leak_multiplier": 0.6, "part_damage_multiplier": 1.2}
+    }
+  }
+}

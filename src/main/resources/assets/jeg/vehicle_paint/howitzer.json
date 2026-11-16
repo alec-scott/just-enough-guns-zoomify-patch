@@ -1,0 +1,17 @@
+{
+  "unpainted_parts": [
+    "finish_wheel_left",
+    "finish_wheel_right",
+    "finish_handwheel_traverse",
+    "finish_handwheel_elevation",
+    "finish_sight",
+    "finish_tube",
+    "finish_barrel",
+    "finish_turret",
+    "spade_left",
+    "finish_trail_left",
+    "spade_right",
+    "finish_trail_right",
+    "finish_carriage"
+  ]
+}

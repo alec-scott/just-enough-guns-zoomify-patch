@@ -1,0 +1,19 @@
+{
+  "format_version": "1.8.0",
+  "animations": {
+    "animation.mk42.rest": {
+      "loop": true,
+      "bones": {
+        "muzzle_flash": {
+          "scale": {
+            "vector": [
+              0,
+              0,
+              0
+            ]
+          }
+        }
+      }
+    }
+  }
+}

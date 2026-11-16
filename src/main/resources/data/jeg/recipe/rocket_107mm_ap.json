@@ -1,0 +1,17 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "equipment",
+  "key": {
+    "I": "minecraft:iron_ingot",
+    "G": "minecraft:gunpowder"
+  },
+  "pattern": [
+    "I",
+    "I",
+    "G"
+  ],
+  "result": {
+    "id": "jeg:rocket_107mm_ap",
+    "count": 3
+  }
+}

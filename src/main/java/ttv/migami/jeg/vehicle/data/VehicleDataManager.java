@@ -31,6 +31,7 @@ import ttv.migami.jeg.vehicle.data.subdata.EngineType;
 import ttv.migami.jeg.vehicle.data.subdata.OBBInfo;
 import ttv.migami.jeg.vehicle.data.subdata.SeatInfo;
 import ttv.migami.jeg.vehicle.data.subdata.SeekInfo;
+import ttv.migami.jeg.vehicle.data.subdata.TrackInfo;
 import ttv.migami.jeg.vehicle.data.subdata.TurretInfo;
 import ttv.migami.jeg.vehicle.data.subdata.VehicleContainerType;
 import ttv.migami.jeg.vehicle.data.subdata.VehicleType;
@@ -148,6 +149,7 @@ public final class VehicleDataManager {
         CollisionLevel collisionLevel = getEnum(object, "collision_level", CollisionLevel.class, fallback.collisionLevel());
         OBBInfo obb = parseObb(object, "obb", fallback.obb());
         OBBInfo deployedObb = parseObb(object, "obb_deployed", null);
+        TrackInfo tracks = parseTracks(getObject(object, "tracks"));
         VehicleArmorProfile armor = parseArmor(getObject(object, "armor"), fallback.armor());
         DamageModifierInfo damageModifier = parseDamageModifier(getObject(object, "damage_modifier"), fallback.damageModifier());
         List<VehicleWeaponInfo> weapons = parseWeapons(object, fallback.weapons());
@@ -180,7 +182,7 @@ public final class VehicleDataManager {
                 hasDecoy,
                 seek,
                 destroy
-        ), deployedObb);
+        ), deployedObb, tracks);
     }
 
     private static DefaultVehicleData fallbackFor(Identifier id) {
@@ -302,6 +304,33 @@ public final class VehicleDataManager {
         return List.copyOf(seats);
     }
 
+    /** The running gear for the shared track driver ("tracks"), or null for a vehicle without one. */
+    private static TrackInfo parseTracks(JsonObject object) {
+        if (object == null) {
+            return null;
+        }
+        JsonArray rest = GsonHelper.getAsJsonArray(object, "rest");
+        JsonArray path = GsonHelper.getAsJsonArray(object, "path");
+        float[] pathZ = new float[path.size()];
+        float[] pathY = new float[path.size()];
+        for (int i = 0; i < path.size(); i++) {
+            JsonArray point = path.get(i).getAsJsonArray();
+            pathZ[i] = point.get(0).getAsFloat();
+            pathY[i] = point.get(1).getAsFloat();
+        }
+        List<TrackInfo.Wheel> wheels = new java.util.ArrayList<>();
+        if (object.has("wheels")) {
+            for (JsonElement element : GsonHelper.getAsJsonArray(object, "wheels")) {
+                JsonObject wheel = element.getAsJsonObject();
+                List<String> bones = new java.util.ArrayList<>();
+                GsonHelper.getAsJsonArray(wheel, "bones").forEach(bone -> bones.add(bone.getAsString()));
+                wheels.add(new TrackInfo.Wheel(List.copyOf(bones), getFloat(wheel, "radius", 1.0F)));
+            }
+        }
+        return TrackInfo.of(getInt(object, "links", 0), rest.get(0).getAsFloat(), rest.get(1).getAsFloat(),
+                getFloat(object, "rest_s", 0.0F), getFloat(object, "half_width", 1.0F), pathZ, pathY, List.copyOf(wheels));
+    }
+
     private static OBBInfo parseObb(JsonObject object, String key, OBBInfo fallback) {
         JsonElement element = object.get(key);
         if (element == null || !element.isJsonArray()) {
@@ -322,7 +351,8 @@ public final class VehicleDataManager {
                     getDouble(box, "z", 0.0D),
                     getDouble(box, "half_width", 0.5D),
                     getDouble(box, "half_height", 0.5D),
-                    getDouble(box, "half_depth", 0.5D)
+                    getDouble(box, "half_depth", 0.5D),
+                    getEnum(box, "follows", OBBInfo.Follows.class, OBBInfo.Follows.HULL)
             ));
         }
         return new OBBInfo(List.copyOf(boxes));
@@ -370,7 +400,9 @@ public final class VehicleDataManager {
                 getDouble(object, "barrel_x", fallback.barrelX()),
                 getDouble(object, "barrel_y", fallback.barrelY()),
                 getDouble(object, "barrel_z", fallback.barrelZ()),
-                getBoolean(object, "guided_uses_turret", fallback.guidedUsesTurret())
+                getBoolean(object, "guided_uses_turret", fallback.guidedUsesTurret()),
+                (float) getDouble(object, "traverse_rate", fallback.traverseRate()),
+                (float) getDouble(object, "elevation_rate", fallback.elevationRate())
         );
     }
 

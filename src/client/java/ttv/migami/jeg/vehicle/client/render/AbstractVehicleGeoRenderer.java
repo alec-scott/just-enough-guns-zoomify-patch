@@ -181,6 +181,10 @@ abstract class AbstractVehicleGeoRenderer<T extends VehicleEntity> extends GeoEn
         if (vehicle.vehicleData().defaults().vehicleType() == ttv.migami.jeg.vehicle.data.subdata.VehicleType.HELICOPTER) {
             hideBattleDamagedParts(vehicle, snapshots);
         }
+        ttv.migami.jeg.vehicle.data.subdata.TrackInfo tracks = vehicle.vehicleData().tracks();
+        if (tracks != null) {
+            updateTracks(vehicle, tracks, partialTick, snapshots);
+        }
         switch (vehicle.vehicleDataId().getPath()) {
             case "ah6" -> updateHelicopterRotors(vehicle, partialTick, snapshots);
             case "bmp2" -> updateTurret(vehicle, partialTick, snapshots, -74.0F, 7.5F);
@@ -202,9 +206,137 @@ abstract class AbstractVehicleGeoRenderer<T extends VehicleEntity> extends GeoEn
                     updateMortar(mortar, partialTick, snapshots);
                 }
             }
+            case "tow" -> {
+                updateTurret(vehicle, partialTick, snapshots, -40.0F, 40.0F);
+                // The round shows in the tube while one is loaded.
+                hideIf(snapshots, "missile", weaponSlotAmmo(vehicle, "vehicle_tow_missile") < 1);
+                // The gunner looks through the sight: in their own first-person view its housing, around the camera, isn't drawn.
+                var mc = net.minecraft.client.Minecraft.getInstance();
+                hideIf(snapshots, "sight", mc.player != null && mc.player.getVehicle() == vehicle && mc.options.getCameraType().isFirstPerson());
+            }
             default -> {
+                if (vehicle instanceof ttv.migami.jeg.vehicle.entity.ShellGunEntity gun) {
+                    updateTurret(vehicle, partialTick, snapshots, gun.minElevation(), gun.maxElevation());
+                    // SBW's fire clips, driven from the synced shots: each barrel slides back and runs out.
+                    var bones = gun.recoilBones();
+                    for (int barrel = 0; barrel < bones.size(); barrel++) {
+                        float recoil = gun.recoilPixels(barrel, partialTick);
+                        snapshots.ifPresent(bones.get(barrel), snapshot -> snapshot.setTranslateZ(recoil));
+                    }
+                    if (gun instanceof ttv.migami.jeg.vehicle.entity.Type63Entity type63) {
+                        // The tubes empty in order: rockets show only in the tubes still loaded.
+                        int fired = ttv.migami.jeg.vehicle.entity.Type63Entity.TUBES - type63.rocketsLoaded();
+                        for (int tube = 0; tube < ttv.migami.jeg.vehicle.entity.Type63Entity.TUBES; tube++) {
+                            hideIf(snapshots, "rocket_" + (tube + 1), tube < fired);
+                        }
+                        // The handwheels turn as the mount is laid: several turns over the elevation and traverse.
+                        float elevation = -vehicle.turretPitch(partialTick);
+                        float traverse = vehicle.turretYaw(partialTick);
+                        snapshots.ifPresent("handwheel_elevation", snapshot -> snapshot.setRotX(elevation * 8.0F * Mth.DEG_TO_RAD));
+                        snapshots.ifPresent("handwheel_traverse", snapshot -> snapshot.setRotZ(traverse * 8.0F * Mth.DEG_TO_RAD));
+                    }
+                    if (gun instanceof ttv.migami.jeg.vehicle.entity.HowitzerEntity howitzer) {
+                        updateHowitzer(howitzer, partialTick, snapshots);
+                    }
+                    if (gun instanceof ttv.migami.jeg.vehicle.entity.Plz05Entity plz05) {
+                        updatePlz05(plz05, partialTick, snapshots);
+                    }
+                }
             }
         }
+    }
+
+    /** Bone names of each side's links ({prefix + i, prefix + i + "_turn"}), by link count. */
+    private static final java.util.Map<Integer, String[][]> TRACK_LINK_BONES = new java.util.concurrent.ConcurrentHashMap<>();
+    /** Scratch for {@link ttv.migami.jeg.vehicle.data.subdata.TrackInfo#sample} (render thread only). */
+    private static final float[] TRACK_SAMPLE = new float[3];
+
+    /**
+     * The shared track driver (guide section 5): each link of each side is moved along the track's path to where the
+     * distance that track has run puts it, and turned to the path's direction; the road wheels, sprockets, idlers and
+     * rollers turn by the same distance over their radius. The refit computed the path in the model's (file) sense; the
+     * snapshot's X rotation is the negative of the file's.
+     */
+    private static void updateTracks(VehicleEntity vehicle, ttv.migami.jeg.vehicle.data.subdata.TrackInfo tracks, float partialTick,
+                                     com.geckolib.renderer.base.BoneSnapshots snapshots) {
+        int links = tracks.links();
+        String[][] names = TRACK_LINK_BONES.computeIfAbsent(links, n -> {
+            String[][] out = new String[4][n];
+            for (int i = 0; i < n; i++) {
+                out[0][i] = "track_link_left_" + i;
+                out[1][i] = "track_link_left_" + i + "_turn";
+                out[2][i] = "track_link_right_" + i;
+                out[3][i] = "track_link_right_" + i + "_turn";
+            }
+            return out;
+        });
+        float pitch = tracks.length() / Math.max(1, links);
+        for (int side = 0; side < 2; side++) {
+            float travel = vehicle.trackTravel(side == 0, partialTick);
+            for (int i = 0; i < links; i++) {
+                tracks.sample(tracks.restS() + travel + i * pitch, TRACK_SAMPLE);
+                float dz = TRACK_SAMPLE[0] - tracks.restZ();
+                float dy = TRACK_SAMPLE[1] - tracks.restY();
+                float turn = -TRACK_SAMPLE[2];
+                snapshots.ifPresent(names[side * 2][i], snapshot -> {
+                    snapshot.setTranslateY(dy);
+                    snapshot.setTranslateZ(dz);
+                });
+                snapshots.ifPresent(names[side * 2 + 1][i], snapshot -> snapshot.setRotX(turn));
+            }
+        }
+        float left = vehicle.trackTravel(true, partialTick);
+        float right = vehicle.trackTravel(false, partialTick);
+        for (var wheel : tracks.wheels()) {
+            for (String bone : wheel.bones()) {
+                float angle = (bone.contains("left") ? left : right) / wheel.radius();
+                snapshots.ifPresent(bone, snapshot -> snapshot.setRotX(angle));
+            }
+        }
+    }
+
+    /**
+     * The PLZ-05: the roof machine gun turns and elevates with its gunner's view (it rides the turret, so its yaw is
+     * taken off the turret's), and the gunner's sight isn't drawn in the gunner's own first-person view.
+     */
+    private static void updatePlz05(ttv.migami.jeg.vehicle.entity.Plz05Entity gun, float partialTick, com.geckolib.renderer.base.BoneSnapshots snapshots) {
+        net.minecraft.world.entity.Entity roof = gun.passengerIn(ttv.migami.jeg.vehicle.entity.Plz05Entity.ROOF_GUNNER_SEAT);
+        float yaw = 0.0F, elevation = 0.0F;
+        if (roof != null) {
+            float hullYaw = Mth.rotLerp(partialTick, gun.yRotO, gun.getYRot());
+            yaw = -Mth.wrapDegrees(roof.getViewYRot(partialTick) - hullYaw) - gun.turretYaw(partialTick);
+            elevation = Mth.clamp(-roof.getViewXRot(partialTick), ttv.migami.jeg.vehicle.util.Plz05Rig.HMG_MIN_ELEVATION,
+                    ttv.migami.jeg.vehicle.util.Plz05Rig.HMG_MAX_ELEVATION);
+        }
+        float mountYaw = Mth.wrapDegrees(yaw) * Mth.DEG_TO_RAD;
+        float gunElevation = elevation * Mth.DEG_TO_RAD;
+        snapshots.ifPresent("hmg_mount", snapshot -> snapshot.setRotY(mountYaw));
+        snapshots.ifPresent("hmg", snapshot -> snapshot.setRotX(gunElevation));
+        var mc = net.minecraft.client.Minecraft.getInstance();
+        hideIf(snapshots, "sight", mc.player != null && gun.passengerIn(ttv.migami.jeg.vehicle.entity.Plz05Entity.GUNNER_SEAT) == mc.player
+                && mc.options.getCameraType().isFirstPerson());
+    }
+
+    /**
+     * The howitzer (design/howitzer/generate.py's pose): the trails swing out as it deploys and in to meet for towing,
+     * the spades fold down into the ground, the wheels roll as it is towed, and the handwheels turn as it is laid. Y
+     * rotations are the negative of the generator's right-handed sense; X rotations are as authored.
+     */
+    private static void updateHowitzer(ttv.migami.jeg.vehicle.entity.HowitzerEntity gun, float partialTick, com.geckolib.renderer.base.BoneSnapshots snapshots) {
+        float progress = gun.deployProgress(partialTick);
+        float swing = ttv.migami.jeg.vehicle.util.HowitzerRig.trailAngle(progress) * Mth.DEG_TO_RAD;
+        snapshots.ifPresent("trail_left", snapshot -> snapshot.setRotY(-swing));
+        snapshots.ifPresent("trail_right", snapshot -> snapshot.setRotY(swing));
+        float fold = ttv.migami.jeg.vehicle.util.HowitzerRig.spadeFold(progress) * Mth.DEG_TO_RAD;
+        snapshots.ifPresent("spade_left", snapshot -> snapshot.setRotX(fold));
+        snapshots.ifPresent("spade_right", snapshot -> snapshot.setRotX(fold));
+        float roll = -gun.wheelRoll(partialTick);
+        snapshots.ifPresent("wheel_left", snapshot -> snapshot.setRotX(roll));
+        snapshots.ifPresent("wheel_right", snapshot -> snapshot.setRotX(roll));
+        float elevation = gun.elevation(partialTick);
+        float traverse = gun.turretYaw(partialTick);
+        snapshots.ifPresent("handwheel_elevation", snapshot -> snapshot.setRotX(elevation * 6.0F * Mth.DEG_TO_RAD));
+        snapshots.ifPresent("handwheel_traverse", snapshot -> snapshot.setRotX(traverse * 6.0F * Mth.DEG_TO_RAD));
     }
 
     /**

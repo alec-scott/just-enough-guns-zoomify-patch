@@ -78,11 +78,12 @@ public final class NetworkHandler {
         PayloadTypeRegistry.serverboundPlay().register(VehicleAimPayload.TYPE, VehicleAimPayload.STREAM_CODEC);
         PayloadTypeRegistry.clientboundPlay().register(CameraShakePayload.TYPE, CameraShakePayload.STREAM_CODEC);
         PayloadTypeRegistry.clientboundPlay().register(MissileBlastPayload.TYPE, MissileBlastPayload.STREAM_CODEC);
-        PayloadTypeRegistry.clientboundPlay().register(MortarFirePayload.TYPE, MortarFirePayload.STREAM_CODEC);
+        PayloadTypeRegistry.clientboundPlay().register(GunReportPayload.TYPE, GunReportPayload.STREAM_CODEC);
         PayloadTypeRegistry.clientboundPlay().register(MissileTrackPayload.TYPE, MissileTrackPayload.STREAM_CODEC);
         PayloadTypeRegistry.clientboundPlay().register(AircraftTrackPayload.TYPE, AircraftTrackPayload.STREAM_CODEC);
         PayloadTypeRegistry.serverboundPlay().register(VehicleChangeSeatPayload.TYPE, VehicleChangeSeatPayload.STREAM_CODEC);
         PayloadTypeRegistry.serverboundPlay().register(VehicleDismountPayload.TYPE, VehicleDismountPayload.STREAM_CODEC);
+        PayloadTypeRegistry.serverboundPlay().register(ttv.migami.jeg.vehicle.network.ObserverMarkPayload.TYPE, ttv.migami.jeg.vehicle.network.ObserverMarkPayload.STREAM_CODEC);
         PayloadTypeRegistry.serverboundPlay().register(VehicleOpenMenuPayload.TYPE, VehicleOpenMenuPayload.STREAM_CODEC);
         PayloadTypeRegistry.serverboundPlay().register(ttv.migami.jeg.vehicle.network.SupportModulePayload.TYPE, ttv.migami.jeg.vehicle.network.SupportModulePayload.STREAM_CODEC);
         PayloadTypeRegistry.serverboundPlay().register(AssembleTestVehiclePayload.TYPE, AssembleTestVehiclePayload.STREAM_CODEC);
@@ -151,6 +152,16 @@ public final class NetworkHandler {
         ServerPlayNetworking.registerGlobalReceiver(VehicleChangeSeatPayload.TYPE, (payload, context) -> {
             context.server().execute(() -> handleVehicleChangeSeat(payload, context.player()));
         });
+        ServerPlayNetworking.registerGlobalReceiver(ttv.migami.jeg.vehicle.network.ObserverMarkPayload.TYPE, (payload, context) -> {
+            context.server().execute(() -> {
+                ServerPlayer player = context.player();
+                // Only while looking through a spyglass, and no further than a spyglass's view.
+                double reach = ttv.migami.jeg.vehicle.util.FireMissions.OBSERVER_MARK_RANGE + 16.0D;
+                if (player.isScoping() && player.position().distanceToSqr(payload.target().getCenter()) <= reach * reach) {
+                    ttv.migami.jeg.vehicle.util.FireMissions.observerMark(player, payload.target());
+                }
+            });
+        });
         ServerPlayNetworking.registerGlobalReceiver(VehicleDismountPayload.TYPE, (payload, context) -> {
             context.server().execute(() -> handleVehicleDismount(payload, context.player()));
         });
@@ -160,10 +171,12 @@ public final class NetworkHandler {
         ServerPlayNetworking.registerGlobalReceiver(ttv.migami.jeg.vehicle.network.SupportModulePayload.TYPE, (payload, context) -> {
             context.server().execute(() -> {
                 ServerPlayer player = context.player();
-                if (player.level().getEntity(payload.vehicleId()) instanceof ttv.migami.jeg.vehicle.entity.SupportVehicleEntity truck
-                        && truck.modules().canUse(player)) {
-                    if (payload.slot() == -3) truck.towKey(player);
-                    else truck.openModule(player, payload.slot());
+                var entity = player.level().getEntity(payload.vehicleId());
+                if (payload.slot() == -3) {
+                    // The tow key (N): hitching on the FSV-6, packing up or deploying a towed gun, the PLZ-05's fire control.
+                    if (entity instanceof VehicleEntity vehicle && vehicle.takesTowKeyFrom(player)) vehicle.towKey(player);
+                } else if (entity instanceof ttv.migami.jeg.vehicle.entity.SupportVehicleEntity truck && truck.modules().canUse(player)) {
+                    truck.openModule(player, payload.slot());
                 }
             });
         });

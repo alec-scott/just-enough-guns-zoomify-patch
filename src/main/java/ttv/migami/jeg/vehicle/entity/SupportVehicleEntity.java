@@ -87,6 +87,8 @@ public final class SupportVehicleEntity extends VehicleEntity {
     @org.jetbrains.annotations.Nullable private java.util.UUID towedId;
     /** The tow bar from the pintle to the towed vehicle's nose, in blocks. */
     private static final double TOW_BAR = 1.2;
+    /** A tow eye (a gun's lunette) drops straight onto the pintle: only the coupling's length between them. */
+    private static final double TOW_BAR_EYE = 0.3;
     /** The rear pintle, model pixels. */
     public static final Vec3 PINTLE = new Vec3(0, 8, 64);
     private boolean modulesDropped;
@@ -545,14 +547,20 @@ public final class SupportVehicleEntity extends VehicleEntity {
         VehicleEntity best = null;
         double bestDistance = TOW_REACH * TOW_REACH;
         for (VehicleEntity other : this.level().getEntitiesOfClass(VehicleEntity.class, new net.minecraft.world.phys.AABB(pintle, pintle).inflate(TOW_REACH),
-                v -> v != this && v.getPassengers().isEmpty() && !(v instanceof SupportVehicleEntity s && !s.isPacked()))) {
+                v -> v != this && v.getPassengers().isEmpty() && v.canBeTowed() && !(v instanceof SupportVehicleEntity s && !s.isPacked()))) {
             double distance = other.position().distanceToSqr(pintle);
             if (distance < bestDistance) { best = other; bestDistance = distance; }
         }
         return best;
     }
 
+    @Override
+    public boolean hasTowKeyAction() {
+        return true;
+    }
+
     /** The driver pressed the tow key. */
+    @Override
     public void towKey(ServerPlayer player) {
         if (this.getControllingPassenger() == player) this.toggleTow(player);
     }
@@ -586,7 +594,7 @@ public final class SupportVehicleEntity extends VehicleEntity {
     private void tickTow(ServerLevel level) {
         if (this.towedId == null) return;
         if (!(level.getEntity(this.towedId) instanceof VehicleEntity towed) || towed.isRemoved() || !towed.getPassengers().isEmpty()
-                || !this.isPacked() || this.isWrecked()) {
+                || !towed.canBeTowed() || !this.isPacked() || this.isWrecked()) {
             this.releaseTow();
             return;
         }
@@ -600,9 +608,20 @@ public final class SupportVehicleEntity extends VehicleEntity {
         }
         if (distance < 1.0E-3) return;
         Vec3 dir = toPintle.scale(1 / distance);
-        double nose = towed.getBbWidth() * .5 + .4;
-        Vec3 target = pintle.subtract(dir.scale(nose + TOW_BAR));
-        float yaw = (float) (Mth.atan2(-dir.x, dir.z) * Mth.RAD_TO_DEG);
+        Vec3 eye = towed.towEye();
+        Vec3 target;
+        float yaw;
+        if (eye != null) {
+            // Towed by its tow eye (a gun's trail): the eye sits a bar's length behind the pintle, the gun trailing
+            // away from it, so it faces away from the truck.
+            double reach = Math.sqrt(eye.x * eye.x + eye.z * eye.z);
+            target = pintle.subtract(dir.scale(TOW_BAR_EYE + reach));
+            yaw = (float) (Mth.atan2(dir.x, -dir.z) * Mth.RAD_TO_DEG);
+        } else {
+            double nose = towed.getBbWidth() * .5 + .4;
+            target = pintle.subtract(dir.scale(nose + TOW_BAR));
+            yaw = (float) (Mth.atan2(-dir.x, dir.z) * Mth.RAD_TO_DEG);
+        }
         towed.setYRot(yaw);
         Vec3 move = new Vec3(target.x - towed.getX(), Math.min(0, towed.getDeltaMovement().y) - .08, target.z - towed.getZ());
         towed.move(net.minecraft.world.entity.MoverType.SELF, move);

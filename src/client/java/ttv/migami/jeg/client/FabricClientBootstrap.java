@@ -313,6 +313,13 @@ public final class FabricClientBootstrap {
         EntityRendererRegistry.register(ModEntities.MORTAR.get(), ttv.migami.jeg.vehicle.client.render.MortarRenderer::new);
         // A round at 200 m/s is a blur nobody sees: it is heard and its blast is drawn (MissileBlastPayload).
         EntityRendererRegistry.register(ModEntities.MORTAR_ROUND.get(), net.minecraft.client.renderer.entity.NoopRenderer::new);
+        EntityRendererRegistry.register(ModEntities.MK42.get(), ttv.migami.jeg.vehicle.client.render.Mk42Renderer::new);
+        EntityRendererRegistry.register(ModEntities.BL132.get(), ttv.migami.jeg.vehicle.client.render.Bl132Renderer::new);
+        EntityRendererRegistry.register(ModEntities.TOW.get(), ttv.migami.jeg.vehicle.client.render.TowRenderer::new);
+        EntityRendererRegistry.register(ModEntities.TYPE63.get(), ttv.migami.jeg.vehicle.client.render.Type63Renderer::new);
+        EntityRendererRegistry.register(ModEntities.HOWITZER.get(), ttv.migami.jeg.vehicle.client.render.HowitzerRenderer::new);
+        EntityRendererRegistry.register(ModEntities.PLZ05.get(), ttv.migami.jeg.vehicle.client.render.Plz05Renderer::new);
+        EntityRendererRegistry.register(ModEntities.CANNON_SHELL.get(), net.minecraft.client.renderer.entity.NoopRenderer::new);
         EntityRendererRegistry.register(ModEntities.WAVEFORCE_TOWER.get(), WaveforceTowerRenderer::new);
         EntityRendererRegistry.register(ModEntities.VEHICLE_DECOY.get(), VehicleDecoyRenderer::new);
         EntityRendererRegistry.register(ModEntities.VEHICLE_MISSILE.get(), VehicleMissileRenderer::new);
@@ -340,6 +347,7 @@ public final class FabricClientBootstrap {
         });
 
         ClientTickEvents.START_CLIENT_TICK.register(FabricClientBootstrap::handleOffhandSwapOverride);
+        ClientTickEvents.START_CLIENT_TICK.register(ttv.migami.jeg.vehicle.client.ObserverMarker::tick);
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             GunRecoilHandler.tick();
             GunViewModelMotion.tick(client);
@@ -353,8 +361,9 @@ public final class FabricClientBootstrap {
             ttv.migami.jeg.vehicle.client.audio.BulldozerAudio.tick(client);
             ttv.migami.jeg.vehicle.client.audio.SupportAudio.tick(client);
             ttv.migami.jeg.vehicle.client.SupportHints.tick(client);
-            ttv.migami.jeg.vehicle.client.audio.MortarAudio.tick(client);
+            ttv.migami.jeg.vehicle.client.audio.GunReportAudio.tick(client);
             ttv.migami.jeg.vehicle.client.MortarAim.tick(client);
+            ttv.migami.jeg.vehicle.client.ShellGunAim.tick(client);
             MedalManager.tick();
             if (NetworkHandler.shouldRenderLegacyBulletTrail()) {
                 BulletTrailRenderer.tick();

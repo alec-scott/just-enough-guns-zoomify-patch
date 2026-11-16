@@ -1,0 +1,144 @@
+{
+  "model": "jeg:entity/vehicle/bl132",
+  "source": "Superb Warfare bl_132, CrawKatt/SuperbWarfareReFabricated@952d73c (used with the SBW team's permission)",
+  "units_per_block": 16,
+  "front": "-Z in the model, +Z in vehicle data",
+  "scale_from_source": 1.0,
+  "elevation_degrees": [
+    -5.0,
+    85.0
+  ],
+  "elevation_sign": "barrel bone file X rotation = -elevation (GeckoLib setRotX(+elevation))",
+  "turret_origin": [
+    0.0,
+    0.375,
+    0.0
+  ],
+  "trunnion": [
+    0.0006,
+    2.625,
+    -0.3937
+  ],
+  "barrel_offset_from_turret": [
+    0.0006,
+    2.25,
+    -0.3937
+  ],
+  "guns_in_firing_order": [
+    {
+      "gun": "gun_2",
+      "slide": "gun_2_slide",
+      "muzzle_rest": [
+        1.2469,
+        2.0812,
+        7.1437
+      ],
+      "bore_from_trunnion_blocks": 7.537
+    },
+    {
+      "gun": "gun_4",
+      "slide": "gun_4_slide",
+      "muzzle_rest": [
+        -1.2469,
+        2.0812,
+        7.1437
+      ],
+      "bore_from_trunnion_blocks": 7.537
+    },
+    {
+      "gun": "gun_1",
+      "slide": "gun_1_slide",
+      "muzzle_rest": [
+        1.2469,
+        3.1875,
+        7.1437
+      ],
+      "bore_from_trunnion_blocks": 7.537
+    },
+    {
+      "gun": "gun_3",
+      "slide": "gun_3_slide",
+      "muzzle_rest": [
+        -1.2469,
+        3.1875,
+        7.1437
+      ],
+      "bore_from_trunnion_blocks": 7.537
+    }
+  ],
+  "recoil_pixels": 11.0,
+  "model_bounds": [
+    [
+      -3.7687,
+      0.0,
+      -4.6379
+    ],
+    [
+      3.7688,
+      4.8063,
+      7.1437
+    ]
+  ],
+  "gunhouse_bounds": [
+    [
+      -3.6266,
+      0.3725,
+      -4.6379
+    ],
+    [
+      3.6266,
+      4.5228,
+      3.7577
+    ]
+  ],
+  "hitbox": [
+    {
+      "part": "body",
+      "covers": "base ring",
+      "x": 0.0,
+      "y": 0.1875,
+      "z": 0.0,
+      "half_width": 2.8201,
+      "half_height": 0.1875,
+      "half_depth": 2.8201
+    },
+    {
+      "part": "body",
+      "covers": "gunhouse",
+      "x": 0.0,
+      "y": 2.4477,
+      "z": -0.4401,
+      "half_width": 3.6266,
+      "half_height": 2.0752,
+      "half_depth": 4.1978,
+      "follows": "turret"
+    },
+    {
+      "part": "body",
+      "covers": "sight tower",
+      "x": -0.0001,
+      "y": 4.6646,
+      "z": 2.4938,
+      "half_width": 0.8662,
+      "half_height": 0.1417,
+      "half_depth": 0.8662,
+      "follows": "turret"
+    },
+    {
+      "part": "turret",
+      "covers": "guns, outside the house",
+      "x": 0.0,
+      "y": 2.6344,
+      "z": 5.4507,
+      "half_width": 1.5,
+      "half_height": 0.8063,
+      "half_depth": 1.693,
+      "follows": "barrel"
+    }
+  ],
+  "hitbox_note": "the ladders on the house sides (0.15 blocks proud) are left out of the boxes",
+  "coplanar_face_pairs": {
+    "in_source": 57,
+    "after_refit": 0
+  }
+}

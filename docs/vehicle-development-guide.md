@@ -156,6 +156,14 @@ clears, and grows the entity box at every angle that isn't square on.
   its contacts in code. The bulldozer does the latter for its blade.
 - **Name the parts that matter** (`main_engine`, `sub_engine`, `turret`, `wheel_left`/`wheel_right`), and give
   them `armor.parts` entries so hits there damage the right system.
+- **Parts on a turret follow it.** A box with `"follows": "turret"` turns with the turret's yaw about the turret
+  origin, and `"follows": "barrel"` also elevates about the barrel pivot (`OBBInfo.Follows`). Write them at rest
+  (turret yaw 0, barrel level). Hits and hit parts are tested in each box's own rest frame (`toBoxRestFrame`); the
+  block and entity envelopes take the hull-aligned box round each as posed (`posedHullBoxes`), and the entity box is
+  refitted when the turret moves, because bullets find a vehicle by its entity box. A barrel box doesn't push
+  entities. The Mk42 is the first user (`Mk42ClientGameTest` shoots the gun and gunhouse at 0, 90 and 180 degrees).
+- **Part damage to `turret` jams the gun** (`isTurretDamaged` stops firing after about 10 points). On a vehicle that is
+  mostly turret (a gun mount), make only the gun the `turret` part and the house `body`, or the first hit jams it.
 - **Long thin parts.** Where parts like a tail boom or stub wings would make the rotated envelope much bigger than
   the hull, keep the entity box at the hull size, as helicopters do (`usesHullBlockCollisionBox`). Then size
   `ModEntities` `sized(width, height)` to the hull.
@@ -256,6 +264,19 @@ Lessons from it:
 - Before the game, render the model from the eye point in perspective: `design/support/render_eye.py` does it for any
   model point and pose. It shows at once whether the geometry or the game is wrong.
 
+**Tracks are driven from a path, not from keyframes** (the PLZ-05, first; the BMP-2 and the MBT next). SBW stacks a
+side's links at one point and moves them along a hand-typed keyframe path in code. Instead the refit computes the
+links' centre line as the convex hull of the running gear's circles (sprocket, road wheels, idler, return rollers, each
+grown by half a link's thickness), checks it against SBW's path (`design/plz05/refit.py`: within 1.5 px), and writes it
+to the vehicle data as `"tracks"` (path, links per side, rest point and arc length, half the track width, and the wheel
+bones with their radii). The shared driver (`AbstractVehicleGeoRenderer.updateTracks`) moves `track_link_<side>_<i>`
+along it and turns `track_link_<side>_<i>_turn` to its direction; the client runs each side by the hull's movement and
+turn (`VehicleEntity.trackTravel`), so nothing is synced. Measure from where the hull was at the end of the last tick, not
+across `super.tick()`: a vehicle another player drives is moved by interpolation before that, and its tracks stood
+still (only the driver's own client saw them run; `Plz05ClientGameTest` watches, not drives). Name the bones that way in the refit and the vehicle gets
+moving tracks with no code. Check the link turn in a review render first: the right sign looked wrong by sign
+reasoning; with it, links lie flat on the runs and their guide horns point inward round the ends.
+
 **Driving bones from code (GeckoLib snapshots).**
 - Translations are in pixels in the authored sense: `setTranslateX(+16)` moves a bone 16 px to the vehicle's left
   (+X). This was checked on the FSV-6's slide-outs with a top-down screenshot. The A-10's fan code negates X inside a
@@ -322,6 +343,12 @@ physically; parts that stop working when hit.
   limits against that same yaw. Clamping against the tick's yaw while the view kept its world heading made a hard turn
   hit the limit and step the F5 camera 20 times a second. Turret seats and vehicles posed by `usesVehiclePoseTransform`
   keep their world aim. Set `third_person_camera.z` to about 1.6× the vehicle's length (the FSV-6: 11.5 blocks).
+- **Powered mounts slew.** `"traverse_rate"`/`"elevation_rate"` (degrees per tick) in the turret data turn the
+  turret toward the gunner's view on the server at those rates (`tickTurretSlew`); the view stays free and the HUD
+  draws a bore marker where the gun points. Don't pin such a gunner's camera to the barrel: the view would sit beside
+  the house, looking at its wall, while the gun turned. Use `"transform": "turret"` on the seat's camera (it turns with
+  the turret, not with the gun's elevation), placed where nothing of the vehicle fills the view: the BL-132's camera
+  behind its sight tower had the tower filling half the screen; it now sits on top of it.
 - **Shift is free for controls.** Riding a JEG vehicle, Shift neither ejects (`wantsToStopRiding`) nor crouches
   (`getDesiredPose`, `PlayerVehicleSneakDismountMixin`); crouching sank the first-person camera into the seat.
   Keys that are unused on an unarmed vehicle (R, left mouse button) can carry its tools.
@@ -383,6 +410,29 @@ Lessons from the FSV-6 (`design/support/`).
   - Use up the fitted item if the block was destroyed some other way, so nothing doubles.
   - Lock that fitting while the block exists.
 
+### Towed guns
+
+Lessons from the 105 mm howitzer (`design/howitzer/`) and the Type-63.
+- **Towing is the FSV-6's hitch; a gun says how it is towed.** `VehicleEntity.towEye()` gives the lunette in vehicle
+  data coordinates, and the hitch puts that point on the pintle with the gun trailing away from the truck, so it goes
+  trail first. Without a tow eye a vehicle is pulled nose first (the LAV-150). `canBeTowed()` refuses the hitch (a
+  gun only packed and unmanned), and the hitch lets go if it turns false.
+- **Deploy before firing, pack up before towing.** `canFireWeapons()` gates the shared gun path (ammunition is not
+  used), and `turretTravelLock()` drives a slew-limited turret back to yaw 0 and level whatever its gunner looks at.
+  The tow key (N) is general: `hasTowKeyAction()` and `towKey(player)` let a gun's crew deploy and pack up with it.
+- **Swing trails and fold spades from synced progress**, with the open pose's hitboxes in `obb_deployed`. A diagonal
+  trail needs several boxes along its length (the generator's `trail_segments`), or one box takes in the ground
+  between the trails.
+- **A long-recoil gun at high elevation strikes the ground with its breech.** Shorten the recoil with elevation
+  (`HowitzerRig.recoilLength`, as real variable recoil does), and check the breech against the ground and the trails
+  over the whole elevation range in the generator's validation.
+
+### Retiring a vehicle
+
+Keep the entity type registered for one release as a `RetiredVehicleEntity`: on its first server tick a saved one
+drops a chest item holding its hold (overflow loose) and removes itself. Remove its assembly recipe and icon entry at
+once, and the type in the release after (the waveforce tower, retired 2026-11-16).
+
 ### Hold and tool bays
 
 - **Mark slots that feed a tool.** If part of the hold feeds a tool (the bulldozer's ripper bay is the last row),
@@ -399,6 +449,65 @@ Lessons from the FSV-6 (`design/support/`).
 - **Projectiles.** Fire through the existing long-range paths, where projectiles tick wherever they are, load
   terrain ahead, are never saved with a chunk and end at their range. Send tracers to players up to 1024 blocks
   away.
+- **Guns that fire in an arc** (mortar, Mk42, later the artillery) fire a `ShellEntity`: it falls by a
+  `ShellBallistics`, keeps flying through unloaded terrain, bursts with a `ShellEntity.Warhead` (blast falloff, direct
+  hit, block power, optional proximity fuze), and the gunner's HUD predicts it with the same ballistics (`ShellAim`).
+  A vehicle gun opts in with `firesShell`/`fireShell`; the shared gun path still handles ammo, drum, reload, cooldown
+  and flash. The report is `GunReportPayload`/`GunReportAudio` (`<sound>.fire`, `.fire_distant`, and
+  `.fire_interior` for the crew).
+- **Gun mounts are `ShellGunEntity`s** (Mk42, BL-132): a subclass lists its shells (one vehicle weapon each, with a
+  warhead), muzzles in firing order and recoiling bones; the base fires the next barrel, recoils it from the synced
+  shot count, sends the report, and gets the fire-control panel, predictor and bone driver for free. Shell warheads
+  can break up (`ShellEntity.Dispense`: cluster bomblets near the target, grapeshot pellets at the muzzle), and every
+  shell is a dud within its blast radius (+1) of the gun that fired it, so firing at the gun's own feet can't hurt it.
+  Rocket launchers use it too (the Type-63): `shellsAreRockets` gives the shells a motor glow and short trail, and
+  `nextBarrel`/`barrelFiring` set the tube order when the tubes empty in turn and reload together. The base plays
+  `animation.<id>.rest`, so write that clip (empty if need be) even when the source model has none; without it
+  GeckoLib logs an error every frame.
+- **Fire missions** (the howitzer): `FireSolution.solve` flies the shell tick by tick with the gun's own
+  `ShellBallistics` from the muzzle's arm about the trunnions, and bisects for the low and high arcs, so the panel's
+  numbers are what the shell will do. A gun with several charges returns the selected one from `ballistics()`, and
+  the predictor and the flight follow it. Targets come from a player looking through a spyglass (attack marks the
+  block, `ObserverMarker`, caught at the start of the client tick because vanilla swallows attack clicks while an item
+  is in use) or from `/justEnoughGuns firemission <x> <z>`. Extra panel rows come from `ShellGunEntity.panelRows`.
+- **Fire missions are shared** (`FireMissions`): a gun that takes them implements `FireMissions.Gun` (target, reach
+  from the observer, crew ping), and an observer's mark reaches every such gun within its own reach (the howitzer
+  4.5 km, the PLZ-05 6.5 km). The command and the spyglass go through it.
+- **A fire control can lay the gun** (the PLZ-05): `turretAutoLay()` returns the turret yaw and pitch to slew to
+  instead of the gunner's view; the slew rates still apply, and the HUD reports LAYING, then ON within 0.05°. Solve
+  from the turret ring's centre: the trunnions lie on the line from it along the bore, so the bearing from the centre
+  is the bearing to lay, and the solver needs no iteration.
+- **Per-weapon rules:** `canFireWeapon(weapon)` gates one weapon (the PLZ-05's gun only at a halt, its roof gun on the
+  move); `firesLongRangeRounds(weapon)` puts a ground vehicle's gun on the aircraft guns' far path;
+  `seatGunMuzzle(weapon, direction)` places a pintle gun's muzzle from its own pivot along its gunner's view.
+- **Weapon ids pick the muzzle flash.** An id without `machine_gun` got the cannon flare (fire and smoke blocks wide):
+  the PLZ-05's roof gun first threw a fireball into its gunner's face. Pintle guns (`*_hmg`) get the helicopters'
+  medium flash.
+- **The gun's panel goes to whoever lays the gun**, not the driver: `ShellGunEntity.laysGun(passenger)` (the PLZ-05's
+  gunner is seat 1). Look seats up with `seatOf(passenger)`, never the passenger list's order: after a seat change the
+  two differ (the bore marker compared them).
+- **Hatch seats ride the turret** (`seatRidesTurret(seat)`): their data position is in hull coordinates with the turret
+  straight ahead, and turns with it. Put an open hatch's eye clear above what is in front of it: the PLZ-05's roof
+  gunner first sat 0.07 blocks above the receiver, which filled the view.
+- **A gun's crew can own the tow key** (`takesTowKeyFrom`): the PLZ-05's gunner engages the fire control with N.
+- **Smoke rounds** are `ShellEntity.Warhead.smokeShell`: no blast, a smoke screen where they land
+  (`SmokeGrenadeEntity.smokeScreen`, sent to 512 blocks so an observer sees it).
+- **Keys read as held (`isDown`) miss a game test's one-tick `pressKey`**: hold them a few ticks, as a player's press
+  lasts. Keys read with `consumeClick` (the tow key) take a press.
+- **Fill a test's crate within each item's stack size.** A stack over `stacksTo` is clamped, so the extra rounds
+  vanish; the Type-63's test lost its range shot this way. Put the extra in the next slot.
+- **Missiles steered by the gunner's eye** (the TOW) implement `VehicleMissileEntity.LineOfSightLauncher`: the
+  missile is steered onto the sight line every tick, and the wire breaks when the gunner leaves, the launcher is lost,
+  the sight loses the missile behind a block, or the wire runs out. Give such missiles a low-smoke trail
+  (`VehicleMissileEntity.isLowSmoke`): the standard trail lies along the gunner's line of sight and hid the missile
+  for seconds in the first play test.
+- **A gunner's camera at a sight sits inside the sight's model.** Hide that bone in the gunner's own first-person
+  view (the TOW's `sight`, in the bone driver), rather than moving the camera off the sight line.
+- **Carried crew weapons** deploy with `DeployableWeaponItem` (the mortar, the TOW) and pack up on a sneak-click with
+  an empty hand; return anything loaded or held in them.
+- **Reload times in `VehicleWeaponStats` are scaled by 0.64 for every vehicle** (`vehicleReloadDuration`, 0.7 again
+  on aircraft). Divide the time you want by 0.64 (the BL-132's 90 ticks is a stat of 141), and measure it in a test:
+  the Mk42's "6 s" reload ran at 3.8 s until its test timed it.
 - **Distant impacts** must appear for distant players (`DistantTerrainRefresh`).
 - **Feel.** Give each weapon recoil, tracers, impact debris and reload sounds, and heat or cooling if real.
 - **Aim.** The aim marker sits on the real bore, and the bore is tested against the model.
@@ -604,6 +713,17 @@ calls the bridge (`python -I design/playtest/mcp.py session.join '{"worldId":"sp
 - Close the pack client before any `./gradlew` compile or game test, and before rebuilding: both use the GPU, and a
   compile replaces classes under the running client.
 - The client's render distance is agreed with the server at join (C2ME): set it before joining, not after.
+- To fill a vehicle's hold, open it with `/jegkey key.inventory 1` and move stacks with `container.click`
+  `{"slot":N,"button":0,"mode":"quick_move"}` (a `shift` flag is ignored). Slots past the hold are the player's.
+- `/stop` does nothing in singleplayer, and stopping the Gradle task leaves the game running: end the `java.exe` whose
+  command line has `packClient` before compiling or running tests.
+- (Howitzer) The client pauses when its window loses focus, which it does while the user plays their own client: set
+  `pauseOnLostFocus:false` in `build/run/packClient/options.txt` before launching.
+- `control.look` keeps holding its view until another look: a later `tp ... facing` is overridden by it.
+- Hold the use key with `/jegkey key.use <ticks>` (a spyglass, a held item); `control.setInput {"use":true}` doesn't
+  start using an item. `screen.close` shuts any screen, where a second `key.inventory` press may not.
+- Ending the client loses what the world hasn't saved yet (`save-all` isn't available here): a vehicle summoned a
+  few minutes before was gone after the restart. Summon again, or save and quit to the title first.
 
 `-PwithMcp` puts mcpfabric in the pack client, so an agent can drive it:
 screenshots, movement keys, right-clicks on what the crosshair is on, screens; our own bindings with

@@ -59,40 +59,21 @@ public final class MortarRig {
         return origin.add(-Math.sin(rad) * forward, model.y / 16.0D, Math.cos(rad) * forward);
     }
 
+    /** The mortar round's flight, shared with the HUD's predictor. */
+    public static final ShellBallistics BALLISTICS = new ShellBallistics(MUZZLE_VELOCITY, GRAVITY, MAX_FLIGHT_TICKS);
+
     /** Launch velocity (blocks per tick) for this bearing and elevation, without spread. */
     public static Vec3 launchVelocity(float yaw, float elevation) {
-        return Vec3.directionFromRotation(-elevation, yaw).scale(MUZZLE_VELOCITY);
+        return BALLISTICS.launchVelocity(yaw, elevation);
     }
 
-    /** One tick of flight, exactly as {@code MortarRoundEntity} moves: gravity first, then the step. */
+    /** One tick of flight, exactly as the round moves: gravity first, then the step. */
     public static Vec3 stepVelocity(Vec3 velocity) {
-        return velocity.add(0.0D, -GRAVITY, 0.0D);
+        return BALLISTICS.step(velocity);
     }
 
-    /**
-     * Where a round fired from {@code muzzle} with {@code velocity} comes down to {@code groundY}, ignoring terrain in
-     * between: the HUD's fallback when the target area is not loaded.
-     */
-    public static Impact predictToHeight(Vec3 muzzle, Vec3 velocity, double groundY) {
-        Vec3 position = muzzle;
-        Vec3 motion = velocity;
-        for (int tick = 1; tick <= MAX_FLIGHT_TICKS; tick++) {
-            motion = stepVelocity(motion);
-            Vec3 next = position.add(motion);
-            if (motion.y < 0.0D && next.y <= groundY) {
-                double share = (position.y - groundY) / (position.y - next.y);
-                return new Impact(position.add(motion.scale(Mth.clamp(share, 0.0D, 1.0D))), tick);
-            }
-            position = next;
-        }
-        return new Impact(position, MAX_FLIGHT_TICKS);
-    }
-
-    public record Impact(Vec3 position, int ticks) {
-        public double horizontalDistance(Vec3 from) {
-            double dx = this.position.x - from.x;
-            double dz = this.position.z - from.z;
-            return Math.sqrt(dx * dx + dz * dz);
-        }
+    /** Where a round comes down to {@code groundY}, ignoring terrain in between (ShellBallistics#predictToHeight). */
+    public static ShellBallistics.Impact predictToHeight(Vec3 muzzle, Vec3 velocity, double groundY) {
+        return BALLISTICS.predictToHeight(muzzle, velocity, groundY);
     }
 }

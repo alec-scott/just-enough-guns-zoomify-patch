@@ -257,7 +257,43 @@ public final class ModEntities {
     public static final DeferredHolder<EntityType<?>, EntityType<ttv.migami.jeg.vehicle.projectile.MortarRoundEntity>> MORTAR_ROUND = REGISTER.register("mortar_round",
             () -> EntityType.Builder.<ttv.migami.jeg.vehicle.projectile.MortarRoundEntity>of(ttv.migami.jeg.vehicle.projectile.MortarRoundEntity::new, MobCategory.MISC)
                     .sized(0.25F, 0.25F).clientTrackingRange(16).updateInterval(1).build(entityKey("mortar_round")));
-    public static final DeferredHolder<EntityType<?>, EntityType<ConfiguredVehicleEntity>> WAVEFORCE_TOWER = configuredVehicle("waveforce_tower", 1.5F, 2.1F);
+    /** The Mk42 5"/54 gun mount: the gunhouse (design/mk42/rig.json); its entity box follows the turret. */
+    public static final DeferredHolder<EntityType<?>, EntityType<ttv.migami.jeg.vehicle.entity.Mk42Entity>> MK42 = REGISTER.register("mk42",
+            () -> EntityType.Builder.<ttv.migami.jeg.vehicle.entity.Mk42Entity>of(ttv.migami.jeg.vehicle.entity.Mk42Entity::new, MobCategory.MISC)
+                    .sized(4.2F, 3.6F).clientTrackingRange(14).updateInterval(1).build(entityKey("mk42")));
+    /** The BL-132 130 mm/58 four-gun mount: the gunhouse (design/bl132/rig.json); its entity box follows the turret. */
+    public static final DeferredHolder<EntityType<?>, EntityType<ttv.migami.jeg.vehicle.entity.Bl132Entity>> BL132 = REGISTER.register("bl132",
+            () -> EntityType.Builder.<ttv.migami.jeg.vehicle.entity.Bl132Entity>of(ttv.migami.jeg.vehicle.entity.Bl132Entity::new, MobCategory.MISC)
+                    .sized(7.2F, 4.5F).clientTrackingRange(14).updateInterval(1).build(entityKey("bl132")));
+    /** The Type-63 107 mm towed rocket launcher (design/type63/rig.json). */
+    public static final DeferredHolder<EntityType<?>, EntityType<ttv.migami.jeg.vehicle.entity.Type63Entity>> TYPE63 = REGISTER.register("type63",
+            () -> EntityType.Builder.<ttv.migami.jeg.vehicle.entity.Type63Entity>of(ttv.migami.jeg.vehicle.entity.Type63Entity::new, MobCategory.MISC)
+                    .sized(1.6F, 1.2F).clientTrackingRange(14).updateInterval(1).build(entityKey("type63")));
+    /** The PLZ-05 155 mm self-propelled howitzer (design/plz05/rig.json). */
+    public static final DeferredHolder<EntityType<?>, EntityType<ttv.migami.jeg.vehicle.entity.Plz05Entity>> PLZ05 = REGISTER.register("plz05",
+            () -> EntityType.Builder.<ttv.migami.jeg.vehicle.entity.Plz05Entity>of(ttv.migami.jeg.vehicle.entity.Plz05Entity::new, MobCategory.MISC)
+                    .sized(3.4F, 3.0F).clientTrackingRange(16).updateInterval(1).build(entityKey("plz05")));
+    /** The 105 mm towed howitzer (design/howitzer/rig.json): its entity box is refitted round the trails as they open. */
+    public static final DeferredHolder<EntityType<?>, EntityType<ttv.migami.jeg.vehicle.entity.HowitzerEntity>> HOWITZER = REGISTER.register("howitzer",
+            () -> EntityType.Builder.<ttv.migami.jeg.vehicle.entity.HowitzerEntity>of(ttv.migami.jeg.vehicle.entity.HowitzerEntity::new, MobCategory.MISC)
+                    .sized(2.2F, 1.7F).clientTrackingRange(14).updateInterval(1).build(entityKey("howitzer")));
+    /** The TOW launcher on its tripod (design/tow/rig.json). */
+    public static final DeferredHolder<EntityType<?>, EntityType<ttv.migami.jeg.vehicle.entity.TowEntity>> TOW = REGISTER.register("tow",
+            () -> EntityType.Builder.<ttv.migami.jeg.vehicle.entity.TowEntity>of(ttv.migami.jeg.vehicle.entity.TowEntity::new, MobCategory.MISC)
+                    .sized(1.1F, 1.4F).clientTrackingRange(14).updateInterval(1).build(entityKey("tow")));
+    /** A gun's shell in flight (the Mk42's); its ballistics and warhead come from the gun that fired it. */
+    public static final DeferredHolder<EntityType<?>, EntityType<ttv.migami.jeg.vehicle.projectile.ShellEntity>> CANNON_SHELL = REGISTER.register("cannon_shell",
+            () -> EntityType.Builder.<ttv.migami.jeg.vehicle.projectile.ShellEntity>of(ttv.migami.jeg.vehicle.projectile.ShellEntity::new, MobCategory.MISC)
+                    .sized(0.25F, 0.25F).clientTrackingRange(16).updateInterval(1).build(entityKey("cannon_shell")));
+    /**
+     * Retired 2026-11-16 (replaced by the 105 mm howitzer): kept registered for one release so a saved tower turns into a
+     * chest of its hold (RetiredVehicleEntity). Remove the type in the release after.
+     */
+    public static final DeferredHolder<EntityType<?>, EntityType<ttv.migami.jeg.vehicle.entity.RetiredVehicleEntity>> WAVEFORCE_TOWER = REGISTER.register(
+            "waveforce_tower",
+            () -> EntityType.Builder.<ttv.migami.jeg.vehicle.entity.RetiredVehicleEntity>of(
+                            (type, level) -> new ttv.migami.jeg.vehicle.entity.RetiredVehicleEntity(type, level, Reference.id("waveforce_tower")), MobCategory.MISC)
+                    .sized(1.5F, 2.1F).clientTrackingRange(14).updateInterval(1).build(entityKey("waveforce_tower")));
 
     public static final DeferredHolder<EntityType<?>, EntityType<VehicleDecoyEntity>> VEHICLE_DECOY = REGISTER.register(
             "vehicle_decoy",

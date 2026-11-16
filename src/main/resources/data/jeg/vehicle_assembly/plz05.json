@@ -1,0 +1,25 @@
+{
+  "result_vehicle": "jeg:plz05",
+  "ingredients": [
+    {
+      "item": "minecraft:iron_ingot",
+      "count": 56
+    },
+    {
+      "item": "minecraft:iron_block",
+      "count": 4
+    },
+    {
+      "item": "minecraft:copper_ingot",
+      "count": 20
+    },
+    {
+      "item": "minecraft:redstone",
+      "count": 16
+    },
+    {
+      "item": "minecraft:green_dye",
+      "count": 2
+    }
+  ]
+}

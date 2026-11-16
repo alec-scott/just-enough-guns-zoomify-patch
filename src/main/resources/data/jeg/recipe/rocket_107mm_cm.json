@@ -1,0 +1,18 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "equipment",
+  "key": {
+    "C": "minecraft:copper_ingot",
+    "T": "minecraft:tnt",
+    "G": "minecraft:gunpowder"
+  },
+  "pattern": [
+    "C",
+    "T",
+    "G"
+  ],
+  "result": {
+    "id": "jeg:rocket_107mm_cm",
+    "count": 3
+  }
+}

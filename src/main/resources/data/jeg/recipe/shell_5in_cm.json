@@ -1,0 +1,18 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "equipment",
+  "key": {
+    "T": "minecraft:tnt",
+    "G": "minecraft:gunpowder",
+    "C": "minecraft:copper_ingot"
+  },
+  "pattern": [
+    "CTC",
+    " T ",
+    " G "
+  ],
+  "result": {
+    "id": "jeg:shell_5in_cm",
+    "count": 2
+  }
+}

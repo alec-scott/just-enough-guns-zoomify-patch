@@ -1,0 +1,18 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "equipment",
+  "key": {
+    "I": "minecraft:iron_ingot",
+    "S": "jeg:smoke_grenade",
+    "C": "minecraft:copper_ingot"
+  },
+  "pattern": [
+    "I",
+    "S",
+    "C"
+  ],
+  "result": {
+    "id": "jeg:shell_105mm_smoke",
+    "count": 1
+  }
+}

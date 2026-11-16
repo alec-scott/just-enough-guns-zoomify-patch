@@ -4,7 +4,6 @@ import com.geckolib.animatable.manager.AnimatableManager;
 import com.geckolib.animation.AnimationController;
 import com.geckolib.animation.RawAnimation;
 import com.geckolib.animation.object.PlayState;
-import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.syncher.EntityDataAccessor;
@@ -29,10 +28,9 @@ import org.jetbrains.annotations.Nullable;
 import ttv.migami.jeg.Reference;
 import ttv.migami.jeg.init.ModItems;
 import ttv.migami.jeg.init.ModSounds;
-import ttv.migami.jeg.network.MortarFirePayload;
+import ttv.migami.jeg.network.GunReportPayload;
 import ttv.migami.jeg.vehicle.entity.base.VehicleEntity;
 import ttv.migami.jeg.vehicle.entity.base.VehicleInput;
-import ttv.migami.jeg.vehicle.projectile.FarFlight;
 import ttv.migami.jeg.vehicle.projectile.MortarRoundEntity;
 import ttv.migami.jeg.vehicle.util.MortarRig;
 
@@ -42,7 +40,7 @@ import ttv.migami.jeg.vehicle.util.MortarRig;
  * mouse button. A round drops down the tube and fires a second later; the next can go in four seconds after the last
  * was loaded (15 a minute, the real sustained rate). A second player can load from outside with a round in hand.
  */
-public final class MortarEntity extends VehicleEntity {
+public final class MortarEntity extends VehicleEntity implements ttv.migami.jeg.item.DeployableWeaponItem.SetsUp {
     public static final String ID = "mortar";
     /** Ticks from a round going down the tube to it leaving (the fire clip's flash is at 1.0 s). */
     public static final int DRILL_TICKS = 20;
@@ -275,13 +273,7 @@ public final class MortarEntity extends VehicleEntity {
         level.sendParticles(ParticleTypes.EXPLOSION, muzzle.x, muzzle.y, muzzle.z, 1, 0.0D, 0.0D, 0.0D, 0.0D);
         level.sendParticles(ParticleTypes.CAMPFIRE_COSY_SMOKE, muzzle.x + out.x * 0.3D, muzzle.y + out.y * 0.3D, muzzle.z + out.z * 0.3D,
                 6, 0.15D, 0.15D, 0.15D, 0.02D);
-        MortarFirePayload report = new MortarFirePayload(muzzle);
-        for (ServerPlayer player : level.players()) {
-            if (player.position().distanceToSqr(muzzle) < FarFlight.VISIBLE_RANGE * FarFlight.VISIBLE_RANGE
-                    && ServerPlayNetworking.canSend(player, MortarFirePayload.TYPE)) {
-                ServerPlayNetworking.send(player, report);
-            }
-        }
+        GunReportPayload.send(level, this, muzzle, "vehicle.mortar", REPORT_LOUDNESS);
     }
 
     private void playSound(net.minecraft.resources.Identifier id, float volume) {

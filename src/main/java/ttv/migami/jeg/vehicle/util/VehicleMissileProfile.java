@@ -35,6 +35,20 @@ public record VehicleMissileProfile(
     );
 
     private static final Map<Identifier, VehicleMissileProfile> PROFILES = Map.of(
+            // The TOW (design/tow/BRIEF.md): steered along the launcher's sight line by wire (VehicleMissileEntity
+            // .steerLineOfSight); SBW's 600 on a vehicle it strikes, 60 to the living within 6 blocks, ~4 blocks a tick,
+            // 400 ticks.
+            Reference.id("vehicle_tow_missile"), new VehicleMissileProfile(
+                    GuidanceMode.DIRECT,
+                    TargetMode.SURFACE_VEHICLE,
+                    400,
+                    4.0D,
+                    0.3D,
+                    4.0F,
+                    6.0D,
+                    600.0F,
+                    60.0F
+            ),
             Reference.id("vehicle_bmp2_missile"), new VehicleMissileProfile(
                     GuidanceMode.WIRE_GUIDED,
                     TargetMode.SURFACE_VEHICLE,
