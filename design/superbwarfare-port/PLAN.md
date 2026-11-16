@@ -19,7 +19,9 @@ Status, 2026-11-15:
 - **PLZ-05 being built** (2026-11-17, [../plz05/BRIEF.md](../plz05/BRIEF.md)): user decisions were a self-propelled
   howitzer whose fire control lays itself, the Mk42's 5-inch shells, about 6 km, and a roof 12.7 mm with a rider. It
   brought the shared track driver (path from the running gear, `"tracks"` in the vehicle data) and shared fire missions
-  (`FireMissions`). Next after it: the BMP-2 tracked-chassis refit (fleet plan section 2), then the MBT.
+  (`FireMissions`).
+- **BMP-2 refit pass 1 done** (fleet plan section 2, [../bmp2/BRIEF.md](../bmp2/BRIEF.md)): 1:1, the shared track
+  driver, rescaled data. Next: the MBT.
 - The track driver is built with the PLZ-05; the weapon station's driver comes with the MBT.
 
 Create Big Cannons: checked. It builds fixed multi-block guns, including a drop mortar, so the carried mortar, the

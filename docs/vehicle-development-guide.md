@@ -486,6 +486,9 @@ once, and the type in the release after (the waveforce tower, retired 2026-11-16
 - **The gun's panel goes to whoever lays the gun**, not the driver: `ShellGunEntity.laysGun(passenger)` (the PLZ-05's
   gunner is seat 1). Look seats up with `seatOf(passenger)`, never the passenger list's order: after a seat change the
   two differ (the bore marker compared them).
+- **Lift a dismount point 0.1 off the ground.** Hulls sit a few hundredths into the ground, so a dismount point at the
+  hull's own height overlaps the block below and is refused; the player then lands on the roof (the BMP-2's rear-door
+  exit, first try).
 - **Hatch seats ride the turret** (`seatRidesTurret(seat)`): their data position is in hull coordinates with the turret
   straight ahead, and turns with it. Put an open hatch's eye clear above what is in front of it: the PLZ-05's roof
   gunner first sat 0.07 blocks above the receiver, which filled the view.

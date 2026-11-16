@@ -187,7 +187,15 @@ abstract class AbstractVehicleGeoRenderer<T extends VehicleEntity> extends GeoEn
         }
         switch (vehicle.vehicleDataId().getPath()) {
             case "ah6" -> updateHelicopterRotors(vehicle, partialTick, snapshots);
-            case "bmp2" -> updateTurret(vehicle, partialTick, snapshots, -74.0F, 7.5F);
+            case "bmp2" -> {
+                updateTurret(vehicle, partialTick, snapshots, -74.0F, 7.5F);
+                // The muzzle flashes show only while that gun fires, flickering shot to shot (the generic idle left
+                // them drawn all the time). Weapon slots: 0 the 30 mm, 1 the coaxial machine gun.
+                int firing = vehicle.activeFireWeaponSlot();
+                boolean flicker = (vehicle.tickCount & 1) == 0;
+                hideIf(snapshots, "cannon_flash", firing != 0 || !flicker);
+                hideIf(snapshots, "coax_flash", firing != 1 || !flicker);
+            }
             case "lav150" -> updateTurret(vehicle, partialTick, snapshots, -15.0F, 32.5F);
             case "mi28" -> {
                 updateTurret(vehicle, partialTick, snapshots, -70.0F, 30.0F);

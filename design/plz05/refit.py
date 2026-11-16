@@ -108,87 +108,6 @@ def data_bounds(lo_px, hi_px):
 
 # ---------------------------------------------------------------- tracks
 
-def circle_of(geo, quads, by, bone):
-    """A wheel's centre (z, y in file px) and its radius in the YZ plane, from its drawn geometry."""
-    names = L.subtree(by, bone)
-    pivot = np.array(L.bone_pivot(geo, bone), float)
-    pts = np.concatenate([q[2] for q in quads if q[0] in names])
-    r = float(np.max(np.hypot(pts[:, 1] - pivot[1], pts[:, 2] - pivot[2])))
-    return float(pivot[2]), float(pivot[1]), r
-
-
-def hull_ccw(points):
-    """Andrew's monotone chain; points [(z, y)] -> hull counter-clockwise in (z right, y up)."""
-    pts = sorted(set(points))
-
-    def cross(o, a, b):
-        return (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0])
-
-    lower, upper = [], []
-    for p in pts:
-        while len(lower) >= 2 and cross(lower[-2], lower[-1], p) <= 0:
-            lower.pop()
-        lower.append(p)
-    for p in reversed(pts):
-        while len(upper) >= 2 and cross(upper[-2], upper[-1], p) <= 0:
-            upper.pop()
-        upper.append(p)
-    return lower[:-1] + upper[:-1]
-
-
-def track_path(circles, half_thickness, step_degrees=3.0):
-    """The links' centre line: the convex hull of the wheels' circles grown by the link's half thickness, as a closed
-    polygon [(z, y)] counter-clockwise in (z right, y up). With the front at -Z that runs rearward along the bottom and
-    forward along the top: the way the links move relative to the hull when the vehicle drives forward."""
-    pts = []
-    n = int(round(360 / step_degrees))
-    for z, y, r in circles:
-        rr = r + half_thickness
-        for k in range(n):
-            a = 2 * math.pi * k / n
-            pts.append((round(z + rr * math.cos(a), 4), round(y + rr * math.sin(a), 4)))
-    return hull_ccw(pts)
-
-
-def path_length(path):
-    return sum(math.dist(path[i], path[(i + 1) % len(path)]) for i in range(len(path)))
-
-
-def path_at(path, s):
-    """Point and unit tangent at arc length s (wrapped)."""
-    total = path_length(path)
-    s %= total
-    for i in range(len(path)):
-        a, b = path[i], path[(i + 1) % len(path)]
-        d = math.dist(a, b)
-        if s <= d or i == len(path) - 1:
-            t = 0.0 if d == 0 else s / d
-            return (a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t), ((b[0] - a[0]) / d, (b[1] - a[1]) / d)
-        s -= d
-    raise AssertionError
-
-
-def nearest_s(path, point):
-    best = (1e9, 0.0)
-    acc = 0.0
-    for i in range(len(path)):
-        a, b = np.array(path[i]), np.array(path[(i + 1) % len(path)])
-        ab = b - a
-        t = float(np.clip(np.dot(np.array(point) - a, ab) / max(np.dot(ab, ab), 1e-12), 0, 1))
-        d = float(np.linalg.norm(a + ab * t - np.array(point)))
-        if d < best[0]:
-            best = (d, acc + t * float(np.linalg.norm(ab)))
-        acc += float(np.linalg.norm(ab))
-    return best[1], best[0]
-
-
-def link_turn(tangent):
-    """X rotation (degrees, file sense) that carries a link lying on the top run, moving forward (-Z), onto a path whose
-    tangent is (dz, dy)."""
-    dz, dy = tangent
-    return math.degrees(math.atan2(dy, -dz))
-
-
 def sbw_path(t):
     """SBW's hand-typed path (Plz05Model), unscaled px offsets (dy, dz) and X rotation, for comparison."""
     def lerp(a, b, f):
@@ -205,28 +124,6 @@ def sbw_path(t):
     z = seg(t, [(0, 0), (44, 133.75), (46, 137.405), (48, 137.47), (49.5833, 134.72), (55, 119.36), (86.75, 23.32),
                 (95.3333, -0.695), (96.6667, -3.205), (98.3333, -3.28), (100, 0)])
     return y, z
-
-
-def links_posed(geo, side, path, rest, travel_px):
-    """A copy of the geometry with one side's links moved along the path (for review renders), and the pose."""
-    geo = copy.deepcopy(geo)
-    by = {b["name"]: b for b in L.bones_of(geo)}
-    total = path_length(path)
-    s_rest, _ = nearest_s(path, (rest[2], rest[1]))
-    pose = {}
-    for i in range(LINKS):
-        s = s_rest + travel_px + i * total / LINKS
-        (z, y), tangent = path_at(path, s)
-        dy, dz = y - rest[1], z - rest[2]
-        for name in L.subtree(by, f"track_link_{side}_{i}"):
-            b = by[name]
-            b["pivot"] = [b["pivot"][0], b["pivot"][1] + dy, b["pivot"][2] + dz]
-            for c in b.get("cubes", []):
-                c["origin"] = [c["origin"][0], c["origin"][1] + dy, c["origin"][2] + dz]
-                if "pivot" in c:
-                    c["pivot"] = [c["pivot"][0], c["pivot"][1] + dy, c["pivot"][2] + dz]
-        pose[f"track_link_{side}_{i}_turn"] = (link_turn(tangent), 0, 0)
-    return geo, pose
 
 
 # ---------------------------------------------------------------- the roof machine gun
@@ -344,7 +241,7 @@ def main():
     sub = lambda name: L.subtree(by, name)
 
     # ---- Tracks: the path from the running gear, checked against SBW's.
-    circles = {side: [circle_of(geo, quads, by, bone) for bone in gear(side)] for side in ("left", "right")}
+    circles = {side: [L.circle_of(geo, quads, by, bone) for bone in gear(side)] for side in ("left", "right")}
     for a, b in zip(circles["left"], circles["right"]):
         if max(abs(x - y) for x, y in zip(a, b)) > 1e-3:
             raise SystemExit("the two sides' running gear differ; the shared path assumes a mirror image")
@@ -352,13 +249,13 @@ def main():
     link_lo, link_hi = L.extent(quads, sub("track_link_left_0"))
     plate = [c for c in by["track_link_left_0_turn"]["cubes"] if "rotation" not in c][0]
     half_thickness = plate["size"][1] / 2
-    path = track_path(circles["left"], half_thickness)
-    total = path_length(path)
-    s_rest, rest_off = nearest_s(path, (link_rest[2], link_rest[1]))
+    path = L.track_path(circles["left"], half_thickness)
+    total = L.path_length(path)
+    s_rest, rest_off = L.nearest_s(path, (link_rest[2], link_rest[1]))
     worst = 0.0
     for k in range(200):
         dy, dz = sbw_path(k / 2)
-        worst = max(worst, nearest_s(path, (link_rest[2] + dz * SCALE, link_rest[1] + dy * SCALE))[1])
+        worst = max(worst, L.nearest_s(path, (link_rest[2] + dz * SCALE, link_rest[1] + dy * SCALE))[1])
     if worst > 2.0:
         raise SystemExit(f"computed track path strays {worst:.2f} px from SBW's")
     wheel_groups = [
@@ -433,8 +330,8 @@ def main():
     L.write_json(HERE / "rig.json", rig)
 
     # ---- Review renders: links on the path, the gun at 0 and 45 degrees, the roof gun turned.
-    posed, link_pose = links_posed(geo, "left", path, link_rest, 0.0)
-    posed, pose_r = links_posed(posed, "right", path, link_rest * np.array([-1, 1, 1]), 0.0)
+    posed, link_pose = L.links_posed(geo, "left", path, link_rest, 0.0, LINKS)
+    posed, pose_r = L.links_posed(posed, "right", path, link_rest * np.array([-1, 1, 1]), 0.0, LINKS)
     link_pose.update(pose_r)
     for e in (0.0, 45.0):
         sheet, _ = R.contact_sheet(posed, tex, f"PLZ-05 refit (scale {SCALE}), gun at {e:.0f} deg",

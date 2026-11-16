@@ -1,0 +1,204 @@
+{
+  "model": "jeg:entity/vehicle/bmp2",
+  "source": "Superb Warfare bmp_2, CrawKatt/SuperbWarfareReFabricated@952d73c (used with the SBW team's permission)",
+  "units_per_block": 16,
+  "front": "-Z in the model, +Z in vehicle data",
+  "scale_from_source": 0.73,
+  "elevation_degrees": [
+    -7.5,
+    74.0
+  ],
+  "turret_origin": [
+    0.0,
+    1.6425,
+    -0.5133
+  ],
+  "trunnion": [
+    -0.0,
+    1.8645,
+    0.0812
+  ],
+  "barrel_offset_from_turret": [
+    -0.0,
+    0.222,
+    0.5945
+  ],
+  "cannon_muzzle_rest": [
+    -0.0821,
+    1.9915,
+    2.6944
+  ],
+  "coax_muzzle_rest": [
+    0.1177,
+    1.9915,
+    0.6844
+  ],
+  "atgm_muzzle_rest": [
+    0.0,
+    2.5504,
+    -0.0456
+  ],
+  "tracks": {
+    "links": 50,
+    "rest": [
+      -40.2122,
+      18.1998
+    ],
+    "rest_s": 190.7962,
+    "half_width": 1.3687,
+    "wheels": [
+      {
+        "bones": [
+          "sprocket_left",
+          "sprocket_right"
+        ],
+        "radius": 5.833
+      },
+      {
+        "bones": [
+          "road_wheel_left_1",
+          "road_wheel_left_2",
+          "road_wheel_left_3",
+          "road_wheel_left_4",
+          "road_wheel_left_5",
+          "road_wheel_left_6",
+          "road_wheel_right_1",
+          "road_wheel_right_2",
+          "road_wheel_right_3",
+          "road_wheel_right_4",
+          "road_wheel_right_5",
+          "road_wheel_right_6"
+        ],
+        "radius": 5.373
+      },
+      {
+        "bones": [
+          "idler_left",
+          "idler_right"
+        ],
+        "radius": 5.057
+      }
+    ],
+    "path_points": 124,
+    "path_length_px": 200.276,
+    "link_pitch_px": 4.006,
+    "rest_off_path_px": 1.259,
+    "worst_distance_from_sbw_path_px": 1.473
+  },
+  "model_bounds": [
+    [
+      -1.7174,
+      0.0261,
+      -3.2008
+    ],
+    [
+      1.7174,
+      2.6599,
+      3.7933
+    ]
+  ],
+  "hull_bounds": [
+    [
+      -1.7174,
+      0.337,
+      -3.2008
+    ],
+    [
+      1.7174,
+      1.8204,
+      3.7933
+    ]
+  ],
+  "turret_bounds": [
+    [
+      -1.1203,
+      1.5055,
+      -1.6186
+    ],
+    [
+      1.1203,
+      2.6508,
+      0.5968
+    ]
+  ],
+  "rear_doors": [
+    [
+      -1.1144,
+      0.5594,
+      -3.2008
+    ],
+    [
+      1.1144,
+      1.5347,
+      -2.6579
+    ]
+  ],
+  "hitbox": [
+    {
+      "part": "body",
+      "covers": "hull",
+      "x": 0.0,
+      "y": 1.0787,
+      "z": 0.2963,
+      "half_width": 1.7174,
+      "half_height": 0.7417,
+      "half_depth": 3.4971
+    },
+    {
+      "part": "wheel_left",
+      "covers": "left track and running gear",
+      "x": 1.314,
+      "y": 0.6037,
+      "z": 0.0204,
+      "half_width": 0.219,
+      "half_height": 0.5776,
+      "half_depth": 2.8261
+    },
+    {
+      "part": "wheel_right",
+      "covers": "right track and running gear",
+      "x": -1.314,
+      "y": 0.6037,
+      "z": 0.0204,
+      "half_width": 0.219,
+      "half_height": 0.5776,
+      "half_depth": 2.8261
+    },
+    {
+      "part": "main_engine",
+      "covers": "engine deck",
+      "x": -0.7984,
+      "y": 1.5056,
+      "z": 1.2775,
+      "half_width": 0.8441,
+      "half_height": 0.2737,
+      "half_depth": 0.8212
+    },
+    {
+      "part": "turret",
+      "covers": "turret",
+      "x": 0.0,
+      "y": 2.0782,
+      "z": -0.5109,
+      "half_width": 1.1203,
+      "half_height": 0.5726,
+      "half_depth": 1.1077,
+      "follows": "turret"
+    },
+    {
+      "part": "turret",
+      "covers": "cannon, outside the turret",
+      "x": -0.0821,
+      "y": 1.9915,
+      "z": 1.6456,
+      "half_width": 0.0548,
+      "half_height": 0.0456,
+      "half_depth": 1.0488,
+      "follows": "barrel"
+    }
+  ],
+  "coplanar_face_pairs": {
+    "in_source": 46,
+    "after_refit": 0
+  }
+}

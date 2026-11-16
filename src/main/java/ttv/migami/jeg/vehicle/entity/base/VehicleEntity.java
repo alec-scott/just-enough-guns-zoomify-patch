@@ -1530,6 +1530,11 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         return stats == null ? null : VehicleSoundHelper.fireSound(this, weapon, stats);
     }
 
+    /** The data's index of the weapon firing now (synced), or -1. */
+    public int activeFireWeaponSlot() {
+        return this.isWeaponFiring() ? this.entityData.get(DATA_ACTIVE_FIRE_WEAPON) : -1;
+    }
+
     @Nullable
     private VehicleWeaponInfo activeFireWeapon() {
         var weapons = this.vehicleData().defaults().weapons();
