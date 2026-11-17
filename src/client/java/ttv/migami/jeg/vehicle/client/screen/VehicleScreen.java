@@ -7,6 +7,13 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
 import net.minecraft.client.input.KeyEvent;
+import net.minecraft.client.input.MouseButtonEvent;
+import net.minecraft.client.resources.sounds.SimpleSoundInstance;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.player.Player;
+import ttv.migami.jeg.vehicle.data.subdata.VehicleType;
+import ttv.migami.jeg.vehicle.entity.base.VehicleEntity;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
@@ -97,6 +104,7 @@ public final class VehicleScreen extends AbstractContainerScreen<VehicleMenu> {
         }
         super.extractContents(guiGraphics, mouseX, mouseY, partialTick);
         for (ModuleIcon icon : this.moduleIcons) guiGraphics.item(icon.stack(), icon.x(), icon.y());
+        this.extractSeatPanel(guiGraphics, mouseX, mouseY);
         if (bay != null) {
             boolean hoveringEmpty = false;
             for (int i = 0; i < this.menu.toolCount(); i++) {
@@ -126,6 +134,111 @@ public final class VehicleScreen extends AbstractContainerScreen<VehicleMenu> {
                         Component.translatable("container.jeg.ripper_slot.line2").withStyle(ChatFormatting.GRAY)), mouseX, mouseY);
             }
         }
+    }
+
+    /** One seat in the side panel, with its eject button's box when a mob sits there (a player never gets one). */
+    public record SeatRow(int seat, Component label, @org.jetbrains.annotations.Nullable Entity occupant, int x, int y, int ejectX, int ejectY) {
+        public boolean ejectable() {
+            return this.occupant != null && !(this.occupant instanceof Player);
+        }
+
+        boolean overEject(double mouseX, double mouseY) {
+            return this.ejectable() && mouseX >= this.ejectX && mouseX < this.ejectX + EJECT_SIZE && mouseY >= this.ejectY && mouseY < this.ejectY + EJECT_SIZE;
+        }
+    }
+
+    private static final int SEAT_ROW_HEIGHT = 12;
+    private static final int EJECT_SIZE = 9;
+    private static final int SEAT_PANEL_MAX_WIDTH = 150;
+
+    @org.jetbrains.annotations.Nullable
+    private VehicleEntity seatVehicle() {
+        Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft.level == null || this.menu.vehicleId() < 0) {
+            return null;
+        }
+        return minecraft.level.getEntity(this.menu.vehicleId()) instanceof VehicleEntity vehicle ? vehicle : null;
+    }
+
+    /**
+     * Who sits in each of the vehicle's seats, laid out in a panel left of the hold (or right of it when the left has no
+     * room). Rebuilt every frame, so it follows mobs and players getting in and out while the screen is open.
+     */
+    public List<SeatRow> seatRows() {
+        VehicleEntity vehicle = this.seatVehicle();
+        if (vehicle == null) {
+            return List.of();
+        }
+        int seatCount = vehicle.vehicleData().defaults().seats().size();
+        VehicleType type = vehicle.vehicleData().defaults().vehicleType();
+        boolean flies = type == VehicleType.HELICOPTER || type == VehicleType.AIRCRAFT;
+        java.util.List<Component> labels = new java.util.ArrayList<>();
+        java.util.List<Entity> occupants = new java.util.ArrayList<>();
+        int textWidth = this.font.width(Component.translatable("gui.jeg.vehicle_seats.title"));
+        for (int seat = 0; seat < seatCount; seat++) {
+            Component name = vehicle.isDriverSeat(seat)
+                    ? Component.translatable(flies ? "gui.jeg.vehicle_seats.pilot" : "gui.jeg.vehicle_seats.driver")
+                    : Component.translatable("gui.jeg.vehicle_seats.seat", seat + 1);
+            Entity occupant = vehicle.passengerForSeat(seat);
+            Component who = occupant != null ? occupant.getDisplayName() : Component.translatable("gui.jeg.vehicle_seats.empty");
+            Component label = Component.empty().append(name).append(": ").append(who);
+            labels.add(label);
+            occupants.add(occupant);
+            textWidth = Math.max(textWidth, this.font.width(label));
+        }
+        int panelWidth = Math.min(SEAT_PANEL_MAX_WIDTH, textWidth + EJECT_SIZE + 12);
+        int left = this.leftPos + TEXTURE_X_OFFSET - 4 - panelWidth;
+        if (left < 2 && this.leftPos + this.imageWidth + 4 + panelWidth <= this.width - 2) {
+            left = this.leftPos + this.imageWidth + 4;
+        }
+        left = Math.max(2, left);
+        int top = this.topPos + 4;
+        java.util.List<SeatRow> rows = new java.util.ArrayList<>();
+        for (int seat = 0; seat < seatCount; seat++) {
+            int y = top + 14 + seat * SEAT_ROW_HEIGHT;
+            rows.add(new SeatRow(seat, labels.get(seat), occupants.get(seat), left + 4, y, left + panelWidth - EJECT_SIZE - 3, y - 1));
+        }
+        return rows;
+    }
+
+    private void extractSeatPanel(GuiGraphicsExtractor guiGraphics, int mouseX, int mouseY) {
+        List<SeatRow> rows = this.seatRows();
+        if (rows.isEmpty()) {
+            return;
+        }
+        int left = rows.getFirst().x() - 4, right = rows.getFirst().ejectX() + EJECT_SIZE + 3;
+        int top = rows.getFirst().y() - 14, bottom = rows.getLast().y() + SEAT_ROW_HEIGHT;
+        guiGraphics.fill(left, top, right, bottom, 0xE0202020);
+        guiGraphics.fill(left, top, right, top + 1, 0xFF8B8B8B);
+        guiGraphics.text(this.font, Component.translatable("gui.jeg.vehicle_seats.title"), left + 4, top + 4, 0xFFFFFFFF, false);
+        int textRight = right - EJECT_SIZE - 6;
+        for (SeatRow row : rows) {
+            String text = this.font.plainSubstrByWidth(row.label().getString(), textRight - row.x());
+            guiGraphics.text(this.font, Component.literal(text), row.x(), row.y(), row.occupant() == null ? 0xFF8A8A8A : 0xFFE0E0E0, false);
+            if (row.ejectable()) {
+                boolean hover = row.overEject(mouseX, mouseY);
+                guiGraphics.fill(row.ejectX(), row.ejectY(), row.ejectX() + EJECT_SIZE, row.ejectY() + EJECT_SIZE, hover ? 0xFFD04040 : 0xFF8A2A2A);
+                guiGraphics.text(this.font, Component.literal("x"), row.ejectX() + 2, row.ejectY(), 0xFFFFFFFF, false);
+                if (hover) {
+                    guiGraphics.setComponentTooltipForNextFrame(this.font,
+                            List.of(Component.translatable("gui.jeg.vehicle_seats.eject", row.occupant().getDisplayName())), mouseX, mouseY);
+                }
+            }
+        }
+    }
+
+    @Override
+    public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
+        if (event.button() == 0 && this.minecraft != null && this.minecraft.gameMode != null) {
+            for (SeatRow row : this.seatRows()) {
+                if (row.overEject(event.x(), event.y())) {
+                    this.minecraft.getSoundManager().play(SimpleSoundInstance.forUI(SoundEvents.UI_BUTTON_CLICK, 1.0F));
+                    this.minecraft.gameMode.handleInventoryButtonClick(this.menu.containerId, row.seat());
+                    return true;
+                }
+            }
+        }
+        return super.mouseClicked(event, doubleClick);
     }
 
     /** The tool bay's slot area relative to the screen (left, top, right, bottom), or null. */

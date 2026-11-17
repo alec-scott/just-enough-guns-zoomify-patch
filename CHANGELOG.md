@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.7.2+mc26.1.2.yftm.22 - 2026-11-16
+
+### Added
+- Vehicles carry mobs as passengers. Open a vehicle's hold (E aboard, or sneak-click from outside) to see a Seats panel listing who sits where. Every seat with a mob has an X that puts the mob off; players are never put off this way. A mob put off in the air gets Slow Falling.
+- Carry On: right-click a vehicle while carrying a mob to put it in a free passenger seat; you stay outside. With no passenger seat free you keep holding it.
+
+### Fixed
+- Mobs no longer take the pilot's or driver's seat or steer a vehicle. A mob found in one, e.g. from an older save, moves to a passenger seat, or gets off if none is free.
+- Mobs sit in their seats instead of sinking into them.
+- After a passenger got out, the client could show the others in the wrong seats.
+
 ## 1.7.2+mc26.1.2.yftm.21 - 2026-11-15
 
 ### Added

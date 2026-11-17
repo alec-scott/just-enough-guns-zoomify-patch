@@ -18,7 +18,8 @@
     "AnvilMenuGunEnchantMixin",
     "EnchantmentHelperGunEnchantMixin",
     "EnchantCommandGunEnchantMixin",
-    "EnchantmentLootingOnGunsMixin"
+    "EnchantmentLootingOnGunsMixin",
+    "CarryOnVehiclePlacementMixin"
   ],
   "client": [
     "AbstractClientPlayerMixin",
