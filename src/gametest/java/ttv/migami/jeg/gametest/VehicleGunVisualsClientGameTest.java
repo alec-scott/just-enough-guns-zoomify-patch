@@ -127,7 +127,7 @@ public class VehicleGunVisualsClientGameTest implements FabricClientGameTest {
                         var bullet = new ttv.migami.jeg.entity.BulletEntity(vehicle.level(), pilot, stats,
                                 direction.scale(stats.projectileSpeed()), stats.damage(), false);
                         bullet.setVehicleRound();
-                        bullet.setHelicopterGunRound();
+                        bullet.setLongRangeRound();
                         bullet.initialisePosition(vehicle.aiWeaponMuzzlePosition(0));
                         vehicle.level().addFreshEntity(bullet);
                         bullet.sendTrailToClients((net.minecraft.server.level.ServerLevel) vehicle.level());

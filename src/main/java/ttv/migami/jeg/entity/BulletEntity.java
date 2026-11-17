@@ -204,11 +204,16 @@ public class BulletEntity extends Projectile {
         this.offhandRound = offhand;
     }
 
+    /** Whether this round flies the long-range path (setLongRangeRound). */
+    public boolean isLongRangeRound() {
+        return this.helicopterGunRound;
+    }
+
     /**
-     * Fired from a helicopter's or jet's gun: flies flat and far (its full range, past the loaded world, like a vehicle
-     * rocket), and tears up flimsy blocks on the way.
+     * Fired from a vehicle's gun (aircraft and ground vehicles alike, VehicleGunReports): flies flat and far (its full
+     * range, past the loaded world, like a vehicle rocket), and tears up flimsy blocks on the way.
      */
-    public void setHelicopterGunRound() {
+    public void setLongRangeRound() {
         this.helicopterGunRound = true;
         double speed = Math.max(1.0D, this.getDeltaMovement().length());
         this.entityData.set(DATA_LIFE, Mth.clamp((int) Math.ceil(AIRCRAFT_GUN_RANGE / speed), 20, 400));

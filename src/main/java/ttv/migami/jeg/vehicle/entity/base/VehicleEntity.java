@@ -1512,7 +1512,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     @Nullable
     public SoundEvent activeVehicleFireSound() {
         VehicleWeaponInfo weapon = this.activeFireWeapon();
-        if (weapon == null) {
+        if (weapon == null || this.reportFor(weapon) != null) {
             return null;
         }
         GunStats stats = VehicleWeaponStats.get(weapon.weaponId());
@@ -1523,11 +1523,23 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     public SoundEvent activeVehicleFireSound(Entity passenger) {
         VehicleWeaponInfo weapon = this.selectedWeapon(passenger);
         Identifier weaponId = weapon == null ? null : weapon.weaponId();
-        if (weapon == null || weaponId == null) {
+        if (weapon == null || weaponId == null || this.reportFor(weapon) != null) {
             return null;
         }
         GunStats stats = VehicleWeaponStats.get(weaponId);
         return stats == null ? null : VehicleSoundHelper.fireSound(this, weapon, stats);
+    }
+
+    /**
+     * The report a ground vehicle's gun is heard by (VehicleGunReports), or null: helicopter and jet guns keep their
+     * looping sound, and guided weapons and shells are heard their own way.
+     */
+    @Nullable
+    private ttv.migami.jeg.vehicle.util.VehicleGunReports.Report reportFor(VehicleWeaponInfo weapon) {
+        if (weapon.guided() || this.vehicleData().defaults().vehicleType() == VehicleType.HELICOPTER || this.isJet()) {
+            return null;
+        }
+        return ttv.migami.jeg.vehicle.util.VehicleGunReports.forWeapon(weapon.weaponId());
     }
 
     /** The data's index of the weapon firing now (synced), or -1. */
@@ -3040,7 +3052,8 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         boolean helicopterGun = VehicleSoundHelper.isHelicopterGun(this, weapon);
         boolean jetGun = VehicleSoundHelper.isJetGun(this, weapon);
         // A helicopter's or jet's gun is heard through the firing loop alone (see VehicleFireSoundInstance).
-        if (!helicopterGun && !jetGun && !this.firesShell(weapon)
+        var report = this.reportFor(weapon);
+        if (report == null && !helicopterGun && !jetGun && !this.firesShell(weapon)
                 && (this.vehicleData().defaults().vehicleType() == VehicleType.HELICOPTER || !this.shouldLoopVehicleFireSound(shooter, weapon, fireInput))) {
             this.playWeaponFireSound(weapon, stats);
         }
@@ -3051,6 +3064,9 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         }
         Vec3 muzzle = this.weaponMuzzlePosition(weapon, direction, 1.15D, 0.9D);
         this.mirroredShot = false;
+        if (report != null && this.level() instanceof ServerLevel reportLevel) {
+            ttv.migami.jeg.network.GunReportPayload.send(reportLevel, this, muzzle, report.sound(), report.loudness());
+        }
         this.spawnVehicleMuzzleFlare(weapon, muzzle, direction);
         if (this.firesShell(weapon)) {
             if (this.level() instanceof ServerLevel serverLevel) {
@@ -3070,7 +3086,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         BulletEntity bullet = new BulletEntity(this.level(), shooter, stats, shotVelocity, damage, false);
         bullet.setVehicleRound();
         if (helicopterGun || jetGun || this.firesLongRangeRounds(weapon)) {
-            bullet.setHelicopterGunRound();
+            bullet.setLongRangeRound();
         }
         bullet.initialisePosition(muzzle);
         this.level().addFreshEntity(bullet);
@@ -3274,9 +3290,12 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         return null;
     }
 
-    /** Whether this weapon's bullets fly flat to their full range past the loaded world, as aircraft guns' do. */
+    /**
+     * Whether this weapon's bullets fly flat to their full range past the loaded world, as aircraft guns' do: every
+     * ground vehicle gun with a report (fleet plan Phase 0.3).
+     */
     protected boolean firesLongRangeRounds(VehicleWeaponInfo weapon) {
-        return false;
+        return this.reportFor(weapon) != null;
     }
 
     private Vec3 weaponMuzzlePosition(VehicleWeaponInfo weapon, Vec3 direction, double fallbackForwardOffset, double fallbackHeight) {

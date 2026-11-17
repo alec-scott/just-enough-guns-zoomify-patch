@@ -23,6 +23,7 @@
       "ttv.migami.jeg.gametest.Plz05ClientGameTest",
       "ttv.migami.jeg.gametest.EnemyVehicleRaidClientGameTest",
       "ttv.migami.jeg.gametest.Leopard2ClientGameTest",
+      "ttv.migami.jeg.gametest.VehicleGunReachClientGameTest",
       "ttv.migami.jeg.gametest.VehicleLookCompareClientGameTest",
       "ttv.migami.jeg.gametest.BulldozerFarSoundClientGameTest",
       "ttv.migami.jeg.gametest.SupportDeployClientGameTest",

@@ -497,6 +497,17 @@ once, and the type in the release after (the waveforce tower, retired 2026-11-16
   straight ahead, and turns with it. Put an open hatch's eye clear above what is in front of it: the PLZ-05's roof
   gunner first sat 0.07 blocks above the receiver, which filled the view.
 - **A gun's crew can own the tow key** (`takesTowKeyFrom`): the PLZ-05's gunner engages the fire control with N.
+- **Ground vehicles' guns are heard and reach as the aircraft guns do** (fleet plan Phase 0.3): a gun listed in
+  `VehicleGunReports` (the 20 mm, 30 mm, coax and every `*_hmg`/`*_rws`) sends a `GunReportPayload` per shot with its
+  report set (`vehicle.gun.<gun>.fire`, `.fire_distant`, `.fire_interior`; `design/vehicle-guns/prepare_audio.py`) and a
+  loudness, instead of a looping or one-shot hand-gun sound with linear fall-off, and its rounds go on the long-range
+  path (`setLongRangeRound`). A new vehicle gun goes in that table with a report set; where SBW has no far take, the
+  script derives one (low-passed, ground-echo tail). `VehicleGunReachClientGameTest` fires each one at range.
+- **`setUseConsistentSettings(false)` gives a normal world, not the flat one.** A test needs it to keep its own render
+  and simulation distance, but then y −60 is underground: the gun-reach test's vehicles first fired into stone. Build a
+  platform high up (y 300), force-loading the area first: a normal world's spawn may be far from it.
+- **Follow a far round by holding the entity, not by id.** Out past the chunks the server keeps entities in,
+  `getEntity(id)` misses a round that is still flying; the gun-reach test first saw every round "gone" after one tick.
 - **Smoke rounds** are `ShellEntity.Warhead.smokeShell`: no blast, a smoke screen where they land
   (`SmokeGrenadeEntity.smokeScreen`, sent to 512 blocks so an observer sees it).
 - **Keys read as held (`isDown`) miss a game test's one-tick `pressKey`**: hold them a few ticks, as a player's press

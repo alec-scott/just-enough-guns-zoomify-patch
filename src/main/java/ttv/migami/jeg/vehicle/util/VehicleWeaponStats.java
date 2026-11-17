@@ -470,7 +470,7 @@ public final class VehicleWeaponStats {
                 100, 125, 0, 2, 14.0F, 30.0F, 60, false, false, 0.4F, 1, MACHINE_GUN_FIRE, null, MACHINE_GUN_FIRE,
                 null, null, null, null, null, GunStats.STANDARD_BULLET_PROJECTILE_SIZE, 0xFFAA33, 1.5F));
         // The PLZ-05's roof 12.7 mm: about 600 rounds a minute from a 100-round box (8 s to change: stat 125 / 0.64), on
-        // the long-range path (Plz05Entity#firesLongRangeRounds).
+        // the long-range path (VehicleGunReports).
         stats.put(Reference.id("vehicle_plz05_hmg"), new GunStats(
                 Reference.id("vehicle_plz05_hmg"),
                 RIFLE_AMMO,

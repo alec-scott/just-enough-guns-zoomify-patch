@@ -2262,5 +2262,101 @@
         "name": "jeg:vehicle/leopard2/engine"
       }
     ]
+  },
+  "vehicle.gun.20mm.fire": {
+    "subtitle": "subtitle.jeg.vehicle.fire",
+    "sounds": [
+      {
+        "name": "jeg:vehicle/gun/20mm/fire"
+      }
+    ]
+  },
+  "vehicle.gun.20mm.fire_distant": {
+    "subtitle": "subtitle.jeg.vehicle.fire",
+    "sounds": [
+      {
+        "name": "jeg:vehicle/gun/20mm/fire_distant"
+      }
+    ]
+  },
+  "vehicle.gun.20mm.fire_interior": {
+    "subtitle": "subtitle.jeg.vehicle.fire",
+    "sounds": [
+      {
+        "name": "jeg:vehicle/gun/20mm/fire_interior"
+      }
+    ]
+  },
+  "vehicle.gun.30mm.fire": {
+    "subtitle": "subtitle.jeg.vehicle.fire",
+    "sounds": [
+      {
+        "name": "jeg:vehicle/gun/30mm/fire"
+      }
+    ]
+  },
+  "vehicle.gun.30mm.fire_distant": {
+    "subtitle": "subtitle.jeg.vehicle.fire",
+    "sounds": [
+      {
+        "name": "jeg:vehicle/gun/30mm/fire_distant"
+      }
+    ]
+  },
+  "vehicle.gun.30mm.fire_interior": {
+    "subtitle": "subtitle.jeg.vehicle.fire",
+    "sounds": [
+      {
+        "name": "jeg:vehicle/gun/30mm/fire_interior"
+      }
+    ]
+  },
+  "vehicle.gun.hmg.fire": {
+    "subtitle": "subtitle.jeg.vehicle.fire",
+    "sounds": [
+      {
+        "name": "jeg:vehicle/gun/hmg/fire"
+      }
+    ]
+  },
+  "vehicle.gun.hmg.fire_distant": {
+    "subtitle": "subtitle.jeg.vehicle.fire",
+    "sounds": [
+      {
+        "name": "jeg:vehicle/gun/hmg/fire_distant"
+      }
+    ]
+  },
+  "vehicle.gun.hmg.fire_interior": {
+    "subtitle": "subtitle.jeg.vehicle.fire",
+    "sounds": [
+      {
+        "name": "jeg:vehicle/gun/hmg/fire_interior"
+      }
+    ]
+  },
+  "vehicle.gun.coax.fire": {
+    "subtitle": "subtitle.jeg.vehicle.fire",
+    "sounds": [
+      {
+        "name": "jeg:vehicle/gun/coax/fire"
+      }
+    ]
+  },
+  "vehicle.gun.coax.fire_distant": {
+    "subtitle": "subtitle.jeg.vehicle.fire",
+    "sounds": [
+      {
+        "name": "jeg:vehicle/gun/coax/fire_distant"
+      }
+    ]
+  },
+  "vehicle.gun.coax.fire_interior": {
+    "subtitle": "subtitle.jeg.vehicle.fire",
+    "sounds": [
+      {
+        "name": "jeg:vehicle/gun/coax/fire_interior"
+      }
+    ]
   }
 }

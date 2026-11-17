@@ -90,7 +90,7 @@ public class AircraftLongRangeClientGameTest implements FabricClientGameTest {
             Vec3 velocity = new Vec3(stats.projectileSpeed() + (jet ? JET_SPEED : 0.0D), 0.0D, 0.0D);
             BulletEntity round = new BulletEntity(level, player, stats, velocity, stats.damage(), false);
             round.setVehicleRound();
-            round.setHelicopterGunRound();
+            round.setLongRangeRound();
             round.initialisePosition(new Vec3(startX, ALTITUDE, z));
             level.addFreshEntity(round);
             round.sendTrailToClients(level);

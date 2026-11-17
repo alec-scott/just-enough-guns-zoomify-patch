@@ -147,9 +147,4 @@ public final class Leopard2Entity extends ShellGunEntity {
         }
         return this.onTurret(Leopard2Rig.RWS_TRUNNION, 1.0F).add(direction.normalize().scale(Leopard2Rig.RWS_ARM));
     }
-
-    @Override
-    protected boolean firesLongRangeRounds(VehicleWeaponInfo weapon) {
-        return RWS_WEAPON.equals(weapon.weaponId());
-    }
 }

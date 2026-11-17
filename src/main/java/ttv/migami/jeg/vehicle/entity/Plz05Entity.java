@@ -234,11 +234,6 @@ public final class Plz05Entity extends ShellGunEntity implements FireMissions.Gu
         return this.onTurret(Plz05Rig.HMG_TRUNNION, 1.0F).add(direction.normalize().scale(Plz05Rig.HMG_ARM));
     }
 
-    @Override
-    protected boolean firesLongRangeRounds(VehicleWeaponInfo weapon) {
-        return HMG_WEAPON.equals(weapon.weaponId());
-    }
-
     /** The gun fires only from a halt; the roof gun fires on the move. */
     @Override
     protected boolean canFireWeapon(VehicleWeaponInfo weapon) {
