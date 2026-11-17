@@ -144,7 +144,8 @@ Every vehicle needs:
   bugs found while playing, for example `Mk42AirDefence`, `TowWireGuide`, `Type63Salvo`, `Plz05Tracks`. The
   mortar's `MortarClientGameTest` is the model.
 - Every weapon and round is fired at full range (the yftm.13 lesson).
-- Every run uses `-PwithPack`. Check first that the user's Minecraft client is closed, and ask if it's running.
+- Every run uses `-PwithPack`. Tests may run while the user's own client is open (the user, 2026-11-17).
+- Each vehicle, once working, joins the ArmourTest sandbox (`ArmourSandboxSetupClientGameTest`), fully equipped.
 - Check that each test class actually logged (the bulldozer server test ends the JVM).
 - The release report says what the pack run covered, and that it isn't the dedicated server.
 
