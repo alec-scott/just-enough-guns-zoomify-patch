@@ -174,6 +174,30 @@ public final class AircraftLights {
         return new LightSet(List.copyOf(lights), null, List.of(), null, false);
     }
 
+    /**
+     * The armoured vehicles (fleet plan Phase 0.8): headlamps (the beam at night), tail lamps that brighten as they brake
+     * and reversing lamps where the hull has them, all on while the engine runs. Positions from the models' lamp bones
+     * (design/<vehicle>/rig.json); render space negates the model's X.
+     */
+    private static final LightSet BMP2 = new LightSet(List.of(
+            new PointLight(Kind.POSITION, -20.6F, 22.8F, -57.3F, SEARCH_WHITE, .16F, 1.1F, .14F, 0),
+            new PointLight(Kind.POSITION, 20.6F, 22.8F, -57.3F, SEARCH_WHITE, .16F, 1.1F, .14F, 0),
+            new PointLight(Kind.BRAKE, -18F, 21F, 51.4F, RED, .14F, 1.0F, .2F, 0),
+            new PointLight(Kind.BRAKE, 18F, 21F, 51.4F, RED, .14F, 1.0F, .2F, 0)
+    ), new Searchlight(0, 22.8F, -57.4F, 8, 24, 30, SEARCH_WHITE, false), List.of(), null, false);
+    private static final LightSet PLZ05 = new LightSet(List.of(
+            new PointLight(Kind.POSITION, -22F, 20.2F, -65F, SEARCH_WHITE, .18F, 1.2F, .15F, 0),
+            new PointLight(Kind.POSITION, 22F, 20.2F, -65F, SEARCH_WHITE, .18F, 1.2F, .15F, 0),
+            new PointLight(Kind.BRAKE, -23.4F, 22.1F, 44.1F, RED, .14F, 1.0F, .2F, 0),
+            new PointLight(Kind.BRAKE, 23.4F, 22.1F, 44.1F, RED, .14F, 1.0F, .2F, 0)
+    ), new Searchlight(0, 20.2F, -65.1F, 8, 24, 32, SEARCH_WHITE, false), List.of(), null, false);
+    private static final LightSet LEOPARD2 = new LightSet(List.of(
+            new PointLight(Kind.POSITION, -24F, 22.3F, -58.7F, SEARCH_WHITE, .16F, 1.1F, .14F, 0),
+            new PointLight(Kind.POSITION, 24F, 22.3F, -58.7F, SEARCH_WHITE, .16F, 1.1F, .14F, 0),
+            new PointLight(Kind.BRAKE, -26F, 22.7F, 62.9F, RED, .14F, 1.0F, .2F, 0),
+            new PointLight(Kind.BRAKE, 26F, 22.7F, 62.9F, RED, .14F, 1.0F, .2F, 0)
+    ), new Searchlight(0, 22.3F, -58.8F, 8, 24, 32, SEARCH_WHITE, false), List.of(), null, false);
+
     private static final LightSet A10 = new LightSet(List.of(
             new PointLight(Kind.POSITION, -142.7F, 39.5F, -8.0F, RED, 0.5F, 1.8F, 0.55F, 0.0F),
             new PointLight(Kind.POSITION, 142.7F, 39.5F, -8.0F, GREEN, 0.5F, 1.8F, 0.55F, 0.0F),
@@ -247,6 +271,9 @@ public final class AircraftLights {
                 boolean lamp = !support.fittedForDisplay(ttv.migami.jeg.vehicle.support.SupportModules.LAMP).isEmpty();
                 yield support.isDeployed() ? (lamp ? TRUCK_MAST_UP_LAMP : TRUCK_MAST_UP) : (lamp ? TRUCK_DEPLOYING_LAMP : TRUCK_DEPLOYING);
             }
+            case "bmp2" -> BMP2;
+            case "plz05" -> PLZ05;
+            case "leopard2" -> LEOPARD2;
             case "a10" -> A10;
             case "ah6" -> AH6;
             case "mi28" -> MI28;
@@ -260,6 +287,9 @@ public final class AircraftLights {
         if (vehicle instanceof ttv.migami.jeg.vehicle.entity.SupportVehicleEntity truck) return truck.engineRunning() || truck.generatorRunning();
         if (vehicle.isWrecked()) {
             return false;
+        }
+        if (vehicle.groundSounds() != null) {
+            return vehicle.groundEngineRunning();
         }
         if (vehicle.getControllingPassenger() != null) {
             return true;
@@ -305,6 +335,10 @@ public final class AircraftLights {
         if (vehicle instanceof ttv.migami.jeg.vehicle.entity.SupportVehicleEntity truck) {
             if (light.kind() == Kind.BRAKE) return truck.braking() ? 1.0F : 0.28F;
             if (light.kind() == Kind.REVERSE) return truck.reversing() ? 1.0F : 0.0F;
+        } else if (light.kind() == Kind.BRAKE) {
+            return vehicle.clientBraking() || vehicle.clientReversing() ? 1.0F : 0.28F;
+        } else if (light.kind() == Kind.REVERSE) {
+            return vehicle.clientReversing() ? 1.0F : 0.0F;
         }
         return flash(light, seconds, seed);
     }

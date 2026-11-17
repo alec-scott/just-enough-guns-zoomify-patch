@@ -6631,10 +6631,6 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     private void tickTrackTravel() {
         this.trackTravelLeftO = this.trackTravelLeft;
         this.trackTravelRightO = this.trackTravelRight;
-        var tracks = this.vehicleData().tracks();
-        if (tracks == null) {
-            return;
-        }
         double xo = Double.isNaN(this.trackLastX) ? this.getX() : this.trackLastX;
         double zo = Double.isNaN(this.trackLastX) ? this.getZ() : this.trackLastZ;
         float yawO = Double.isNaN(this.trackLastX) ? this.getYRot() : this.trackLastYaw;
@@ -6643,6 +6639,11 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         this.trackLastYaw = this.getYRot();
         Vec3 forward = Vec3.directionFromRotation(0.0F, this.getYRot());
         double moved = (this.getX() - xo) * forward.x + (this.getZ() - zo) * forward.z;
+        this.tickClientMotion(Math.abs(moved) > 4.0D ? 0.0D : moved);
+        var tracks = this.vehicleData().tracks();
+        if (tracks == null) {
+            return;
+        }
         if (Math.abs(moved) > 4.0D) {
             moved = 0.0D; // a teleport or resync, not driving
         }
@@ -6656,6 +6657,26 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
             this.trackTravelLeftO = this.trackTravelLeft;
             this.trackTravelRightO = this.trackTravelRight;
         }
+    }
+
+    /** Client: the hull's speed along its heading last tick, and whether it is braking or reversing (the lamps). */
+    private double clientForwardSpeed;
+    private boolean clientBraking, clientReversing;
+
+    private void tickClientMotion(double moved) {
+        this.clientBraking = Math.abs(moved) < Math.abs(this.clientForwardSpeed) - 0.004D && Math.abs(this.clientForwardSpeed) > 0.02D;
+        this.clientReversing = moved < -0.02D;
+        this.clientForwardSpeed = moved;
+    }
+
+    /** Client: the hull is slowing (its brake lamps light), as every client sees it from its motion. */
+    public boolean clientBraking() {
+        return this.clientBraking;
+    }
+
+    /** Client: the hull is going backwards. */
+    public boolean clientReversing() {
+        return this.clientReversing;
     }
 
     /** Client: how far a track has run, model pixels along its path (the track driver's input). */
