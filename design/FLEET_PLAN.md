@@ -4,8 +4,12 @@ Status: approved 2026-11-15, with the open questions answered (see the end). The
 support vehicle, planned in [support/PLAN.md](support/PLAN.md). Go-ahead given 2026-11-16, scheduled with the SBW
 port. Done so far: **0.1 and 0.2** for the BMP-2, LAV-150, PLZ-05 and Leopard (`GroundVehicleAudio`, far tracks; no real
 start, stop or cab recordings yet), **0.3** (every ground vehicle gun on the long-range path and heard through reports, 2026-11-17); **0.4**
-(turret-following hitbox parts, first used by the Mk42); **0.9** (`EnemyVehicleRaidClientGameTest`,
-2026-11-17); **section 2, BMP-2 refit pass 1** (1:1 model, track driver, data; [bmp2/IMPLEMENTATION_STATUS.md](bmp2/IMPLEMENTATION_STATUS.md)). **Section 7, the howitzer**, built
+(turret-following hitbox parts, first used by the Mk42); **0.8** for the BMP-2, PLZ-05, Leopard and LAV-150
+(headlamps with the beam at night, brake and reversing lamps; convoy and blackout lamps, work lights and cab glow still
+to do); **0.9** (`EnemyVehicleRaidClientGameTest`,
+2026-11-17); **section 2, BMP-2 refit pass 1** (1:1 model, track driver, data; [bmp2/IMPLEMENTATION_STATUS.md](bmp2/IMPLEMENTATION_STATUS.md)); **section 3, LAV-150 refit pass 1** (1:1
+model, the new shared wheel driver with steering, data, lights; [lav150/IMPLEMENTATION_STATUS.md](lav150/IMPLEMENTATION_STATUS.md),
+2026-11-17). **Section 7, the howitzer**, built
 out of order with the SBW port's towed guns (2026-11-16, [howitzer/BRIEF.md](howitzer/BRIEF.md)): user decisions were a
 new `jeg:howitzer` with the waveforce tower retired, a spyglass observer with manual laying, three charges to about
 4 km, and deploy before firing.

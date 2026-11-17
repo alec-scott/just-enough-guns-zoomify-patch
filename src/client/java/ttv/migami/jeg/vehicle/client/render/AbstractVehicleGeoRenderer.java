@@ -185,6 +185,10 @@ abstract class AbstractVehicleGeoRenderer<T extends VehicleEntity> extends GeoEn
         if (tracks != null) {
             updateTracks(vehicle, tracks, partialTick, snapshots);
         }
+        ttv.migami.jeg.vehicle.data.subdata.WheelInfo wheels = vehicle.vehicleData().wheels();
+        if (wheels != null) {
+            updateWheels(vehicle, wheels, partialTick, snapshots);
+        }
         switch (vehicle.vehicleDataId().getPath()) {
             case "ah6" -> updateHelicopterRotors(vehicle, partialTick, snapshots);
             case "bmp2" -> {
@@ -196,7 +200,14 @@ abstract class AbstractVehicleGeoRenderer<T extends VehicleEntity> extends GeoEn
                 hideIf(snapshots, "cannon_flash", firing != 0 || !flicker);
                 hideIf(snapshots, "coax_flash", firing != 1 || !flicker);
             }
-            case "lav150" -> updateTurret(vehicle, partialTick, snapshots, -15.0F, 32.5F);
+            case "lav150" -> {
+                updateTurret(vehicle, partialTick, snapshots, -15.0F, 32.5F);
+                // As the BMP-2's: the flashes show only while their gun fires (0 the 20 mm, 1 the coax).
+                int firing = vehicle.activeFireWeaponSlot();
+                boolean flicker = (vehicle.tickCount & 1) == 0;
+                hideIf(snapshots, "cannon_flash", firing != 0 || !flicker);
+                hideIf(snapshots, "coax_flash", firing != 1 || !flicker);
+            }
             case "mi28" -> {
                 updateTurret(vehicle, partialTick, snapshots, -70.0F, 30.0F);
                 updateHelicopterRotors(vehicle, partialTick, snapshots);
@@ -277,6 +288,26 @@ abstract class AbstractVehicleGeoRenderer<T extends VehicleEntity> extends GeoEn
         float gunElevation = elevation * Mth.DEG_TO_RAD;
         snapshots.ifPresent(mountBone, snapshot -> snapshot.setRotY(mountYaw));
         snapshots.ifPresent(gunBone, snapshot -> snapshot.setRotX(gunElevation));
+    }
+
+    /**
+     * The shared wheel driver (guide section 5): road wheels roll by the distance driven over their radius (the snapshot's
+     * X rotation as the track driver's wheels), and the steered ones turn about their own vertical axis by the angle the
+     * hull's turn rate gives for its wheelbase.
+     */
+    private static void updateWheels(VehicleEntity vehicle, ttv.migami.jeg.vehicle.data.subdata.WheelInfo wheels, float partialTick,
+                                     com.geckolib.renderer.base.BoneSnapshots snapshots) {
+        float travel = vehicle.wheelTravel(partialTick);
+        for (var group : wheels.roll()) {
+            float angle = travel / group.radius();
+            for (String bone : group.bones()) {
+                snapshots.ifPresent(bone, snapshot -> snapshot.setRotX(angle));
+            }
+        }
+        float steer = -vehicle.wheelSteer(partialTick) * Mth.DEG_TO_RAD;
+        for (String bone : wheels.steer()) {
+            snapshots.ifPresent(bone, snapshot -> snapshot.setRotY(steer));
+        }
     }
 
     /** Bone names of each side's links ({prefix + i, prefix + i + "_turn"}), by link count. */

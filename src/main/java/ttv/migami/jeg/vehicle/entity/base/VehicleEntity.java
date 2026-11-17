@@ -6640,6 +6640,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         Vec3 forward = Vec3.directionFromRotation(0.0F, this.getYRot());
         double moved = (this.getX() - xo) * forward.x + (this.getZ() - zo) * forward.z;
         this.tickClientMotion(Math.abs(moved) > 4.0D ? 0.0D : moved);
+        this.tickWheels(Math.abs(moved) > 4.0D ? 0.0D : moved, Mth.wrapDegrees(this.getYRot() - yawO));
         var tracks = this.vehicleData().tracks();
         if (tracks == null) {
             return;
@@ -6657,6 +6658,45 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
             this.trackTravelLeftO = this.trackTravelLeft;
             this.trackTravelRightO = this.trackTravelRight;
         }
+    }
+
+    /** Client: how far the hull has rolled (model pixels, for road wheels) and the steered wheels' angle (degrees). */
+    private float wheelTravel, wheelTravelO, wheelSteer, wheelSteerO;
+
+    /**
+     * Client: road wheels roll with the distance driven and steer by how fast the hull turns for its speed, as a real
+     * wheelbase does (tan steer = wheelbase x turn rate / speed), so every client agrees without syncing the input.
+     */
+    private void tickWheels(double moved, float yawDelta) {
+        this.wheelTravelO = this.wheelTravel;
+        this.wheelSteerO = this.wheelSteer;
+        var wheels = this.vehicleData().wheels();
+        if (wheels == null) {
+            return;
+        }
+        this.wheelTravel += (float) (moved * 16.0D);
+        float target = 0.0F;
+        if (Math.abs(moved) > 0.02D) {
+            double turn = yawDelta * Mth.DEG_TO_RAD;
+            target = (float) Math.toDegrees(Math.atan(wheels.wheelbase() * turn / moved));
+            target = Mth.clamp(target, -ttv.migami.jeg.vehicle.data.subdata.WheelInfo.MAX_STEER,
+                    ttv.migami.jeg.vehicle.data.subdata.WheelInfo.MAX_STEER);
+        }
+        this.wheelSteer = Mth.lerp(0.3F, this.wheelSteer, target);
+        if (Math.abs(this.wheelTravel) > 1.0E6F) {
+            this.wheelTravel %= 1000.0F;
+            this.wheelTravelO = this.wheelTravel;
+        }
+    }
+
+    /** Client: road wheel travel, model pixels (the wheel driver's input). */
+    public float wheelTravel(float partialTick) {
+        return Mth.lerp(partialTick, this.wheelTravelO, this.wheelTravel);
+    }
+
+    /** Client: the steered wheels' angle, degrees (positive turning right). */
+    public float wheelSteer(float partialTick) {
+        return Mth.lerp(partialTick, this.wheelSteerO, this.wheelSteer);
     }
 
     /** Client: the hull's speed along its heading last tick, and whether it is braking or reversing (the lamps). */

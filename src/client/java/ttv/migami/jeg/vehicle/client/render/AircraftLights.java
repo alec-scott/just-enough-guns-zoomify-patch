@@ -62,7 +62,15 @@ public final class AircraftLights {
      * either side, reaching {@code range} blocks. A taxi light shines only while the gear is down.
      */
     public record Searchlight(float x, float y, float z, float pitchDown, float halfAngle, float range, int colour,
-                              boolean taxi) {
+                              boolean taxi, boolean lensGlow) {
+        /**
+         * {@code lensGlow}: the beam draws its own glow at its origin (one lamp: a helicopter's searchlight). Off for a
+         * pair of headlamps, whose own glows show; a single glare in the middle of a tank's bow looked wrong.
+         */
+        public Searchlight(float x, float y, float z, float pitchDown, float halfAngle, float range, int colour, boolean taxi) {
+            this(x, y, z, pitchDown, halfAngle, range, colour, taxi, true);
+        }
+
         Vector3f modelPos() {
             return new Vector3f(this.x / 16.0F, this.y / 16.0F, this.z / 16.0F);
         }
@@ -184,19 +192,26 @@ public final class AircraftLights {
             new PointLight(Kind.POSITION, 20.6F, 22.8F, -57.3F, SEARCH_WHITE, .16F, 1.1F, .14F, 0),
             new PointLight(Kind.BRAKE, -18F, 21F, 51.4F, RED, .14F, 1.0F, .2F, 0),
             new PointLight(Kind.BRAKE, 18F, 21F, 51.4F, RED, .14F, 1.0F, .2F, 0)
-    ), new Searchlight(0, 22.8F, -57.4F, 8, 24, 30, SEARCH_WHITE, false), List.of(), null, false);
+    ), new Searchlight(0, 22.8F, -57.4F, 8, 24, 30, SEARCH_WHITE, false, false), List.of(), null, false);
     private static final LightSet PLZ05 = new LightSet(List.of(
             new PointLight(Kind.POSITION, -22F, 20.2F, -65F, SEARCH_WHITE, .18F, 1.2F, .15F, 0),
             new PointLight(Kind.POSITION, 22F, 20.2F, -65F, SEARCH_WHITE, .18F, 1.2F, .15F, 0),
             new PointLight(Kind.BRAKE, -23.4F, 22.1F, 44.1F, RED, .14F, 1.0F, .2F, 0),
             new PointLight(Kind.BRAKE, 23.4F, 22.1F, 44.1F, RED, .14F, 1.0F, .2F, 0)
-    ), new Searchlight(0, 20.2F, -65.1F, 8, 24, 32, SEARCH_WHITE, false), List.of(), null, false);
+    ), new Searchlight(0, 20.2F, -65.1F, 8, 24, 32, SEARCH_WHITE, false, false), List.of(), null, false);
     private static final LightSet LEOPARD2 = new LightSet(List.of(
             new PointLight(Kind.POSITION, -24F, 22.3F, -58.7F, SEARCH_WHITE, .16F, 1.1F, .14F, 0),
             new PointLight(Kind.POSITION, 24F, 22.3F, -58.7F, SEARCH_WHITE, .16F, 1.1F, .14F, 0),
             new PointLight(Kind.BRAKE, -26F, 22.7F, 62.9F, RED, .14F, 1.0F, .2F, 0),
             new PointLight(Kind.BRAKE, 26F, 22.7F, 62.9F, RED, .14F, 1.0F, .2F, 0)
-    ), new Searchlight(0, 22.3F, -58.8F, 8, 24, 32, SEARCH_WHITE, false), List.of(), null, false);
+    ), new Searchlight(0, 22.3F, -58.8F, 8, 24, 32, SEARCH_WHITE, false, false), List.of(), null, false);
+    /** The LAV-150: the caged lamp boxes on the glacis and the small tail lamps at the rear corners (design/lav150). */
+    private static final LightSet LAV150 = new LightSet(List.of(
+            new PointLight(Kind.POSITION, -10.5F, 30.7F, -40.4F, SEARCH_WHITE, .16F, 1.1F, .14F, 0),
+            new PointLight(Kind.POSITION, 10.5F, 30.7F, -40.4F, SEARCH_WHITE, .16F, 1.1F, .14F, 0),
+            new PointLight(Kind.BRAKE, -16.2F, 23.1F, 45.0F, RED, .14F, 1.0F, .2F, 0),
+            new PointLight(Kind.BRAKE, 16.2F, 23.1F, 45.0F, RED, .14F, 1.0F, .2F, 0)
+    ), new Searchlight(0, 30.7F, -40.5F, 8, 24, 30, SEARCH_WHITE, false, false), List.of(), null, false);
 
     private static final LightSet A10 = new LightSet(List.of(
             new PointLight(Kind.POSITION, -142.7F, 39.5F, -8.0F, RED, 0.5F, 1.8F, 0.55F, 0.0F),
@@ -274,6 +289,7 @@ public final class AircraftLights {
             case "bmp2" -> BMP2;
             case "plz05" -> PLZ05;
             case "leopard2" -> LEOPARD2;
+            case "lav150" -> LAV150;
             case "a10" -> A10;
             case "ah6" -> AH6;
             case "mi28" -> MI28;

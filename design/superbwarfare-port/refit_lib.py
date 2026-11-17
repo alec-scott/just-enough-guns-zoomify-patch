@@ -228,7 +228,8 @@ def resolve_zfighting(geo, push=0.04):
     """Push the smaller cube of each coplanar pair out by `push` px on the shared face, as
     design/support/generate.py does, until no pair is left. Per-face UV is unaffected."""
     geo = copy.deepcopy(geo)
-    for _ in range(8):
+    # A cube sharing faces with many others (the LAV-150's hull) takes a few rounds: each push can open a new pair.
+    for _ in range(40):
         pairs = coplanar_overlaps(geo)
         if not pairs:
             return geo
@@ -238,8 +239,10 @@ def resolve_zfighting(geo, push=0.04):
             a, b = cubes[i], cubes[j]
             vol = lambda c: c["size"][0] * c["size"][1] * c["size"][2]
             small, big = (a, b) if vol(a) <= vol(b) else (b, a)
-            s_lo, s_hi = small["origin"][axis], small["origin"][axis] + small["size"][axis]
-            planes = (big["origin"][axis], big["origin"][axis] + big["size"][axis])
+            # Planes as drawn, inflate included (SBW's LAV-150 has cubes inflated by -0.05): the pairs were found that way.
+            s_inf, b_inf = small.get("inflate", 0), big.get("inflate", 0)
+            s_lo, s_hi = small["origin"][axis] - s_inf, small["origin"][axis] + small["size"][axis] + s_inf
+            planes = (big["origin"][axis] - b_inf, big["origin"][axis] + big["size"][axis] + b_inf)
             if any(abs(s_lo - p) < 1e-4 for p in planes):
                 small["origin"][axis] = round(small["origin"][axis] - push, 5)
                 small["size"][axis] = round(small["size"][axis] + push, 5)

@@ -26,6 +26,7 @@
       "ttv.migami.jeg.gametest.VehicleGunReachClientGameTest",
       "ttv.migami.jeg.gametest.GroundVehicleSoundClientGameTest",
       "ttv.migami.jeg.gametest.ArmourNightLightsClientGameTest",
+      "ttv.migami.jeg.gametest.Lav150WheelsClientGameTest",
       "ttv.migami.jeg.gametest.ArmourSandboxSetupClientGameTest",
       "ttv.migami.jeg.gametest.VehicleLookCompareClientGameTest",
       "ttv.migami.jeg.gametest.BulldozerFarSoundClientGameTest",

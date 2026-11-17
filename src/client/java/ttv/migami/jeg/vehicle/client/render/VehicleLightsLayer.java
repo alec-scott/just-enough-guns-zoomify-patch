@@ -197,7 +197,7 @@ final class VehicleLightsLayer<T extends VehicleEntity> extends GeoRenderLayer<T
                 for (Glow glow : glows) {
                     glow(buffer, facing, glow.at, glow.size, glow.r, glow.g, glow.b, glow.alpha, glow.pullForward);
                 }
-                if (lensBeam != null && !openSeat) {
+                if (lensBeam != null && !openSeat && set.searchlight().lensGlow()) {
                     glow(buffer, facing, lensBeam.lens, lensBeam.lensSize, lensBeam.r, lensBeam.g, lensBeam.b,
                             lensBeam.lensAlpha, !occupant);
                 }

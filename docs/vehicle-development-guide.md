@@ -277,6 +277,16 @@ still (only the driver's own client saw them run; `Plz05ClientGameTest` watches,
 moving tracks with no code. Check the link turn in a review render first: the right sign looked wrong by sign
 reasoning; with it, links lie flat on the runs and their guide horns point inward round the ends.
 
+**Road wheels roll and steer from the data as well** (the LAV-150, first). The refit measures each wheel's rolling
+radius and the wheelbase from the drawn geometry and writes `"wheels"`: `{"roll": [{"bones": [...], "radius": px}],
+"steer": [front wheel bones], "wheelbase": blocks}`. The shared driver (`AbstractVehicleGeoRenderer.updateWheels`) turns
+each rolling bone by the distance driven over its radius (`VehicleEntity.wheelTravel`) and each steered bone about its
+own Y axis by `VehicleEntity.wheelSteer`: the angle a real wheelbase gives for how fast the hull turns at its speed
+(tan steer = wheelbase × turn per tick / distance per tick, at most 35°, eased), so every client agrees without the
+driver's input being synced, and backing through a turn steers the other way. A wheel that both steers and rolls can be
+one bone (GeckoLib rolls about X before it steers about Y). `Lav150WheelsClientGameTest` pins the roll per block and the
+steer's sign and size.
+
 **Driving bones from code (GeckoLib snapshots).**
 - Translations are in pixels in the authored sense: `setTranslateX(+16)` moves a bone 16 px to the vehicle's left
   (+X). This was checked on the FSV-6's slide-outs with a top-down screenshot. The A-10's fan code negates X inside a

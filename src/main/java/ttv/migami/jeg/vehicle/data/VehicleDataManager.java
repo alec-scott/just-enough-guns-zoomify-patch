@@ -32,6 +32,7 @@ import ttv.migami.jeg.vehicle.data.subdata.OBBInfo;
 import ttv.migami.jeg.vehicle.data.subdata.SeatInfo;
 import ttv.migami.jeg.vehicle.data.subdata.SeekInfo;
 import ttv.migami.jeg.vehicle.data.subdata.TrackInfo;
+import ttv.migami.jeg.vehicle.data.subdata.WheelInfo;
 import ttv.migami.jeg.vehicle.data.subdata.TurretInfo;
 import ttv.migami.jeg.vehicle.data.subdata.VehicleContainerType;
 import ttv.migami.jeg.vehicle.data.subdata.VehicleType;
@@ -150,6 +151,7 @@ public final class VehicleDataManager {
         OBBInfo obb = parseObb(object, "obb", fallback.obb());
         OBBInfo deployedObb = parseObb(object, "obb_deployed", null);
         TrackInfo tracks = parseTracks(getObject(object, "tracks"));
+        WheelInfo wheels = parseWheels(getObject(object, "wheels"));
         VehicleArmorProfile armor = parseArmor(getObject(object, "armor"), fallback.armor());
         DamageModifierInfo damageModifier = parseDamageModifier(getObject(object, "damage_modifier"), fallback.damageModifier());
         List<VehicleWeaponInfo> weapons = parseWeapons(object, fallback.weapons());
@@ -182,7 +184,7 @@ public final class VehicleDataManager {
                 hasDecoy,
                 seek,
                 destroy
-        ), deployedObb, tracks);
+        ), deployedObb, tracks, wheels);
     }
 
     private static DefaultVehicleData fallbackFor(Identifier id) {
@@ -302,6 +304,27 @@ public final class VehicleDataManager {
         }
         seats.sort(Comparator.comparingInt(SeatInfo::index));
         return List.copyOf(seats);
+    }
+
+    /** The road wheels for the shared wheel driver ("wheels"), or null for a vehicle without them. */
+    private static WheelInfo parseWheels(JsonObject object) {
+        if (object == null) {
+            return null;
+        }
+        List<TrackInfo.Wheel> roll = new java.util.ArrayList<>();
+        if (object.has("roll")) {
+            for (JsonElement element : GsonHelper.getAsJsonArray(object, "roll")) {
+                JsonObject group = element.getAsJsonObject();
+                List<String> bones = new java.util.ArrayList<>();
+                GsonHelper.getAsJsonArray(group, "bones").forEach(bone -> bones.add(bone.getAsString()));
+                roll.add(new TrackInfo.Wheel(List.copyOf(bones), getFloat(group, "radius", 1.0F)));
+            }
+        }
+        List<String> steer = new java.util.ArrayList<>();
+        if (object.has("steer")) {
+            GsonHelper.getAsJsonArray(object, "steer").forEach(bone -> steer.add(bone.getAsString()));
+        }
+        return new WheelInfo(List.copyOf(roll), List.copyOf(steer), getFloat(object, "wheelbase", 2.5F));
     }
 
     /** The running gear for the shared track driver ("tracks"), or null for a vehicle without one. */

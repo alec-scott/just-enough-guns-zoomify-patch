@@ -16,7 +16,7 @@ import ttv.migami.jeg.vehicle.client.render.AircraftLights;
 import ttv.migami.jeg.vehicle.entity.base.VehicleEntity;
 
 /**
- * Fleet plan Phase 0.8, the armoured vehicles' lights. A BMP-2, a PLZ-05 and a Leopard, each with a husk at the
+ * Fleet plan Phase 0.8, the armoured vehicles' lights. A BMP-2, a PLZ-05, a Leopard and a LAV-150, each with a husk at the
  * controls, and an uncrewed Leopard stand side by side at midnight. Fails unless the crewed ones are lit and throw their
  * headlamp beams at night, the uncrewed one is dark, the beams are off by day, and a hull that slows or reverses shows
  * bright tail lamps on the client. Screenshots from outside, at night and by day, and from the BMP-2 driver's seat.
@@ -35,7 +35,7 @@ public class ArmourNightLightsClientGameTest implements FabricClientGameTest {
             server.runCommand("gamerule advance_time false");
             server.runCommand("gamemode spectator @a");
             server.runCommand("time set midnight");
-            server.runCommand("tp @a 0.5 -56 -14 0 12");
+            server.runCommand("tp @a 2.5 -55 -24 0 10");
             context.runOnClient(mc -> {
                 mc.options.setCameraType(CameraType.FIRST_PERSON);
                 mc.options.hideGui = true;
@@ -43,8 +43,9 @@ public class ArmourNightLightsClientGameTest implements FabricClientGameTest {
             context.waitTicks(10);
             int[] ids = server.computeOnServer(s -> {
                 var level = s.overworld();
-                Object[][] spawns = {{ModEntities.BMP2.get(), -10.5D, true}, {ModEntities.PLZ05.get(), -2.5D, true},
-                        {ModEntities.LEOPARD2.get(), 6.5D, true}, {ModEntities.LEOPARD2.get(), 15.5D, false}};
+                Object[][] spawns = {{ModEntities.BMP2.get(), -13.5D, true}, {ModEntities.PLZ05.get(), -5.5D, true},
+                        {ModEntities.LEOPARD2.get(), 2.5D, true}, {ModEntities.LAV150.get(), 10.5D, true},
+                        {ModEntities.LEOPARD2.get(), 18.5D, false}};
                 int[] out = new int[spawns.length];
                 for (int i = 0; i < spawns.length; i++) {
                     @SuppressWarnings("unchecked")
@@ -72,11 +73,11 @@ public class ArmourNightLightsClientGameTest implements FabricClientGameTest {
             context.waitTicks(60);
             context.takeScreenshot("armour_lights_day");
             float[][] day = context.computeOnClient(mc -> this.levels(mc, ids));
-            String[] names = {"BMP-2", "PLZ-05", "Leopard", "uncrewed Leopard"};
+            String[] names = {"BMP-2", "PLZ-05", "Leopard", "LAV-150", "uncrewed Leopard"};
             for (int i = 0; i < ids.length; i++) {
                 LOGGER.info(String.format(Locale.ROOT, "[armour-lights] %s: powered %s/%s, beam night %.2f, day %.2f",
                         names[i], night[i][0] > 0, day[i][0] > 0, night[i][1], day[i][1]));
-                boolean crewed = i < 3;
+                boolean crewed = i < 4;
                 if (crewed && (night[i][0] <= 0 || night[i][1] < 0.5F)) failures.append(names[i]).append(": not lit with its beam at night\n");
                 if (!crewed && (night[i][0] > 0 || night[i][1] > 0)) failures.append(names[i]).append(": lit with nobody at the controls\n");
                 if (day[i][1] > 0.01F) failures.append(names[i]).append(": beam on by day\n");
