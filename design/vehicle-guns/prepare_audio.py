@@ -82,7 +82,11 @@ def main():
         kind, path = far
         if kind == "derive":
             data, rate = read(sbw, *path)
-            sf.write(out / "fire_distant.ogg", distant(data, rate), rate, format="OGG", subtype="VORBIS")
+            # In blocks: libsndfile's Vorbis encoder overflows the stack on Windows given a long buffer at once.
+            samples = np.ascontiguousarray(distant(data, rate), dtype=np.float32)
+            with sf.SoundFile(out / "fire_distant.ogg", "w", samplerate=rate, channels=1, format="OGG", subtype="VORBIS") as f:
+                for start in range(0, len(samples), 4096):
+                    f.write(samples[start:start + 4096])
             credits.append((gun, "fire_distant", path[0], path[1], "low-passed (900 Hz), softened attack, ground-echo tail"))
         else:
             (out / "fire_distant.ogg").write_bytes((Path(sbw) / "sounds" / path).read_bytes())

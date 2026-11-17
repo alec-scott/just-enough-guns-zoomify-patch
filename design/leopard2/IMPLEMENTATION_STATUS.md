@@ -43,9 +43,14 @@ Brief: [BRIEF.md](BRIEF.md).
 | AP fired at 0.39 blocks a tick at a BMP-2 120 blocks ahead | BMP-2 320 → destroyed |
 | Weapon station fired from the commander's seat | the round 1.1 blocks from the station's trunnion |
 
+## Since (2026-11-17)
+
+- Heard the aircraft way (`GroundVehicleAudio`, far tracks; `GroundVehicleSoundClientGameTest`), and every gun on the
+  long-range path with reports (`VehicleGunReachClientGameTest`). Real start, stop and cab recordings are still to find.
+
 ## Not covered yet
 
-- Listening (SBW's YX-100 recordings, unchecked by ear); ground-vehicle audio (the old engine one-shot).
+- Listening (SBW's YX-100 recordings and the derived engine loops, unchecked by ear).
 - HE, cluster and grapeshot fired from it; the coax; hitboxes shot at; the enemy AI (it isn't an enemy vehicle).
 - The long tube's texture noise reads as speckle in close views; lights; damage states; night view.
 - The dedicated server, multiplayer. No sandbox world.

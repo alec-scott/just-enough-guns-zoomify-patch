@@ -2358,5 +2358,141 @@
         "name": "jeg:vehicle/gun/coax/fire_interior"
       }
     ]
+  },
+  "vehicle.bmp2.engine_idle": {
+    "subtitle": "subtitle.jeg.vehicle.engine",
+    "sounds": [
+      {
+        "name": "jeg:vehicle/bmp2/engine_idle"
+      }
+    ]
+  },
+  "vehicle.bmp2.engine_load": {
+    "subtitle": "subtitle.jeg.vehicle.engine",
+    "sounds": [
+      {
+        "name": "jeg:vehicle/bmp2/engine_load"
+      }
+    ]
+  },
+  "vehicle.bmp2.engine_cab": {
+    "subtitle": "subtitle.jeg.vehicle.engine",
+    "sounds": [
+      {
+        "name": "jeg:vehicle/bmp2/engine_cab"
+      }
+    ]
+  },
+  "vehicle.bmp2.engine_distant": {
+    "subtitle": "subtitle.jeg.vehicle.engine",
+    "sounds": [
+      {
+        "name": "jeg:vehicle/bmp2/engine_distant"
+      }
+    ]
+  },
+  "vehicle.lav150.engine_idle": {
+    "subtitle": "subtitle.jeg.vehicle.engine",
+    "sounds": [
+      {
+        "name": "jeg:vehicle/lav150/engine_idle"
+      }
+    ]
+  },
+  "vehicle.lav150.engine_load": {
+    "subtitle": "subtitle.jeg.vehicle.engine",
+    "sounds": [
+      {
+        "name": "jeg:vehicle/lav150/engine_load"
+      }
+    ]
+  },
+  "vehicle.lav150.engine_cab": {
+    "subtitle": "subtitle.jeg.vehicle.engine",
+    "sounds": [
+      {
+        "name": "jeg:vehicle/lav150/engine_cab"
+      }
+    ]
+  },
+  "vehicle.lav150.engine_distant": {
+    "subtitle": "subtitle.jeg.vehicle.engine",
+    "sounds": [
+      {
+        "name": "jeg:vehicle/lav150/engine_distant"
+      }
+    ]
+  },
+  "vehicle.plz05.engine_idle": {
+    "subtitle": "subtitle.jeg.vehicle.engine",
+    "sounds": [
+      {
+        "name": "jeg:vehicle/plz05/engine_idle"
+      }
+    ]
+  },
+  "vehicle.plz05.engine_load": {
+    "subtitle": "subtitle.jeg.vehicle.engine",
+    "sounds": [
+      {
+        "name": "jeg:vehicle/plz05/engine_load"
+      }
+    ]
+  },
+  "vehicle.plz05.engine_cab": {
+    "subtitle": "subtitle.jeg.vehicle.engine",
+    "sounds": [
+      {
+        "name": "jeg:vehicle/plz05/engine_cab"
+      }
+    ]
+  },
+  "vehicle.plz05.engine_distant": {
+    "subtitle": "subtitle.jeg.vehicle.engine",
+    "sounds": [
+      {
+        "name": "jeg:vehicle/plz05/engine_distant"
+      }
+    ]
+  },
+  "vehicle.leopard2.engine_idle": {
+    "subtitle": "subtitle.jeg.vehicle.engine",
+    "sounds": [
+      {
+        "name": "jeg:vehicle/leopard2/engine_idle"
+      }
+    ]
+  },
+  "vehicle.leopard2.engine_load": {
+    "subtitle": "subtitle.jeg.vehicle.engine",
+    "sounds": [
+      {
+        "name": "jeg:vehicle/leopard2/engine_load"
+      }
+    ]
+  },
+  "vehicle.leopard2.engine_cab": {
+    "subtitle": "subtitle.jeg.vehicle.engine",
+    "sounds": [
+      {
+        "name": "jeg:vehicle/leopard2/engine_cab"
+      }
+    ]
+  },
+  "vehicle.leopard2.engine_distant": {
+    "subtitle": "subtitle.jeg.vehicle.engine",
+    "sounds": [
+      {
+        "name": "jeg:vehicle/leopard2/engine_distant"
+      }
+    ]
+  },
+  "vehicle.tracks.clank": {
+    "subtitle": "subtitle.jeg.vehicle.engine",
+    "sounds": [
+      {
+        "name": "jeg:vehicle/tracks/clank"
+      }
+    ]
   }
 }

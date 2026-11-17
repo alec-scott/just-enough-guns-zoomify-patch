@@ -361,6 +361,7 @@ public final class FabricClientBootstrap {
             ttv.migami.jeg.vehicle.client.render.AircraftLights.tick(client);
             ttv.migami.jeg.vehicle.client.audio.BulldozerAudio.tick(client);
             ttv.migami.jeg.vehicle.client.audio.SupportAudio.tick(client);
+            ttv.migami.jeg.vehicle.client.audio.GroundVehicleAudio.tick(client);
             ttv.migami.jeg.vehicle.client.SupportHints.tick(client);
             ttv.migami.jeg.vehicle.client.audio.GunReportAudio.tick(client);
             ttv.migami.jeg.vehicle.client.MortarAim.tick(client);

@@ -533,6 +533,19 @@ once, and the type in the release after (the waveforce tower, retired 2026-11-16
 
 ## 7. Sound
 
+**Armoured vehicles share one engine audio (fleet plan Phase 0.1, 0.2).** A vehicle listed in `GroundVehicleSounds`
+(loudness idle and flat out, tracked, enclosed cab) is heard through `GroundVehicleAudio`: idle and working loops
+crossfaded by engine speed (from how fast the hull moves, so every client agrees), the muffled cab loop for an
+enclosed crew in first person, the track clank by the tracks' speed, the distant loop, sound delay and Doppler; the
+server sends far tracks; the old once-a-second engine sound stops. The engine winds up when a driver takes the controls
+and down when they leave. The layers come from one recording by `design/ground-vehicles/prepare_audio.py` (16 s varying
+loops; idle slowed, cab and distant low-passed). Lessons:
+- **Sync whether the engine runs.** Inferred on the client from the crew, it fell silent 128 blocks off, inside entity
+  range: clients aren't sent a mob crew that far (`groundEngineRunning`).
+- **Write Ogg in blocks.** libsndfile's Vorbis encoder overflows the stack on Windows given a long buffer in one call.
+- **Still missing for these vehicles:** real start and stop recordings, and real cab recordings (the cab loops are
+  filtered exterior takes). Find CC0 ones before calling them finished, and ask the user to listen.
+
 **Sources.**
 - Use field recordings of the real machine type, licensed CC0, credited in `sounds/vehicle/<id>/CREDITS.md`.
 - Cut idle and working loops from one take where possible, so the crossfade stays one voice.

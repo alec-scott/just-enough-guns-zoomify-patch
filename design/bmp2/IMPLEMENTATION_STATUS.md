@@ -43,6 +43,11 @@ Found while writing the raid test:
 - **Open:** the AI sometimes halts near 60 blocks, short of its engagement range (42 for the LAV-150, 52 for the
   BMP-2): one run sat at 60.x for 45 s. The test asks only for closing under 63; the cause isn't found yet.
 
+## Since (2026-11-17)
+
+- Heard the aircraft way (`GroundVehicleAudio`, far tracks; `GroundVehicleSoundClientGameTest`), and every gun on the
+  long-range path with reports (`VehicleGunReachClientGameTest`). Real start, stop and cab recordings are still to find.
+
 ## Not covered yet
 
 - The passengers' outward view (SBW's firing ports face sideways; jegn seats have no orientation), the gunner's seat

@@ -61,10 +61,14 @@ Second pass (after the fixes), pack client with Photon:
 Found by the test: a watched (not driven) PLZ-05's tracks didn't move. Travel was measured across `super.tick()`, but a
 watched entity is moved by interpolation earlier in the tick; it is now measured from the last tick's end.
 
+## Since (2026-11-17)
+
+- Heard the aircraft way (`GroundVehicleAudio`, far tracks; `GroundVehicleSoundClientGameTest`), and every gun on the
+  long-range path with reports (`VehicleGunReachClientGameTest`). Real start, stop and cab recordings are still to find.
+
 ## Not covered yet
 
-- Engine sound: still the old server one-shot every second (SBW's engine loop); the shared ground-vehicle audio (fleet
-  plan Phase 0.1) isn't built. The report and loader are SBW's, unchecked by ear.
+- Listening: the engine loops (derived from SBW's engine take), the report and the loader are unchecked by ear.
 - An observer's spyglass mark at range (the howitzer's limit applies: 512 blocks); the high arcs; AP, cluster and
   grapeshot fired from it; the roof gun's rounds at range.
 - Hitboxes shot at; the enemy AI; swimming (it doesn't); climbing at `up_step` 1.25.

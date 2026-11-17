@@ -190,6 +190,8 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     private static final EntityDataAccessor<Boolean> DATA_ENGINE_DAMAGED = SynchedEntityData.defineId(VehicleEntity.class, EntityDataSerializers.BOOLEAN);
     private static final EntityDataAccessor<Boolean> DATA_SUB_ENGINE_DAMAGED = SynchedEntityData.defineId(VehicleEntity.class, EntityDataSerializers.BOOLEAN);
     private static final EntityDataAccessor<Boolean> DATA_TURRET_DAMAGED = SynchedEntityData.defineId(VehicleEntity.class, EntityDataSerializers.BOOLEAN);
+    /** A ground vehicle's engine is running (synced: a client may not be sent the crew of a vehicle it can still hear). */
+    private static final EntityDataAccessor<Boolean> DATA_GROUND_ENGINE = SynchedEntityData.defineId(VehicleEntity.class, EntityDataSerializers.BOOLEAN);
     private static final EntityDataAccessor<Float> DATA_TURRET_YAW = SynchedEntityData.defineId(VehicleEntity.class, EntityDataSerializers.FLOAT);
     private static final EntityDataAccessor<Float> DATA_TURRET_PITCH = SynchedEntityData.defineId(VehicleEntity.class, EntityDataSerializers.FLOAT);
     private static final EntityDataAccessor<Float> DATA_PROPELLER_ROT = SynchedEntityData.defineId(VehicleEntity.class, EntityDataSerializers.FLOAT);
@@ -833,6 +835,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         builder.define(DATA_ENGINE_DAMAGED, false);
         builder.define(DATA_SUB_ENGINE_DAMAGED, false);
         builder.define(DATA_TURRET_DAMAGED, false);
+        builder.define(DATA_GROUND_ENGINE, false);
         builder.define(DATA_TURRET_YAW, 0.0F);
         builder.define(DATA_TURRET_PITCH, 0.0F);
         builder.define(DATA_PROPELLER_ROT, 0.0F);
@@ -1976,6 +1979,8 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         if (this.level().isClientSide()) {
             this.tickDamageEffects();
             this.tickTrackTravel();
+        } else if (this.groundSounds() != null && this.entityData.get(DATA_GROUND_ENGINE) != this.groundEngineRunning()) {
+            this.entityData.set(DATA_GROUND_ENGINE, this.groundEngineRunning());
         }
         if (this.isWrecked()) {
             // A wreck only falls, burns and breaks apart: no controls, weapons, repairs or recharging.
@@ -4913,17 +4918,41 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
      */
     /** Whether players beyond entity range are sent this vehicle's position for its far sound (aircraft by default). */
     protected boolean sendsFarSoundTracks() {
-        return VehicleSoundHelper.isAircraft(this);
+        return VehicleSoundHelper.isAircraft(this) || this.groundSounds() != null;
     }
 
     /** Engine loudness in the far tracks, before distance (see AircraftSoundRange). */
     protected float farSoundLoudness() {
+        var ground = this.groundSounds();
+        if (ground != null) {
+            return this.groundEngineRunning() ? ground.loudness(Math.abs(this.landInput().forwardAxis())) : 0.0F;
+        }
         return VehicleSoundHelper.aircraftEngineLoudness(this);
     }
 
     /** Engine pitch in the far tracks, before Doppler. */
     protected float farSoundPitch() {
+        if (this.groundSounds() != null) {
+            return 0.9F + 0.12F * Math.abs(this.landInput().forwardAxis());
+        }
         return VehicleSoundHelper.aircraftEnginePitch(this);
+    }
+
+    /** How this ground vehicle is heard (GroundVehicleAudio and the far tracks), or null for one heard another way. */
+    @Nullable
+    public ttv.migami.jeg.vehicle.util.GroundVehicleSounds groundSounds() {
+        return ttv.migami.jeg.vehicle.util.GroundVehicleSounds.forVehicle(this.vehicleDataId().getPath());
+    }
+
+    /**
+     * A ground vehicle's engine runs while someone is at the controls and it isn't wrecked. Decided on the server and
+     * synced: past 128 blocks a client is no longer sent a mob crew, though it still has the vehicle and hears it.
+     */
+    public boolean groundEngineRunning() {
+        if (this.level().isClientSide()) {
+            return this.entityData.get(DATA_GROUND_ENGINE);
+        }
+        return !this.isWrecked() && this.getControllingPassenger() != null;
     }
 
     /** The far tracks' second sound: a jet's gun firing, or another vehicle's loudest signal (a horn). */
@@ -5797,8 +5826,9 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     }
 
     private void tickEngineSound() {
-        // Helicopters and jets use one positional client sound per engine, including startup and Doppler pitch.
-        if (this.vehicleData().defaults().vehicleType() == VehicleType.HELICOPTER || this.isJet()) {
+        // Helicopters and jets use one positional client sound per engine, including startup and Doppler pitch, and
+        // the ground vehicles with a sound profile are heard through GroundVehicleAudio the same way.
+        if (this.vehicleData().defaults().vehicleType() == VehicleType.HELICOPTER || this.isJet() || this.groundSounds() != null) {
             return;
         }
         if (this.tickCount % 20 != 0) {
