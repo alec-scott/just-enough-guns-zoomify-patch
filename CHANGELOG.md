@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.7.2+mc26.1.2.yftm.23 - 2026-11-20
 
 ### Added
 - AH-6: a live glass cockpit on its dash: a colour attitude display (speed, radar height, heading), an engine page (rotor, turbine, torque, temperature, fuel), a navigation display with a turning compass rose, standby airspeed and altimeter, caution and master warning lamps, and a weapons page on the console (rounds, rockets, selected weapon, flares).
