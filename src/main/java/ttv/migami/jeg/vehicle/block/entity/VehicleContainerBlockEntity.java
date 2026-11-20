@@ -93,8 +93,9 @@ public final class VehicleContainerBlockEntity extends BlockEntity {
             vehicle.loadVehicleContainerState(this.entityTag);
         }
         double spawnX = spawnPos.getX() + 0.5D;
-        // A jet is checked for room on top of the box and then stands on its wheels where the box was (below). Dropped from
-        // half its height it fell with no pilot, and its flight model points the nose into the fall: it hit nose first.
+        // Room is checked on top of the box; the vehicle then stands where the box was (below). Dropped from half its
+        // height a jet fell with no pilot and its flight model pointed the nose into the fall, and the artillery (the
+        // sentry first) has no drive to fall with: it hung in the air above the empty spot.
         double spawnY = vehicle.isJet() ? spawnPos.getY() : spawnPos.getY() + vehicle.getBbHeight() * 0.5D;
         double spawnZ = spawnPos.getZ() + 0.5D;
         vehicle.snapTo(spawnX, spawnY, spawnZ, player.getYRot(), 0.0F);
@@ -106,15 +107,14 @@ public final class VehicleContainerBlockEntity extends BlockEntity {
             return false;
         }
         BlockPos boxPos = this.getBlockPos();
-        if (vehicle.isJet()) {
-            level.removeBlock(boxPos, false);
-            vehicle.snapTo(spawnX, boxPos.getY(), spawnZ, player.getYRot(), 0.0F);
-            vehicle.setDeltaMovement(net.minecraft.world.phys.Vec3.ZERO);
-            level.addFreshEntity(vehicle);
-            return true;
-        }
-        level.addFreshEntity(vehicle);
         level.removeBlock(boxPos, false);
+        vehicle.snapTo(spawnX, boxPos.getY(), spawnZ, player.getYRot(), 0.0F);
+        if (!vehicle.isJet() && !level.noCollision(vehicle, vehicle.getBoundingBox())) {
+            // Something low beside the box (a fence, a slab) is in the way at ground level: start above it and let it settle.
+            vehicle.snapTo(spawnX, spawnY, spawnZ, player.getYRot(), 0.0F);
+        }
+        vehicle.setDeltaMovement(net.minecraft.world.phys.Vec3.ZERO);
+        level.addFreshEntity(vehicle);
         return true;
     }
 

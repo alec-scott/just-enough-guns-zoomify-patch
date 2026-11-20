@@ -237,11 +237,14 @@ clears, and grows the entity box at every angle that isn't square on.
   brief, then measure it in a test: drive at full lock for 2 s and work out the radius from the distance travelled
   and the heading change (`SupportInteriorClientGameTest`).
 - **Other entries.** Give it no `weapons`, `seek` or decoys unless it is armed.
-- **The vehicle creator.** Every assembled vehicle needs a `data/jeg/vehicle_assembly/<id>.json` recipe and a
-  creator icon, `textures/vehicle_icon/<id>_icon.png` (256 x 64, a light grey side view on a transparent strip, nose
-  to the left, as SBW's). `VehicleAssemblingScreen` finds the icon by its file; without one the vehicle shows no
-  picture (the BD-40, Mk42, BL-132 and Type 63 did until 2026-11-19). A refit copies SBW's icon when it has one, and
-  otherwise draws one from the model with `refit_lib.silhouette_icon`. Carried weapons (the mortar, the TOW) are crafted
+- **The vehicle creator.** Every assembled vehicle needs a `data/jeg/vehicle_assembly/<id>.json` recipe, a short
+  name for the list (`vehicle.jeg.<id>.short` in `en_us.json`, e.g. "BL-132"; without one the full name is cut off on
+  its button) and a place in `VehicleAssemblingScreen.ORDER`, which runs each tab from light to heavy. The screen
+  (restyled 2026-11-20) turns the vehicle's real model in 3D, sized from its `obb` parts, with the full name under it,
+  so the parts must cover the whole model or it is drawn too big for its stage (`VehicleAssemblingScreenClientGameTest`
+  shoots every vehicle's stage). Its tabs are categories, not vehicle types: Ground, Air (helicopters and planes), Sea,
+  Artillery, and Defences (an `AutoDefenceEntity`). The old silhouette icons (`textures/vehicle_icon/`) are no longer
+  drawn. Carried weapons (the mortar, the TOW) are crafted
   items instead and pack into their own item on a sneak-click with an empty hand; everything else packs into its
   container with the crowbar (`VehiclePackUp` covers both for the whole fleet).
 - **An unarmed vehicle: `"weapons": []`.** An empty list means no weapons (since 2026-11-17); only a missing list
@@ -411,9 +414,13 @@ physically; parts that stop working when hit.
 
 - **Server first.** World changes happen on the server only. Respect the world border, spawn protection and
   adventure mode, and call `PlayerBlockBreakEvents.BEFORE`/`AFTER` for every block, so claim mods apply.
-- **A vehicle container sets a jet down on its wheels where the box stood.** It spawned every vehicle half its
-  height up; a jet fell with no pilot, its flight model turned the nose into the fall, and it landed nose first
-  (`VehicleContainerBlockEntity.deploy`).
+- **A vehicle container sets every vehicle down on the ground where the box stood.** It spawned every vehicle half its
+  height up; a jet fell with no pilot, its flight model turned the nose into the fall, and it landed nose first, and
+  the artillery (the sentry first, 2026-11-20) has no drive to fall with, so it hung in the air
+  (`VehicleContainerBlockEntity.deploy`). Only when something low beside the box is in the way at ground level does it
+  start above and settle. Artillery now has weight too (`tickArtilleryGravity`: straight down, never pushed sideways
+  or up), so a gun whose ground is dug out falls. `VehicleBoxLandingClientGameTest` unboxes every vehicle with an
+  assembly recipe and checks it rests on the ground, level, where the box was: add each new vehicle to its list.
 - **Carry On (in the pack) picks up any entity with sneak + right-click and an empty hand.** Unblacklisted, a player
   could carry a whole vehicle off, and every sneak-click on a vehicle went to Carry On instead of the vehicle (the
   FSV-6's on-foot tow click lifted the truck). Every JEG vehicle entity is listed in

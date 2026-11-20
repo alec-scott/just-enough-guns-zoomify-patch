@@ -5724,7 +5724,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         }
         EngineInfo engine = this.vehicleData().defaults().engine();
         if (this.vehicleData().defaults().vehicleType() == VehicleType.ARTILLERY) {
-            this.setDeltaMovement(Vec3.ZERO);
+            this.tickArtilleryGravity();
             return;
         }
         if (this.isJet()) {
@@ -5751,6 +5751,21 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         }
         boolean hasThrottle = this.hasEngineEnergy(engine, forwardAxis != 0 || steeringAxis != 0);
         this.tickBasicLandMovement(engine, velocity, forwardAxis, this.input.strafeAxis(), hasThrottle, true);
+    }
+
+    /**
+     * Artillery has no drive, but it still has to stand on something: it falls straight down (never pushed sideways or
+     * up) until it does. Without this a sentry deployed from its box hung in the air, as did a gun whose ground was dug
+     * out from under it. A towing vehicle moves its gun itself (SupportVehicleEntity#tickTow).
+     */
+    private void tickArtilleryGravity() {
+        if (this.isPassenger() || this.isNoGravity()) {
+            this.setDeltaMovement(Vec3.ZERO);
+            return;
+        }
+        double fall = Math.max(Math.min(0.0D, this.getDeltaMovement().y) - GRAVITY, -3.92D);
+        this.moveGroundVehicle(new Vec3(0.0D, fall, 0.0D));
+        this.setDeltaMovement(0.0D, this.getDeltaMovement().y, 0.0D);
     }
 
     private void tickBasicLandMovement(EngineInfo engine, Vec3 velocity, int forwardAxis, int strafeAxis, boolean hasThrottle, boolean engineSound) {

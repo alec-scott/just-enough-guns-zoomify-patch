@@ -9,6 +9,7 @@ import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.events.GuiEventListener;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.MenuProvider;
 import net.minecraft.world.item.Items;
@@ -17,6 +18,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import ttv.migami.jeg.Reference;
 import ttv.migami.jeg.vehicle.client.screen.VehicleAssemblingScreen;
+
+import java.util.List;
 
 /**
  * The vehicle assembling table shows what each vehicle needs: picking one lists its items with how many are carried, and
@@ -62,6 +65,13 @@ public class VehicleAssemblingScreenClientGameTest implements FabricClientGameTe
             }
             shot(context, "vehicle_assembling_bmp2");
 
+            // The list runs by category (Ground first); the helicopters and planes are under Air.
+            click(context, Component.translatable("gui.jeg.vehicle_assembling.category.air").getString(), failures);
+            context.waitTicks(2);
+            List<String> air = context.computeOnClient(mc -> screen(mc).listedVehicles().stream().map(Identifier::getPath).toList());
+            if (!air.equals(List.of("ah6", "mi28", "tom6", "a10"))) {
+                failures.append("the Air tab should list the AH-6, Mi-28, bush plane and A-10, got ").append(air).append('\n');
+            }
             click(context, "AH-6", failures);
             context.waitTicks(2);
             String ah6 = context.computeOnClient(mc -> String.valueOf(screen(mc).selectedVehicle()) + " " + screen(mc).canAssemble());
@@ -79,6 +89,17 @@ public class VehicleAssemblingScreenClientGameTest implements FabricClientGameTe
             }
             shot(context, "vehicle_assembling_a10");
 
+            // The guns that fire on their own have a tab of their own.
+            click(context, Component.translatable("gui.jeg.vehicle_assembling.category.defences").getString(), failures);
+            context.waitTicks(2);
+            List<String> defences = context.computeOnClient(mc -> screen(mc).listedVehicles().stream().map(Identifier::getPath).toList());
+            if (!defences.equals(List.of("sentry", "hpj11"))) {
+                failures.append("the Defences tab should list the sentry and the HPJ-11, got ").append(defences).append('\n');
+            }
+            shot(context, "vehicle_assembling_defences");
+
+            click(context, Component.translatable("gui.jeg.vehicle_assembling.filter.all").getString(), failures);
+            context.waitTicks(2);
             click(context, "BMP-2", failures);
             context.waitTicks(2);
             click(context, Component.translatable("gui.jeg.vehicle_assembling.assemble").getString(), failures);
@@ -89,6 +110,56 @@ public class VehicleAssemblingScreenClientGameTest implements FabricClientGameTe
             }
             shot(context, "vehicle_assembling_built");
             LOGGER.info("vehicle assembling: bmp2 pick {}, ah6 pick {}, iron after build {}", bmp, ah6, iron);
+
+            // Each vehicle's turning model in the card (the user, 2026-11-20: show the model in 3D, names that fit), for
+            // looking at: every model must sit whole inside its stage. Then the screen at GUI scales 2, 3 and 4.
+            // Dragging across the stage turns the model with the mouse (1.4 degrees a GUI pixel), and it stays put
+            // while held.
+            context.runOnClient(mc -> screen(mc).show(Reference.id("bmp2")));
+            context.waitTicks(2);
+            double[] stage = context.computeOnClient(mc -> {
+                double gui = mc.getWindow().getGuiScale();
+                int left = (mc.getWindow().getGuiScaledWidth() - 320) / 2, top = (mc.getWindow().getGuiScaledHeight() - 238) / 2;
+                return new double[]{(left + 248) * gui, (top + 78) * gui, gui};
+            });
+            context.getInput().setCursorPos(stage[0], stage[1]);
+            context.waitTick();
+            context.getInput().holdMouse(GLFW.GLFW_MOUSE_BUTTON_LEFT);
+            context.waitTick();
+            float before = context.computeOnClient(mc -> screen(mc).modelTurn());
+            context.getInput().setCursorPos(stage[0] + 30 * stage[2], stage[1]);
+            context.waitTicks(3);
+            float dragged = context.computeOnClient(mc -> screen(mc).modelTurn());
+            context.waitTicks(10);
+            float held = context.computeOnClient(mc -> screen(mc).modelTurn());
+            context.getInput().releaseMouse(GLFW.GLFW_MOUSE_BUTTON_LEFT);
+            float turned = ((before - dragged) % 360.0F + 360.0F) % 360.0F;
+            LOGGER.info("vehicle assembling: drag 30 px turned the model {} degrees (before {}, after {}, held {})", turned, before, dragged, held);
+            if (Math.abs(turned - 42.0F) > 6.0F || Math.abs(held - dragged) > 0.01F) {
+                failures.append("dragging 30 px should turn the model 42 degrees and hold it, turned ").append(turned)
+                        .append(", moved ").append(held - dragged).append(" while held\n");
+            }
+
+            List<Identifier> offered = context.computeOnClient(mc -> screen(mc).offeredVehicles());
+            for (Identifier id : offered) {
+                context.runOnClient(mc -> screen(mc).show(id));
+                context.waitTicks(3);
+                shot(context, "vehicle_assembling_model_" + id.getPath());
+            }
+            int scale = context.computeOnClient(mc -> mc.options.guiScale().get());
+            for (int gui : new int[]{2, 3, 4}) {
+                context.runOnClient(mc -> {
+                    mc.options.guiScale().set(gui);
+                    mc.resizeGui();
+                    screen(mc).show(Reference.id("plz05"));
+                });
+                context.waitTicks(3);
+                shot(context, "vehicle_assembling_gui" + gui);
+            }
+            context.runOnClient(mc -> {
+                mc.options.guiScale().set(scale);
+                mc.resizeGui();
+            });
             context.runOnClient(mc -> mc.setScreen(null));
         }
         if (failures.length() > 0) {

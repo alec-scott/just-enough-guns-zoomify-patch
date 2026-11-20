@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.7.2+mc26.1.2.yftm.24 - 2026-11-20
+
+### Added
+- Crafting recipes for the 30mm AP Shell (BMP-2 cannon, HPJ-11): an iron ingot, a copper ingot and two gunpowder make 24; and for the 20mm HE Shell (LAV-150 cannon): two copper ingots and two gunpowder make 24. Neither could be crafted before.
+
+### Changed
+- Vehicle creator: the picked vehicle's real model turns in 3D (drag it to turn it yourself), with its full name under it. The list uses short names that fit their buttons ("BL-132" rather than a cut-off "BL-132 130 mm Gun Mount"), in the vehicle screens' clean style, and the screen is a little shorter, so a small window or a large GUI scale no longer cuts off the hotbar.
+- Vehicle creator: clearer tabs: All, Ground, Air (helicopters and planes together), Sea, Artillery, and Defences (the sentry and the HPJ-11, which fire on their own). The list runs in that order, each group from light to heavy, instead of alphabetically.
+
+### Fixed
+- Vehicles opened from their box stand on the ground where the box was. The sentry, HPJ-11, Mk42, BL-132, Type-63 and howitzer came out hanging in the air above it; other vehicles dropped down from there. Guns and defences now also settle onto the ground if the ground under them is dug out, and any left in the air by an earlier version come down.
+
 ## 1.7.2+mc26.1.2.yftm.23 - 2026-11-20
 
 ### Added

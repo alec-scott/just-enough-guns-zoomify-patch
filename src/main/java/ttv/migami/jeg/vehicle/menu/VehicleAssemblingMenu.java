@@ -38,13 +38,15 @@ public final class VehicleAssemblingMenu extends AbstractContainerMenu {
         this.playerInventory = playerInventory;
         this.access = access;
 
+        // Under the vehicle list on the left (VehicleAssemblingScreen), the screen no taller than 240 so a short window or a
+        // large GUI scale doesn't cut the hotbar off.
         for (int row = 0; row < 3; row++) {
             for (int col = 0; col < 9; col++) {
-                this.addSlot(new Slot(playerInventory, col + row * 9 + 9, 8 + col * 18, 166 + row * 18));
+                this.addSlot(new Slot(playerInventory, col + row * 9 + 9, 8 + col * 18, 158 + row * 18));
             }
         }
         for (int col = 0; col < 9; col++) {
-            this.addSlot(new Slot(playerInventory, col, 8 + col * 18, 224));
+            this.addSlot(new Slot(playerInventory, col, 8 + col * 18, 216));
         }
     }
 
