@@ -32,6 +32,13 @@ public class TowClientGameTest implements FabricClientGameTest {
     public void runTest(ClientGameTestContext context) {
         context.runOnClient(mc -> mc.options.renderDistance().set(12));
         try (TestSingleplayerContext world = context.worldBuilder().create()) {
+            // The real recordings (a BGM-71 launch, design/tow/prepare_audio.py) must be what is heard.
+            java.util.List<String> heard = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
+            net.minecraft.client.sounds.SoundEventListener listener = (sound, events, range) -> {
+                String path = sound.getIdentifier().getPath();
+                if (path.contains("tow")) heard.add(path);
+            };
+            context.runOnClient(mc -> mc.getSoundManager().addListener(listener));
             context.waitTicks(100);
             TestServerContext server = world.getServer();
             server.runCommand("gamemode survival @a");
@@ -71,7 +78,7 @@ public class TowClientGameTest implements FabricClientGameTest {
             context.waitTicks(10);
             this.look(context, server, 0.0F, 0.0F);
             context.getInput().pressKey(KeyBindings.RELOAD);
-            context.waitTicks(170);
+            context.waitTicks(90);
             int loaded = server.computeOnServer(s -> tow(s).vehicleWeaponSlotAmmo(0));
             check(loaded == 1, "R must load a missile from the crate, loaded " + loaded);
             context.takeScreenshot("tow_sight");
@@ -97,7 +104,7 @@ public class TowClientGameTest implements FabricClientGameTest {
 
             // 4. Steering: fire straight ahead, then turn 12 degrees right; the missile follows the new line.
             context.getInput().pressKey(KeyBindings.RELOAD);
-            context.waitTicks(170);
+            context.waitTicks(90);
             this.fire(context);
             context.waitTicks(8);
             this.look(context, server, -12.0F, 0.0F);
@@ -119,7 +126,7 @@ public class TowClientGameTest implements FabricClientGameTest {
 
             // 5. Wire break: leave the sight and the missile flies on straight.
             context.getInput().pressKey(KeyBindings.RELOAD);
-            context.waitTicks(170);
+            context.waitTicks(90);
             this.look(context, server, 0.0F, 0.0F);
             context.waitTicks(10);
             this.fire(context);
@@ -158,6 +165,9 @@ public class TowClientGameTest implements FabricClientGameTest {
             LOGGER.info("[tow] pack-up: removed {} launchers {} missiles {} -> {}", gone, launchers, missilesBefore, missilesAfter);
             check(gone && launchers == 1, "packing up must remove the TOW and return the launcher");
             check(missilesAfter == missilesBefore + 1, "packing up must return the missile left in the crate");
+            context.runOnClient(mc -> mc.getSoundManager().removeListener(listener));
+            LOGGER.info("[tow] sounds heard: {}", heard.stream().distinct().toList());
+            if (!heard.contains("vehicle.tow.launch")) throw new AssertionError("vehicle.tow.launch was not heard: " + java.util.List.copyOf(heard));
             LOGGER.info("[tow] COMPLETE");
         } catch (Throwable failure) {
             LOGGER.error("[tow] FAILED: {}", failure.getMessage());

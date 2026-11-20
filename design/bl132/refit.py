@@ -153,6 +153,7 @@ def main():
         copies += [(f"sounds/bl_132/bl_132_fire_3p_0{i}.ogg", f"sounds/vehicle/bl132/fire_{i}.ogg"),
                    (f"sounds/bl_132/bl_132_fire_1p_0{i}.ogg", f"sounds/vehicle/bl132/fire_interior_{i}.ogg"),
                    (f"sounds/bl_132/bl_132_reload_0{i}.ogg", f"sounds/vehicle/bl132/load_{i}.ogg")]
+    copies.append((f"textures/vehicle_icon/{SBW_ID}_icon.png", f"textures/vehicle_icon/{ID}_icon.png"))  # the creator's icon
     for source, target in copies:
         (assets / target).parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(src / source, assets / target)

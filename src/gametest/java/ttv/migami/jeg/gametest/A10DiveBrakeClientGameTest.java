@@ -53,6 +53,8 @@ public class A10DiveBrakeClientGameTest implements FabricClientGameTest {
                 pilot.setSilent(true);
                 pilot.snapTo(SPOT.x, SPOT.y, SPOT.z, 0.0F, 0.0F);
                 level.addFreshEntity(pilot);
+                // Since yftm.22 only a player or tagged crew may drive or man a gun.
+                pilot.addTag(ttv.migami.jeg.vehicle.ai.EnemyVehicleController.ENEMY_VEHICLE_CREW_TAG);
                 pilot.startRiding(jet, true, true);
                 jet.addEnergy(jet.maxVehicleEnergy());
                 return jet.getUUID().toString();

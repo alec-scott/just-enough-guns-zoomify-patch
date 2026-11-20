@@ -74,6 +74,13 @@ public final class MissileBlastRenderer {
     /** Sprite cell size: large enough to stay soft when a puff fills the view. */
     private static final int SPRITE_CELL = 128;
     private static final List<Blast> BLASTS = new ArrayList<>();
+    private static final List<SmokeScreen> SCREENS = new ArrayList<>();
+    private static final List<Plume> PLUMES = new ArrayList<>();
+    private static final List<Wisp> WISPS = new ArrayList<>();
+    /** At most this many plume puffs in the air; the oldest give way. */
+    private static final int MAX_PLUMES = 6000;
+    private static final Vec3 PLUME_WIND = new Vec3(0.011D, 0.0D, 0.005D);
+    private static int smokeScreensStarted;
     private static boolean texturesReady;
     private static int blastsStarted;
     private static int shocksFelt;
@@ -106,8 +113,32 @@ public final class MissileBlastRenderer {
         return shocksFelt;
     }
 
+    /** A smoke screen going up (a vehicle's smoke dischargers, a smoke grenade or shell). */
+    public static void addSmokeScreen(ttv.migami.jeg.network.SmokeScreenPayload payload) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.level == null) {
+            return;
+        }
+        ensureTextures(mc);
+        SCREENS.add(new SmokeScreen(mc, payload.position(), payload.radius(), payload.ticks(), mc.level.getRandom().nextLong()));
+        smokeScreensStarted++;
+    }
+
+    /** How many smoke screens have been drawn since the game started, for checks. */
+    public static int smokeScreensStarted() {
+        return smokeScreensStarted;
+    }
+
+    /** How many smoke screens are in the air now, for checks. */
+    public static int smokeScreensShown() {
+        return SCREENS.size();
+    }
+
     public static void clear() {
         BLASTS.clear();
+        SCREENS.clear();
+        PLUMES.clear();
+        WISPS.clear();
         screenFlash = 0.0F;
     }
 
@@ -115,8 +146,13 @@ public final class MissileBlastRenderer {
         Minecraft mc = Minecraft.getInstance();
         if (mc.level == null) {
             BLASTS.clear();
+            SCREENS.clear();
+            PLUMES.clear();
+            WISPS.clear();
             return;
         }
+        tickPlumes(mc);
+        SCREENS.removeIf(screen -> ++screen.age > screen.lifetime);
         Iterator<Blast> iterator = BLASTS.iterator();
         while (iterator.hasNext()) {
             Blast blast = iterator.next();
@@ -133,7 +169,7 @@ public final class MissileBlastRenderer {
     }
 
     public static void render(PoseStack poseStack, MultiBufferSource bufferSource, float partialTick) {
-        if (BLASTS.isEmpty() || !texturesReady) {
+        if ((BLASTS.isEmpty() && SCREENS.isEmpty() && PLUMES.isEmpty()) || !texturesReady) {
             return;
         }
         Minecraft mc = Minecraft.getInstance();
@@ -177,6 +213,17 @@ public final class MissileBlastRenderer {
             if (far[i] < 1.0F) {
                 for (int q = first; q < quads.size(); q++) {
                     quads.set(q, quads.get(q).scaled(far[i]));
+                }
+            }
+        }
+        collectPlumes(quads, view, partialTick);
+        for (SmokeScreen screen : SCREENS) {
+            int first = quads.size();
+            screen.collect(mc, quads, view, forward, partialTick);
+            float scale = FarDraw.scale(screen.centre.subtract(view));
+            if (scale < 1.0F) {
+                for (int q = first; q < quads.size(); q++) {
+                    quads.set(q, quads.get(q).scaled(scale));
                 }
             }
         }
@@ -1010,6 +1057,328 @@ public final class MissileBlastRenderer {
     }
 
     private record TrailPoint(Vec3 at, int born) {}
+
+    /**
+     * A smoke screen: the canisters burn for a few seconds, pouring out thick white smoke that rolls outward low along
+     * the ground and billows up as it spreads, drifting downwind; it holds as a wall for {@code hold} ticks and then thins
+     * away, puff by puff, over the next few seconds. Lit like the blasts' smoke (light on top, shadow underneath), soft
+     * at its edges and thinner there, so it screens without being a solid block (the user's review, R17).
+     */
+    private static final class SmokeScreen {
+        /** Ticks the canisters pour smoke; the cloud keeps topping up more slowly after that while it holds. */
+        private static final int BURST_TICKS = 50;
+        private static final int FADE_TICKS = 90;
+        private static final Vec3 WIND = new Vec3(0.011D, 0.0D, 0.005D);
+
+        final Vec3 centre;
+        final double radius;
+        final int hold;
+        final int lifetime;
+        final double groundY;
+        final List<ScreenPuff> puffs = new ArrayList<>();
+        int age;
+
+        SmokeScreen(Minecraft mc, Vec3 at, float radius, int hold, long seed) {
+            this.radius = Math.max(1.5D, radius);
+            this.hold = Math.max(40, hold);
+            this.groundY = groundBelow(mc, at);
+            this.centre = Double.isNaN(this.groundY) ? at : new Vec3(at.x, this.groundY, at.z);
+            RandomSource random = RandomSource.create(seed);
+            double scale = this.radius / 4.0D;
+            int burst = (int) Math.round(22 + 12 * scale);
+            int sustain = (int) Math.round(Math.max(0, this.hold - BURST_TICKS) / 14.0D);
+            int longest = 0;
+            for (int i = 0; i < burst + sustain; i++) {
+                boolean early = i < burst;
+                int delay = early ? Math.round(BURST_TICKS * (float) Math.pow(random.nextFloat(), 1.4D))
+                        : BURST_TICKS + random.nextInt(Math.max(1, this.hold - BURST_TICKS));
+                // Each puff lives out the hold and then thins away, the last of it a little after the rest.
+                int life = Math.max(40, this.hold - delay) + Math.round(FADE_TICKS * (0.4F + 0.6F * random.nextFloat()));
+                double angle = random.nextDouble() * Mth.TWO_PI;
+                double reach = Math.sqrt(random.nextDouble());
+                this.puffs.add(new ScreenPuff(new Vec3(Math.cos(angle), 0.0D, Math.sin(angle)), reach,
+                        (1.3D + random.nextDouble() * 1.1D) * Math.sqrt(scale), random.nextFloat() * Mth.TWO_PI,
+                        (random.nextFloat() - 0.5F) * 0.012F, delay, life, random.nextFloat(), random.nextFloat()));
+                longest = Math.max(longest, delay + life);
+            }
+            this.lifetime = longest + 2;
+        }
+
+        private static double groundBelow(Minecraft mc, Vec3 at) {
+            BlockPos start = BlockPos.containing(at.add(0.0D, 0.5D, 0.0D));
+            for (int dy = 0; dy <= 6; dy++) {
+                BlockPos pos = start.below(dy);
+                BlockState state = mc.level.getBlockState(pos);
+                if (!state.isAir() && !state.getCollisionShape(mc.level, pos).isEmpty()) {
+                    return pos.getY() + state.getCollisionShape(mc.level, pos).max(net.minecraft.core.Direction.Axis.Y);
+                }
+            }
+            return Double.NaN;
+        }
+
+        void collect(Minecraft mc, List<Quad> quads, Vec3 view, Vector3f forward, float partialTick) {
+            float t = this.age + partialTick;
+            float daylight = daylight(mc, this.centre, 0.22F);
+            Vec3 look = new Vec3(forward.x(), forward.y(), forward.z());
+            double floor = Double.isNaN(this.groundY) ? Double.NaN : this.groundY - view.y;
+            double height = 1.2D + 0.55D * this.radius;
+            for (ScreenPuff puff : this.puffs) {
+                float tau = t - puff.delay();
+                if (tau <= 0.0F || tau > puff.life()) {
+                    continue;
+                }
+                // Pushed out from the canister fast, then rolling on more slowly as it spreads.
+                double out = this.radius * puff.reach() * (0.25D + 0.75D * (1.0D - Math.exp(-tau / 30.0D))) + 0.004D * tau;
+                double size = puff.size() * (0.55D + 0.9D * (1.0D - Math.exp(-tau / 35.0D)) + tau / 900.0D);
+                // Low and heavy at first; some of it climbs higher as it billows.
+                double rise = size * 0.45D + height * puff.lift() * (1.0D - Math.exp(-tau / 70.0D)) + 0.002D * tau;
+                Vec3 drift = WIND.scale(tau);
+                Vec3 at = this.centre.add(puff.dir().scale(out)).add(drift).add(0.0D, rise, 0.0D);
+                if (!Double.isNaN(this.groundY) && at.y < this.groundY + size * 0.45D) {
+                    at = new Vec3(at.x, this.groundY + size * 0.45D, at.z);
+                }
+                Vec3 middle = this.centre.add(drift).add(0.0D, height * 0.4D, 0.0D);
+                float remaining = (puff.life() - tau) / FADE_TICKS;
+                // Thinner at the screen's edge, where it trails off into wisps.
+                float alpha = 0.5F * Math.min(1.0F, tau / 6.0F) * Mth.clamp(remaining, 0.0F, 1.0F)
+                        * (float) (1.0D - 0.55D * puff.reach() * puff.reach());
+                if (alpha <= 0.004F) {
+                    continue;
+                }
+                // Screening smoke is white; fresh out of the canister it is brightest, greying a little as it hangs.
+                float grey = 0.8F + 0.1F * puff.shade() - 0.08F * Math.min(1.0F, tau / 300.0F);
+                float lit = litFrom(at, middle, size, look) * daylight;
+                quads.add(new Quad(at.subtract(view), (float) size, puff.rotation() + puff.spin() * tau,
+                        new float[] {grey * lit, grey * lit, grey * lit * 1.01F}, alpha, FULL_BRIGHT,
+                        Math.min(3, (int) (puff.shade() * 4.0F)), SMOKE_GRADIENT, floor));
+            }
+        }
+    }
+
+    // ---- Plumes: damage and wreck smoke and fire, gun smoke, flare trails (SmokeFx) ---------------------------
+
+    /**
+     * One puff of smoke or flame: it moves off at its velocity, slowing, rises on its own heat, drifts downwind and grows
+     * as it thins. Drawn as the blasts' smoke is (soft, lit from above and shaded under), sorted with it.
+     */
+    private static final class Plume {
+        double x, y, z, px, py, pz, vx, vy, vz;
+        float size, grow, rise, drag, alpha, grey, lit = 1.0F, rotation, spin;
+        float r = 1.0F, g = 1.0F, b = 1.0F;
+        int life, age, variant;
+        boolean fire;
+    }
+
+    /** Smoke still curling off a gun's muzzle after a shot, for a few seconds. */
+    private static final class Wisp {
+        final int gunId;
+        final Vec3 offset;
+        int left;
+
+        Wisp(int gunId, Vec3 offset, int left) {
+            this.gunId = gunId;
+            this.offset = offset;
+            this.left = left;
+        }
+    }
+
+    /** SmokeFx's client side: one puff of the kind asked for. */
+    public static void emitPlume(net.minecraft.world.level.Level level, Vec3 at, Vec3 velocity, int kind, float scale) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.level == null || level != mc.level) {
+            return;
+        }
+        ensureTextures(mc);
+        RandomSource random = mc.level.getRandom();
+        Plume p = new Plume();
+        p.x = p.px = at.x;
+        p.y = p.py = at.y;
+        p.z = p.pz = at.z;
+        p.vx = velocity.x;
+        p.vy = velocity.y;
+        p.vz = velocity.z;
+        p.rotation = random.nextFloat() * Mth.TWO_PI;
+        p.spin = (random.nextFloat() - 0.5F) * 0.02F;
+        p.variant = random.nextInt(4);
+        float jitter = 0.8F + random.nextFloat() * 0.4F;
+        switch (kind) {
+            case ttv.migami.jeg.vehicle.effect.SmokeFx.GREY -> set(p, 0.5F, 0.022F, 0.0015F, 0.96F, 0.42F, 0.58F, 80 + random.nextInt(40));
+            case ttv.migami.jeg.vehicle.effect.SmokeFx.DARK -> set(p, 0.6F, 0.03F, 0.002F, 0.97F, 0.55F, 0.3F, 110 + random.nextInt(50));
+            case ttv.migami.jeg.vehicle.effect.SmokeFx.BLACK -> set(p, 0.8F, 0.04F, 0.003F, 0.97F, 0.7F, 0.11F, 150 + random.nextInt(70));
+            case ttv.migami.jeg.vehicle.effect.SmokeFx.FIRE -> {
+                set(p, 0.45F, 0.02F, 0.004F, 0.95F, 0.85F, 1.0F, 10 + random.nextInt(9));
+                p.fire = true;
+            }
+            case ttv.migami.jeg.vehicle.effect.SmokeFx.WHITE -> set(p, 0.35F, 0.025F, 0.001F, 0.9F, 0.55F, 0.93F, 70 + random.nextInt(40));
+            default -> set(p, 0.5F, 0.05F, 0.0015F, 0.85F, 0.5F, 0.82F, 70 + random.nextInt(50));
+        }
+        p.size *= scale * jitter;
+        p.grow *= scale * jitter;
+        add(p);
+    }
+
+    private static void set(Plume p, float size, float grow, float rise, float drag, float alpha, float grey, int life) {
+        p.size = size;
+        p.grow = grow;
+        p.rise = rise;
+        p.drag = drag;
+        p.alpha = alpha;
+        p.grey = grey;
+        p.life = life;
+    }
+
+    private static void add(Plume p) {
+        if (PLUMES.size() >= MAX_PLUMES) {
+            PLUMES.remove(0);
+        }
+        PLUMES.add(p);
+    }
+
+    /**
+     * A shell gun has fired (its report has come in, GunReportAudio): the muzzle blast's cloud thrown forward along the
+     * bore and out sideways through the muzzle brake, then slowing, billowing and drifting off, and smoke curling off the
+     * muzzle for a few seconds after. A rocket's is its backblast behind the launcher. Placed on the gun as drawn (the user's review, 2026-11-19: "smoke from the barrel should
+     * be realistic and animated"), replacing the campfire puffs the server sent.
+     */
+    public static void gunFired(ttv.migami.jeg.network.GunReportPayload payload) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.level == null || !(mc.level.getEntity(payload.gunId()) instanceof ttv.migami.jeg.vehicle.entity.ShellGunEntity gun)) {
+            return;
+        }
+        ensureTextures(mc);
+        RandomSource random = mc.level.getRandom();
+        Vec3 bore = gun.barrelDirection(1.0F).normalize();
+        Vec3 muzzle = payload.muzzle();
+        float scale = Mth.clamp(payload.loudness() / 2.4F, 0.8F, 1.6F);
+        Vec3 side = bore.cross(new Vec3(0.0D, 1.0D, 0.0D));
+        side = side.lengthSqr() < 1.0E-4D ? new Vec3(1.0D, 0.0D, 0.0D) : side.normalize();
+        Vec3 up = side.cross(bore).normalize();
+        if (gun.shellsAreRockets()) {
+            Vec3 back = muzzle.subtract(bore.scale(1.2D));
+            for (int i = 0; i < 12; i++) {
+                Vec3 v = bore.scale(-(0.25D + random.nextDouble() * 0.55D)).add(jitter(random, 0.12D));
+                muzzlePuff(back, v, 0.7F * scale, 0.78F, random);
+            }
+            for (int i = 0; i < 3; i++) {
+                muzzlePuff(muzzle, bore.scale(0.15D + random.nextDouble() * 0.2D).add(jitter(random, 0.04D)), 0.4F * scale, 0.8F, random);
+            }
+            return;
+        }
+        int jet = Math.round(12 * scale);
+        for (int i = 0; i < jet; i++) {
+            double speed = (0.35D + random.nextDouble() * 1.2D) * Math.sqrt(scale);
+            muzzlePuff(muzzle, bore.scale(speed).add(jitter(random, 0.08D)), 0.55F * scale, 0.8F, random);
+        }
+        // The muzzle brake throws the gas out sideways in two lobes, and a little up and down.
+        for (int i = 0; i < 8; i++) {
+            double angle = (i % 2 == 0 ? 0.0D : Math.PI) + (random.nextDouble() - 0.5D) * 0.9D;
+            Vec3 out = side.scale(Math.cos(angle)).add(up.scale(Math.sin(angle) * 0.5D)).scale(0.22D + random.nextDouble() * 0.15D);
+            muzzlePuff(muzzle, out.add(bore.scale(0.08D)), 0.5F * scale, 0.78F, random);
+        }
+        WISPS.add(new Wisp(gun.getId(), muzzle.subtract(gun.position()), 70));
+    }
+
+    private static Plume muzzlePuff(Vec3 at, Vec3 velocity, float size, float grey, RandomSource random) {
+        Plume p = new Plume();
+        p.x = p.px = at.x;
+        p.y = p.py = at.y;
+        p.z = p.pz = at.z;
+        p.vx = velocity.x;
+        p.vy = velocity.y;
+        p.vz = velocity.z;
+        p.rotation = random.nextFloat() * Mth.TWO_PI;
+        p.spin = (random.nextFloat() - 0.5F) * 0.03F;
+        p.variant = random.nextInt(4);
+        set(p, size, 0.045F * size / 0.55F, 0.0015F, 0.86F, 0.5F, grey + random.nextFloat() * 0.06F, 70 + random.nextInt(60));
+        add(p);
+        return p;
+    }
+
+    private static Vec3 jitter(RandomSource random, double amount) {
+        return new Vec3(random.nextGaussian() * amount, random.nextGaussian() * amount, random.nextGaussian() * amount);
+    }
+
+    private static void tickPlumes(Minecraft mc) {
+        java.util.Iterator<Wisp> wisps = WISPS.iterator();
+        while (wisps.hasNext()) {
+            Wisp wisp = wisps.next();
+            if (--wisp.left <= 0 || !(mc.level.getEntity(wisp.gunId) instanceof ttv.migami.jeg.vehicle.entity.ShellGunEntity gun)) {
+                wisps.remove();
+                continue;
+            }
+            if (wisp.left % 2 == 0) {
+                RandomSource random = mc.level.getRandom();
+                Vec3 at = gun.position().add(wisp.offset);
+                Plume p = muzzlePuff(at, new Vec3(random.nextGaussian() * 0.006D, 0.025D + random.nextDouble() * 0.02D,
+                        random.nextGaussian() * 0.006D), 0.22F, 0.86F, random);
+                p.alpha = 0.35F * wisp.left / 70.0F;
+                p.grow = 0.012F;
+                p.drag = 0.97F;
+                p.life = 50 + random.nextInt(30);
+            }
+        }
+        java.util.Iterator<Plume> it = PLUMES.iterator();
+        long time = mc.level.getGameTime();
+        while (it.hasNext()) {
+            Plume p = it.next();
+            p.px = p.x;
+            p.py = p.y;
+            p.pz = p.z;
+            if (++p.age >= p.life) {
+                it.remove();
+                continue;
+            }
+            p.vx *= p.drag;
+            p.vy = p.vy * p.drag + p.rise;
+            p.vz *= p.drag;
+            // The wind takes it more as its own push dies away.
+            double windShare = Math.min(1.0D, p.age / 20.0D);
+            p.x += p.vx + PLUME_WIND.x * windShare;
+            p.y += p.vy;
+            p.z += p.vz + PLUME_WIND.z * windShare;
+            p.size += p.grow * (1.0F - 0.6F * p.age / p.life);
+            if ((p.age & 7) == 1) {
+                p.lit = daylight(mc, new Vec3(p.x, p.y, p.z), 0.2F);
+            }
+            // Smoke has no collision: none inside a deployed FSV-6's room (it rose through the floor there).
+            if ((p.age & 3) == 0 && ttv.migami.jeg.vehicle.entity.SupportVehicleEntity.insideClientRoom(p.x, p.y, p.z, p.size * 0.5F)) {
+                it.remove();
+            }
+        }
+    }
+
+    private static void collectPlumes(List<Quad> quads, Vec3 view, float partialTick) {
+        for (Plume p : PLUMES) {
+            float t = p.age + partialTick;
+            float life = t / p.life;
+            float fade = Math.min(1.0F, t / 3.0F) * (1.0F - life * life);
+            if (fade <= 0.003F) {
+                continue;
+            }
+            Vec3 rel = new Vec3(Mth.lerp(partialTick, p.px, p.x) - view.x, Mth.lerp(partialTick, p.py, p.y) - view.y,
+                    Mth.lerp(partialTick, p.pz, p.z) - view.z);
+            float size = p.size + p.grow * partialTick;
+            Quad quad;
+            if (p.fire) {
+                float[] c = fireColour(Math.min(1.0F, life * 1.15F), p.variant / 3.0F);
+                quad = new Quad(rel, size, p.rotation + p.spin * t, c, p.alpha * fade, FULL_BRIGHT, p.variant, FIRE_GRADIENT, Double.NaN);
+            } else {
+                float shade = p.grey * p.lit;
+                quad = new Quad(rel, size, p.rotation + p.spin * t, new float[] {shade * p.r, shade * p.g, shade * p.b},
+                        p.alpha * fade, FULL_BRIGHT, p.variant, SMOKE_GRADIENT, Double.NaN);
+            }
+            float scale = FarDraw.scale(rel);
+            quads.add(scale < 1.0F ? quad.scaled(scale) : quad);
+        }
+    }
+
+    /** For checks: puffs in the air now. */
+    public static int plumesShown() {
+        return PLUMES.size();
+    }
+
+    private record ScreenPuff(Vec3 dir, double reach, double size, float rotation, float spin, int delay, int life, float shade,
+                              float lift) {}
 
 
     /** A burning scrap on a ballistic arc, leaving smoke behind it until it lands or burns out. */

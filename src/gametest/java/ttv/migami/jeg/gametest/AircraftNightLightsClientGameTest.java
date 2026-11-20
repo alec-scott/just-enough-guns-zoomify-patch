@@ -66,6 +66,8 @@ public class AircraftNightLightsClientGameTest implements FabricClientGameTest {
                         pilot.setSilent(true);
                         pilot.snapTo(at.x, at.y, at.z, 0.0F, 0.0F);
                         level.addFreshEntity(pilot);
+                        // Since yftm.22 only a player or tagged crew may drive or man a gun.
+                        pilot.addTag(ttv.migami.jeg.vehicle.ai.EnemyVehicleController.ENEMY_VEHICLE_CREW_TAG);
                         pilot.startRiding(vehicle, true, true);
                     }
                     out[i++] = vehicle.getUUID().toString();

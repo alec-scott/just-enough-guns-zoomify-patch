@@ -328,9 +328,16 @@ public final class SupportShell {
         return cell.level() == 1 && cell.row() == 2 && (cell.column() == 1 || cell.column() == 2);
     }
 
+    /**
+     * The lamp cells' level: the lamp's own less one, at most {@link #ROOM_LAMP_MAX}. A lantern gave 14, which Photon
+     * still exposed as a hot, saturated room (user report, 2026-11-17: "more ambient, softer exposure"); at 11 the room
+     * falls off to about 9 at its ends.
+     */
     static int lampLevel(int roomLight) {
-        return Math.max(0, roomLight - 1);
+        return Math.max(0, Math.min(roomLight - 1, ROOM_LAMP_MAX));
     }
+
+    public static final int ROOM_LAMP_MAX = 11;
 
     /** Set the room's light, the camp lamps and the bunks' beds after the fittings of a deployed vehicle change. */
     public static void relight(SupportVehicleEntity vehicle) {

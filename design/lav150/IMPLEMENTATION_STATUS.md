@@ -39,9 +39,44 @@ Brief: [BRIEF.md](BRIEF.md).
 | `ArmourNightLightsClientGameTest` (LAV-150 added) | passes: lit with its beam at night, beam off by day; the earlier lens-glare fix shows no glare |
 | `EnemyVehicleRaidClientGameTest` | passes: the LAV-150 on the new model closes from 70 to 63, lays on the player (0° off) and fires 12 rounds |
 
+## Finalisation (2026-11-17, design/READINESS.md)
+
+- **Road speed:** 88.0 km/h measured flat out, the brief's (`max_forward_speed` 2.181: top speed is where friction
+  levels off, set from a measured run), and it brakes to a stop in about 1 s.
+- **Weight (`"mass"` 9.9 t):** the lightest armour, so the quickest to wind up (80% of top in 28 ticks) and to stop;
+  squats about 1° pulling away and dives 2° braking, rolls out of turns; the crew feels the rumble and the rock.
+- **The rifleman's hatch** (seat 6 on the HUD, index 5, `"turret_riders"`): stands waist-out of the turret's left
+  hatch, rides the turret round, uses his own weapon, drawn for everyone; the hatch lid swings open on its outer hinge
+  while he's in it.
+- **Swims** at about 5 km/h (`"amphibious"`, waterline 1.45 up), the 20 mm free to fire afloat, and climbs out up a
+  shelving bank.
+- **Armour** rating 5.1 (hull and engine): stops rifle rounds (the best, the combat rifle, pierces 4.96) and not the
+  20 mm (5.2); the tyres (4.8) can be shot out by rifles. **Run-flat:** a shot-out side slows it to 0.75 (both 0.56),
+  never stopping it.
+- **Sound:** a real truck diesel start and shutdown (CC0, Ford LTL 9000), the loops winding up as it catches; tyres on
+  gravel by speed; the air brakes when braking; the turret's electric drive and the gun's elevation; a knock landing
+  from a drop; a splash into water.
+- **Destroyed:** cooks off and burns as a charred hulk.
+
+| Test (`-PwithPack`) | Result |
+| --- | --- |
+| `Lav150SpeedSwimClientGameTest` (new) | passes: 88 km/h, stopped 21 ticks after braking; hatch rider in seat 5, 2.3 up; swims 4.8 km/h and climbs out |
+| `VehicleWeightClientGameTest` (new) | passes: 80% of top in 28 ticks, stopped in 21, squat -0.98°, dive 1.96°, brakes and turret drive heard, knock landing |
+| `Lav150WheelsClientGameTest` | passes |
+| `EnemyVehicleRaidClientGameTest` | passes |
+
 ## Not covered yet
 
-- Top speed and braking at 88 km/h (`Lav150Speed`), the roof hatch seat (`Lav150Hatch`), armour that stops rifle
-  rounds and not 20 mm (`Lav150Hitbox`), run-flat tyres, swimming, suspension, real engine, tyre and interior audio.
-- The enemy AI still halts near 60 blocks at times (see the BMP-2's status); this run's LAV-150 stopped at 63.
-- Night view from outside at a distance, the dedicated server, multiplayer.
+- **Listen:** `engine_start`, `engine_stop` (and `_cab`), `tyres/gravel`, `movement/brake`, `movement/traverse`,
+  `movement/elevation`, `movement/bump`, `movement/splash`.
+- The hatch lid's swing direction is coded from the model's geometry but not yet seen in a close screenshot.
+- The enemy AI still halts near 60 blocks at times (see the BMP-2's status).
+- The dedicated server, multiplayer.
+
+## Texture pass (2026-11-19, the user's review R7)
+
+`design/ground-vehicles/detail_texture.py` re-weathers the texture from the model: it is enlarged (the original paint
+kept texel for texel) and each texel is shaded by where it sits on the hull: panel seams and worn edges, bolt heads
+round big panels, mottled paint, grime run down from top edges, dust on top faces, mud low down. The untouched texture
+is `texture_base.png` here (re-run the script to tune; it never stacks), the before/after `review-texture.png`. Seen in
+the pack (Photon) by day from close; not yet looked at under every paint colour.

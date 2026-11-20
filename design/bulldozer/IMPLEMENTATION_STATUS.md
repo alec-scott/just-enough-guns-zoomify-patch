@@ -17,7 +17,7 @@ The test drives through the real keys and checks:
 - **Operator:** not hidden; can look 170° behind with the first-person camera following (camera yaw 170°).
 - **Blade:** the rendered cutting edge and lift-cylinder rod match the server's work geometry at grade, fully
   raised and dug in. Lift limits (−4° to 30°), the grade lock, and Shift lowering the blade without dismounting.
-- **Driving:** top speed on flat ground 0.169 blocks/tick (12 km/h). A stationary pivot turns with track sound.
+- **Driving:** top speed on flat ground 0.3 blocks/tick (6 m/s, raised from 3.4 m/s at the user's request, 2026-11-17). A stationary pivot turns with track sound.
   Released controls hold the machine still.
 - **Clearing a bank:** a mixed bank of soil, stone and deepslate, then a six-high bank, is cleared completely
   without the dozer climbing it or digging the ground. Material holds the machine back while it is cut. A separate
@@ -112,6 +112,24 @@ Claude handoff completed on 15 November 2026 (ripper lane, HUD and hold screen):
 - **Saved review images:** [HUD at scale 3](in-game-ripper-hud.png), [bay at scale 3](in-game-ripper-bay.png),
   [bay at scale 2](in-game-ripper-bay-gui2.png), [five-column lane](in-game-ripper-lane-off-grid.png),
   [four-column lane](in-game-ripper-lane-on-grid.png).
+
+## Lane lock, ripper restock and the HUD (2026-11-17/18)
+
+- **Lane lock** (X, the weapon-switch key; the dozer has no weapons): squares the machine to the nearest compass
+  heading and onto a block edge, then holds it there, so a cut or a ripper road runs dead straight. A or D turns it a
+  quarter turn while locked; X again frees the steering. Shown as a "Lane" row and keycap in the panel.
+- **Ripper restock:** when the bay is empty, the ripper takes another stack of the block it was laying from the
+  operator's inventory and keeps paving (only when the bay is completely empty, so swapping the bay's material does
+  not pull the old block back).
+- **HUD:** every vehicle panel restyled and 20% smaller (shared `HudKit`/`HudPanel`). On 2026-11-18 the user asked for
+  it to look clean and modern rather than blocky: the pixel font was replaced by Inter (antialiased, built per screen
+  density so it stays sharp), with smooth icons, rounded panels and keycaps, and pill bars.
+
+| Check | Result |
+| --- | --- |
+| `BulldozerLaneLockClientGameTest` (`-PwithPack`) | passes: 7 degrees and 0.3 blocks off squared to yaw 0 and x 0; road rows z 4..14 four columns wide; 64 stone bricks carried, the 6-block bay restocked; quarter turn |
+| `BulldozerRipperLaneClientGameTest`, `VehicleHudLayoutClientGameTest` | pass with the new HUD |
+| Played (mcpfabric, `-PwithPack`, DozerTest copy, survival) | X locked the lane (yaw 6 to 0, "Locked South"), R lowered the ripper with 64 stone bricks in the bay and 128 carried; drove 100 blocks south at x 30.000, yaw 0; the ripper restocked twice from the inventory and paved 48 straight rows (192 blocks) before it ran out; the new HUD and rounded hold screen seen in the pack |
 
 ## Not covered
 

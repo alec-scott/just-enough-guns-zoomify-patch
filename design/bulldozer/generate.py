@@ -43,8 +43,31 @@ MATERIALS = {
     "mirror": (156, 183, 194, 255),
 }
 PAINT = ("yellow", "yellow_light", "yellow_dark")
-TILE = 32
-ATLAS = (256, 128)
+TILE = 32  # the material tiles, laid per face by the bake
+ATLAS = [256, 128]
+# The texture upgrade (the user, 2026-11-19: "do that"): every face its own texels (refit_lib.bake_unique), each laid with
+# its material's tile, the name plates lettered sharp at four times the density, then the detail pass with the wear a
+# working dozer gets: soil packed on the blade's face and in the track shoes, rust on the blade's back, soot on the hood
+# round the stack, oil weeping down the engine's sides, mud on the running gear. The cutting edge and bits (polished by
+# the ground), chrome rods, lamps, gauges and mirror keep their bake.
+TEXELS = 4
+KEPT = ("lamp", "amber", "tail", "console", "gauge", "mirror", "chrome", "edge", "mesh")
+GLOW = ("lamp", "amber", "tail", "console", "gauge")
+# Which side faces' texture runs back to front, so the badge reads on both sides (neither, from the review render).
+BADGE_MIRRORED = {"east": False, "west": False}
+DETAIL = dict(upscale=1, mud_height=14.0, mud=0.65, wear=1.1, streaks=1.0, paint_lum=0.92, paint_sat=0.9, stains=[
+    # Soil packed on the moldboard's lower face, as a blade that has been pushing earth carries.
+    dict(bones="blade_tilt", facing=(0, 0, -1), dot=0.3, below=15.0, colour=(92, 72, 50), strength=0.75, noise=2.2, seed=31),
+    # Rust where paint is lost on the blade's back.
+    dict(bones="blade_tilt", facing=(0, 0, 1), dot=0.5, colour=(112, 64, 34), strength=0.5, noise=2.8, seed=32),
+    # Soot round the stack on the hood.
+    dict(bones="engine|exhaust", facing=(0, 1, 0), dot=0.5, centre=(-8.4, 25.0, -17.0), radius=9.0, falloff=1.4,
+         colour=(28, 26, 24), strength=0.6, seed=33),
+    dict(bones="exhaust", colour=(30, 26, 22), strength=0.5, noise=1.2, seed=34),
+    # Oil weeping down the engine's sides from the access doors.
+    dict(bones="engine", facing=(1, 0, 0), dot=0.6, below=22.0, colour=(42, 34, 24), strength=0.4, streak=True, seed=35),
+    dict(bones="engine", facing=(-1, 0, 0), dot=0.6, below=22.0, colour=(42, 34, 24), strength=0.4, streak=True, seed=36),
+])
 BONES: list[dict] = []
 BY_NAME: dict[str, dict] = {}
 
@@ -321,7 +344,7 @@ def create_model():
         sbox("engine", "door seam", side, 10.5, 10.62, 11, 22.6, -11.2, -10.9, "seal")
         sbox("engine", "door seam", side, 10.5, 10.62, 11, 22.6, -19.7, -19.4, "seal")
         sbox("engine", "door latch", side, 10.5, 10.9, 20.4, 21.2, -12.6, -11.6, "chrome")
-        sbox("engine", "model badge", side, 10.5, 10.7, 20.6, 22.6, -27.5, -21.5, "label")
+        sbox("engine", "model badge", side, 10.5, 10.7, 16.0, 18.4, -10.4, -4.6, "label")
         sbox("engine", "hood grab rail", side, 7.2, 7.9, 25.4, 26.0, -27, -8, "steel")
         for z in (-26.5, -8.5):
             sbox("engine", "rail post", side, 7.25, 7.85, 24.6, 25.6, z - .3, z + .3, "steel")
@@ -507,6 +530,23 @@ def create_model():
         sbox("blade_tilt", "arm ball socket", side, 22.0, 25.4, 5.4, 9.8, -41.6, -38.4, "steel")
         sbox("blade_tilt", "wing side plate", side, 30.9, 31.6, 2.6, 25.6, -47.6, -42.4, "yellow_dark")
     box("blade_tilt", "worn soil line", [-23.6, 2.6, -46.25], [23.6, 3.1, -46.0], "soil")
+    # The earth the blade carries, against the moldboard's face: BulldozerRenderer scales it from the cutting edge with
+    # the dozer's synced load (how full the blade is) and hides it on an empty blade. Lumpy: each 8-px run of a layer
+    # sticks out a little more or less.
+    bone("blade_spoil", "blade_tilt", [0.0, 0.0, CUT_EDGE[2]])
+    lumps = random.Random(4040)
+    for i in range(7):
+        y0 = 0.3 + i * 2.4
+        yc = y0 + 1.2
+        face = -43.2 - .022 * (yc - 13) ** 2
+        depth = max(1.0, 8.6 - i * 1.25)
+        half = 30.4 - i * 1.5
+        x0 = -half
+        while x0 < half - 0.5:
+            x1 = min(half, x0 + 8.0)
+            d = depth * (0.82 + 0.34 * lumps.random())
+            box("blade_spoil", "carried earth", [x0, y0, face + 0.3 - d], [x1, y0 + 2.5, face + 0.3], "soil")
+            x0 = x1
 
     for side in (1, -1):
         hydraulic("lift", side, "chassis", LIFT_BASE, lift_pose, LIFT_BARREL, 1.35, .62)
@@ -722,6 +762,62 @@ def write_vehicle_obb(parts):
                     % (part, cx, cy, -cz, hw, hh, hd))
     text = text[:start] + '  "obb": [\n' + ",\n".join(rows) + "\n  ]," + text[end:]
     path.write_text(text, encoding="utf-8")
+
+
+def badge_plate(w, h, mirrored):
+    """The engine-side badge: "BD-40" in the HUD's Inter on the black plate, sharp at the plate's boosted density."""
+    from PIL import ImageFont
+    img = Image.new("RGBA", (w + 2, h + 2), (24, 25, 26, 255))
+    d = ImageDraw.Draw(img)
+    size = max(6, int(h * 0.72))
+    try:
+        fnt = ImageFont.truetype(str(HERE.parent / "hud/Inter-SemiBold.ttf"), size)
+    except OSError:
+        fnt = ImageFont.load_default(size=size)
+    d.text(((w + 2) / 2, (h + 2) / 2), "BD-40", font=fnt, fill=(232, 182, 54, 255), anchor="mm")
+    return img.transpose(Image.FLIP_LEFT_RIGHT) if mirrored else img
+
+
+def hazard_stripes(w, h):
+    """Black and yellow chevrons at the bake's density, 1.2 model px wide, not a stretched tile."""
+    import numpy as np
+    yy, xx = np.mgrid[0:h + 2, 0:w + 2]
+    on = ((xx + yy) // int(1.2 * TEXELS * 2)) % 2 == 0
+    out = np.zeros((h + 2, w + 2, 4), int)
+    out[...] = (226, 172, 32, 255)
+    out[on] = (24, 24, 24, 255)
+    return out
+
+
+def bake():
+    """Every face its own texels laid with its tile (the badge lettered, the hazard panels striped), the weathering
+    pass, then the kept materials put back as laid."""
+    import sys
+    import numpy as np
+    sys.path.insert(0, str(HERE.parent / "superbwarfare-port"))
+    sys.path.insert(0, str(HERE.parent / "superbwarfare-port/triage"))
+    sys.path.insert(0, str(HERE.parent / "ground-vehicles"))
+    import refit_lib as L
+    rng = random.Random(4000)
+    tiles = {name: paint_tile(name, rgba, rng) for name, rgba in MATERIALS.items()}
+    repeated = {name: np.asarray(tile.crop((1, 1, 31, 31)).resize((30 * TEXELS, 30 * TEXELS), Image.NEAREST)).astype(int)
+                for name, tile in tiles.items()}
+
+    def fill(item, w, h):
+        name = item["material"]
+        if name == "label":
+            return np.asarray(badge_plate(w, h, BADGE_MIRRORED.get(item["face"], False))).astype(int)
+        if name == "hazard":
+            return hazard_stripes(w, h)
+        if name in ("console", "gauge", "mirror"):
+            return np.asarray(tiles[name].crop((1, 1, 31, 31)).resize((w + 2, h + 2), Image.NEAREST)).astype(int)
+        block = repeated[name]
+        reps = ((h + 2) // block.shape[0] + 1, (w + 2) // block.shape[1] + 1, 1)
+        return np.tile(block, reps)[:h + 2, :w + 2]
+
+    uv, faces, base = L.bake_unique(BONES, MATERIALS, TEXELS, fill=fill, boost={"label": 4})
+    ATLAS[:] = [int(round(uv[0])), int(round(uv[1]))]
+    return L, faces, base
 
 
 def make_texture():
@@ -941,22 +1037,25 @@ def validate(animations, project):
 def main():
     create_model()
     separate_finishes()
-    atlas = make_texture()
+    L, faces, base = bake()
     texture_path = ASSETS / "textures/entity/vehicle/bulldozer.png"
     texture_path.parent.mkdir(parents=True, exist_ok=True)
-    atlas.save(texture_path)
-    glow = Image.new("RGBA", ATLAS)
-    for name in ("lamp", "amber", "tail", "console", "gauge"):
-        index = list(MATERIALS).index(name)
-        x, y = index % 8 * TILE, index // 8 * TILE
-        glow.paste(atlas.crop((x, y, x + TILE, y + TILE)), (x, y))
-    glow.save(texture_path.with_name("bulldozer_glow.png"))
-    url = "data:image/png;base64," + base64.b64encode(texture_path.read_bytes()).decode()
     geometry = {"format_version": "1.12.0", "minecraft:geometry": [{
         "description": {"identifier": "geometry.jeg.bulldozer", "texture_width": ATLAS[0], "texture_height": ATLAS[1],
                         "visible_bounds_width": 8, "visible_bounds_height": 6, "visible_bounds_offset": [0, 1.5, 0]},
         "bones": [{k: [{ck: cv for ck, cv in c.items() if not ck.startswith("_")} for c in v] if k == "cubes" else v
                    for k, v in b.items()} for b in BONES]}]}
+    import detail_texture as D
+    atlas, _, _ = D.detail_image(native_geometry(geometry), base, DETAIL)
+    L.paste_faces(atlas, base, faces, KEPT)
+    atlas.save(texture_path)
+    glow = Image.new("RGBA", base.size, (0, 0, 0, 0))
+    for item in faces:
+        if item["material"] in GLOW:
+            x0, y0, x1, y1 = item["rect"]
+            glow.paste(base.crop((x0 - 1, y0 - 1, x1 + 1, y1 + 1)), (x0 - 1, y0 - 1))
+    glow.save(texture_path.with_name("bulldozer_glow.png"))
+    url = "data:image/png;base64," + base64.b64encode(texture_path.read_bytes()).decode()
     animations = make_animations()
     project = make_bbmodel(url, animations)
     count = validate(animations, project)

@@ -1,0 +1,38 @@
+{
+  "fire": {
+    "s": 2.45,
+    "peak": 0.759
+  },
+  "fire_interior": {
+    "s": 2.45,
+    "peak": 0.824
+  },
+  "fire_2": {
+    "s": 2.65,
+    "peak": 0.87
+  },
+  "fire_interior_2": {
+    "s": 2.65,
+    "peak": 0.859
+  },
+  "fire_3": {
+    "s": 2.95,
+    "peak": 0.95
+  },
+  "fire_interior_3": {
+    "s": 2.95,
+    "peak": 0.872
+  },
+  "fire_distant_1": {
+    "s": 2.95,
+    "peak": 0.858
+  },
+  "fire_distant_2": {
+    "s": 2.05,
+    "peak": 0.886
+  },
+  "fire_distant_3": {
+    "s": 1.85,
+    "peak": 0.835
+  }
+}

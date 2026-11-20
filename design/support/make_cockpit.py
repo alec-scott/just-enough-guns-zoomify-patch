@@ -23,9 +23,13 @@ PHOSPHOR = (124, 255, 154, 255)
 PHOSPHOR_DIM = (62, 140, 85, 255)
 
 
+INTER = ROOT / "design/hud/Inter-SemiBold.ttf"
+
+
 def font(size):
+    """The HUD's face (Inter), as the vehicle HUD uses: smooth, not a pixel font (the user's rule, 2026-11-17)."""
     try:
-        return ImageFont.truetype("arialbd.ttf", size)
+        return ImageFont.truetype(str(INTER), size)
     except OSError:
         return ImageFont.load_default(size=size)
 
@@ -67,9 +71,9 @@ def dial(name, maximum, major, minor, labels, unit, red_from=None):
             w = d.textlength(text, font=fnt)
             d.text((tx - w / 2, ty - 17), text, font=fnt, fill=WHITE)
         v += minor
-    fnt = font(18)
+    fnt = font(16)
     w = d.textlength(unit, font=fnt)
-    d.text((c - w / 2, c + 18), unit, font=fnt, fill=DIM)
+    d.text((c - w / 2, c + 20), unit, font=fnt, fill=DIM)
     d.ellipse([c - 12, c - 12, c + 12, c + 12], fill=(60, 62, 60, 255))
     img.save(OUT / f"{name}.png")
 
@@ -126,24 +130,83 @@ STATUS_BAR_X = (62, 196)
 STATUS_BEACON_Y = 84
 
 
+# The screens are drawn at S texels a layout unit; the layer's live fills use the layout's units.
+S = 5
+TITLE = (205, 255, 222, 255)
+LABEL = (128, 198, 158, 255)
+TRACK = (9, 27, 20, 255)
+EDGE = (60, 124, 90, 255)
+FAINT = (40, 84, 62, 255)
+
+
+class Screen:
+    """A screen in layout units (w x h), drawn at S texels a unit: a dark glass ground with a faint grid, a rounded rim,
+    a title bar with an icon and an ONLINE lamp."""
+
+    def __init__(self, w, h, title, icon):
+        self.w, self.h = w, h
+        self.img = Image.new("RGBA", (w * S, h * S), (0, 0, 0, 255))
+        self.d = ImageDraw.Draw(self.img)
+        for y in range(h * S):
+            k = y / (h * S)
+            self.d.line([0, y, w * S, y], fill=(int(9 - 4 * k), int(24 - 10 * k), int(18 - 7 * k), 255))
+        for g in range(8, w, 8):
+            self.d.line([g * S, 26 * S, g * S, h * S], fill=(12, 31, 23, 255), width=1)
+        for g in range(32, h, 8):
+            self.d.line([0, g * S, w * S, g * S], fill=(12, 31, 23, 255), width=1)
+        self.d.rounded_rectangle([S, S, w * S - S - 1, h * S - S - 1], radius=4 * S, outline=(34, 74, 54, 255), width=2)
+        icon(self.d, 15 * S, 12 * S, S)
+        self.text(24, 12, title, 12.5, TITLE, "lm")
+        self.d.ellipse([(w - 47) * S, 10 * S, (w - 43) * S, 14 * S], fill=(80, 230, 130, 255))
+        self.text(w - 10, 12, "ONLINE", 7.5, LABEL, "rm")
+        self.d.line([8 * S, 24 * S, (w - 8) * S, 24 * S], fill=EDGE, width=2)
+
+    def text(self, x, y, s, size, fill, anchor="la"):
+        self.d.text((x * S, y * S), s, font=font(int(size * S)), fill=fill, anchor=anchor)
+
+    def track(self, x0, y0, x1, y1):
+        """A rounded track round the live fill (x0, y0)-(x1, y1), a unit of margin."""
+        self.d.rounded_rectangle([(x0 - 2) * S, (y0 - 1) * S, (x1 + 2) * S, (y1 + 1) * S], radius=2 * S, fill=TRACK,
+                                 outline=EDGE, width=2)
+
+    def save(self, name):
+        self.img.save(OUT / name)
+
+
+def icon_bolt(d, cx, cy, s):
+    d.polygon([(cx + 1 * s, cy - 6 * s), (cx - 4 * s, cy + 1 * s), (cx - 0.5 * s, cy + 1 * s), (cx - 1.5 * s, cy + 6 * s),
+               (cx + 4 * s, cy - 1 * s), (cx + 0.5 * s, cy - 1 * s)], fill=TITLE)
+
+
+def icon_beacon(d, cx, cy, s, colour=TITLE):
+    d.pieslice([cx - 4 * s, cy - 3 * s, cx + 4 * s, cy + 5 * s], 180, 360, fill=colour)
+    d.rounded_rectangle([cx - 5 * s, cy + 1 * s, cx + 5 * s, cy + 3 * s], radius=s, fill=colour)
+    import math as _m
+    for a in (-60, -30, 0, 30, 60):
+        r = _m.radians(a)
+        d.line([cx + 6 * s * _m.sin(r), cy - 6 * s * _m.cos(r), cx + 8 * s * _m.sin(r), cy - 8 * s * _m.cos(r)], fill=colour, width=s)
+
+
+def icon_truck(d, cx, cy, s):
+    d.rounded_rectangle([cx - 6 * s, cy - 4 * s, cx + 2 * s, cy + 3 * s], radius=s, fill=TITLE)
+    d.rounded_rectangle([cx + 2.5 * s, cy - 1 * s, cx + 6 * s, cy + 3 * s], radius=s, fill=TITLE)
+    for x in (-4, 3.5):
+        d.ellipse([cx + (x - 1.6) * s, cy + 2.4 * s, cx + (x + 1.6) * s, cy + 5.6 * s], fill=(8, 22, 16, 255), outline=TITLE, width=s)
+
+
 def status():
-    img = Image.new("RGBA", (STATUS_W, STATUS_H), (7, 20, 13, 255))
-    d = ImageDraw.Draw(img)
-    for y in range(1, STATUS_H, 2):
-        d.line([0, y, STATUS_W, y], fill=(11, 29, 19, 255))
-    d.text((8, 4), "FSV-6  STATUS", font=font(15), fill=PHOSPHOR)
-    d.line([6, 22, STATUS_W - 6, 22], fill=PHOSPHOR_DIM, width=1)
-    fnt = font(13)
+    sc = Screen(STATUS_W, STATUS_H, "FSV-6 STATUS", icon_truck)
     for name, y in STATUS_BARS.items():
-        d.text((8, y - 2), name, font=fnt, fill=PHOSPHOR_DIM)
-        d.rectangle([STATUS_BAR_X[0] - 2, y - 1, STATUS_BAR_X[1] + 2, y + 11], outline=PHOSPHOR_DIM, width=1)
-    d.text((8, STATUS_BEACON_Y - 2), "BCN", font=fnt, fill=PHOSPHOR_DIM)
+        sc.text(10, y + 5, name, 8.5, LABEL, "lm")
+        sc.track(STATUS_BAR_X[0], y, STATUS_BAR_X[1], y + 10)
+    y = STATUS_BEACON_Y
+    sc.text(10, y + 5, "BEACON", 8.5, LABEL, "lm")
     for k in range(4):
         x = STATUS_BAR_X[0] + k * 22
-        d.rectangle([x, STATUS_BEACON_Y, x + 16, STATUS_BEACON_Y + 10], outline=PHOSPHOR_DIM, width=1)
-    d.text((168, STATUS_BEACON_Y - 2), "TOW", font=fnt, fill=PHOSPHOR_DIM)
-    d.rectangle([206, STATUS_BEACON_Y, 222, STATUS_BEACON_Y + 10], outline=PHOSPHOR_DIM, width=1)
-    img.save(OUT / "fsv6_status.png")
+        sc.d.rounded_rectangle([x * S, y * S, (x + 16) * S, (y + 10) * S], radius=2 * S, fill=TRACK, outline=EDGE, width=2)
+    sc.text(200, y + 5, "TOW", 8.5, LABEL, "rm")
+    sc.d.rounded_rectangle([206 * S, y * S, 222 * S, (y + 10) * S], radius=2 * S, fill=TRACK, outline=EDGE, width=2)
+    sc.save("fsv6_status.png")
 
 
 def binnacle():
@@ -162,44 +225,36 @@ WALL_ROWS = {"PWR": 34, "BATT": 54, "HOLD": 74, "LIGHT": 94}
 WALL_BAR_X = (78, 220)
 
 
-def screen_base(title):
-    img = Image.new("RGBA", (WALL_W, WALL_H), (7, 20, 13, 255))
-    d = ImageDraw.Draw(img)
-    for y in range(1, WALL_H, 2):
-        d.line([0, y, WALL_W, y], fill=(11, 29, 19, 255))
-    d.text((10, 4), title, font=font(16), fill=PHOSPHOR)
-    d.line([8, 24, WALL_W - 8, 24], fill=PHOSPHOR_DIM, width=1)
-    return img, d
-
-
 def wall_console():
-    img, d = screen_base("FSV-6 SUPPORT")
-    fnt = font(13)
+    sc = Screen(WALL_W, WALL_H, "FSV-6 SUPPORT", icon_bolt)
+    names = {"PWR": "POWER", "BATT": "BATTERY", "HOLD": "HOLD", "LIGHT": "LIGHT"}
     for name, y in WALL_ROWS.items():
-        d.text((10, y - 2), name, font=fnt, fill=PHOSPHOR_DIM)
+        sc.text(10, y + 5, names[name], 8.5, LABEL, "lm")
         if name == "PWR":
             for k, label in enumerate(("GEN", "DSL", "BAT")):
                 x = WALL_BAR_X[0] + k * 48
-                d.rectangle([x, y, x + 12, y + 10], outline=PHOSPHOR_DIM, width=1)
-                d.text((x + 16, y - 2), label, font=font(11), fill=PHOSPHOR_DIM)
+                sc.d.rounded_rectangle([x * S, y * S, (x + 12) * S, (y + 10) * S], radius=2 * S, fill=TRACK, outline=EDGE, width=2)
+                sc.text(x + 16, y + 5, label, 8, LABEL, "lm")
         else:
-            d.rectangle([WALL_BAR_X[0] - 2, y - 1, WALL_BAR_X[1] + 2, y + 11], outline=PHOSPHOR_DIM, width=1)
-    img.save(OUT / "fsv6_wall_console.png")
+            sc.track(WALL_BAR_X[0], y, WALL_BAR_X[1], y + 10)
+    sc.save("fsv6_wall_console.png")
 
 
 def wall_beacon():
-    img, d = screen_base("ROOF BEACON")
-    fnt = font(13)
-    d.rectangle([10, 32, 62, 84], outline=PHOSPHOR_DIM, width=1)          # the effect's icon
-    d.text((80, 30), "LEVEL", font=fnt, fill=PHOSPHOR_DIM)
+    sc = Screen(WALL_W, WALL_H, "ROOF BEACON", icon_beacon)
+    # The effect's tile: the chosen effect's colour fills it live; a faint beacon outline shows while none is.
+    sc.d.rounded_rectangle([10 * S, 32 * S, 62 * S, 84 * S], radius=4 * S, fill=TRACK, outline=EDGE, width=2)
+    icon_beacon(sc.d, 36 * S, 60 * S, int(S * 1.8), FAINT)
+    sc.text(80, 37, "LEVEL", 8.5, LABEL, "lm")
     for k in range(4):
         x = 80 + k * 36
-        d.rectangle([x, 48, x + 28, 62], outline=PHOSPHOR_DIM, width=1)
-    d.text((80, 70), "BEAM", font=fnt, fill=PHOSPHOR_DIM)
-    d.rectangle([128, 71, 222, 83], outline=PHOSPHOR_DIM, width=1)
-    d.text((10, 94), "RACK", font=fnt, fill=PHOSPHOR_DIM)
-    d.rectangle([58, 95, 222, 107], outline=PHOSPHOR_DIM, width=1)
-    img.save(OUT / "fsv6_wall_beacon.png")
+        sc.d.rounded_rectangle([x * S, 48 * S, (x + 28) * S, 62 * S], radius=2 * S, fill=TRACK, outline=EDGE, width=2)
+        sc.text(x + 14, 55, "I" * (k + 1) if k < 3 else "IV", 6.5, FAINT, "mm")
+    sc.text(80, 77, "BEAM", 8.5, LABEL, "lm")
+    sc.track(130, 72, 220, 82)
+    sc.text(10, 101, "RACK", 8.5, LABEL, "lm")
+    sc.track(60, 96, 220, 106)
+    sc.save("fsv6_wall_beacon.png")
 
 
 if __name__ == "__main__":

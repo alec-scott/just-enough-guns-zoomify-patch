@@ -13,13 +13,23 @@ import org.jetbrains.annotations.Nullable;
  * @param workLoudness loudness flat out
  * @param tracked      a tracked hull: the track clank plays with the tracks' speed
  * @param cab          the driver sits in an enclosed hull: in first person they hear the muffled cab loop
+ * @param startCatchTicks with a real start recording (engine_start, engine_stop and their _cab versions, from
+ *                     design/ground-vehicles/prepare_starts.py): ticks into the start at which the engine catches and
+ *                     the loops wind up; -1 for none (the loops wind up at once, silently)
  */
-public record GroundVehicleSounds(float idleLoudness, float workLoudness, boolean tracked, boolean cab) {
+public record GroundVehicleSounds(float idleLoudness, float workLoudness, boolean tracked, boolean cab, int startCatchTicks) {
     private static final Map<String, GroundVehicleSounds> PROFILES = Map.of(
-            "bmp2", new GroundVehicleSounds(1.0F, 1.7F, true, true),
-            "lav150", new GroundVehicleSounds(0.8F, 1.4F, false, true),
-            "plz05", new GroundVehicleSounds(1.1F, 1.8F, true, true),
-            "leopard2", new GroundVehicleSounds(1.2F, 2.0F, true, true));
+            "bmp2", new GroundVehicleSounds(1.0F, 1.7F, true, true, 60),
+            "lav150", new GroundVehicleSounds(0.8F, 1.4F, false, true, 22),
+            "plz05", new GroundVehicleSounds(1.1F, 1.8F, true, true, 20),
+            "yx100", new GroundVehicleSounds(1.2F, 2.0F, true, true, 80),
+            // An open helm behind a windscreen: no cab loop.
+            "speedboat", new GroundVehicleSounds(0.9F, 1.7F, false, false, 12));
+
+    /** Whether the vehicle has real start and stop recordings. */
+    public boolean hasStart() {
+        return this.startCatchTicks >= 0;
+    }
 
     /** The profile for a vehicle id (the data id's path), or null for a vehicle heard another way. */
     @Nullable

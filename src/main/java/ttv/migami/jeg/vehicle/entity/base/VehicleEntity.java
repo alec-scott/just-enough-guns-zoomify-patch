@@ -131,16 +131,18 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     private static final float VEHICLE_RELOAD_TIME_SCALE = 0.64F;
     /** Helicopter weapons reload another 30% faster on top of that (0.448x the hand-held time). */
     private static final float HELICOPTER_RELOAD_TIME_SCALE = 0.70F;
-    private static final float SPEEDBOAT_COLLISION_LENGTH_SCALE = 1.2F;
-    private static final double SPEEDBOAT_COLLISION_FORWARD_SHIFT = 0.15D;
     private static final double BOAT_WATER_PROBE_BELOW = 0.2D;
     private static final double BOAT_WATER_PROBE_ABOVE = 0.35D;
+    /**
+     * How deep under the hull water still counts as afloat for the engine and drag. Deeper than the buoyancy probe: a hull
+     * on the plane rides up and leaves that one, and the speedboat used to fall back to its crawl ashore every time.
+     */
+    private static final double BOAT_AFLOAT_PROBE_BELOW = 1.0D;
     private static final int BOAT_WATERBORNE_MEMORY_TICKS = 8;
-    private static final double SPEEDBOAT_BOW_BLOCK_PROBE_DISTANCE = 0.35D;
-    private static final double SPEEDBOAT_BOW_BLOCK_PROBE_HALF_WIDTH = 0.95D;
-    private static final double SPEEDBOAT_BOW_BLOCK_PROBE_LOW_Y = 0.35D;
-    private static final double SPEEDBOAT_BOW_BLOCK_PROBE_HIGH_Y = 0.9D;
-    private static final double SPEEDBOAT_WATER_CRUISE_SPEED = 40.0D / 72.0D;
+    /** Ashore a boat only crawls (to reach the water from where it was built, or back off a beach): this share of top speed. */
+    private static final double BOAT_LAND_SPEED_SHARE = 0.2D;
+    /** Ticks a beaching run may climb the shore. */
+    private static final int BOAT_BEACHING_TICKS = 12;
     private static final int DISMOUNT_LERP_SUPPRESSION_TICKS = 20;
     private static final int DISMOUNT_FOLLOWUP_SYNC_TICKS = 40;
     private static final double OBB_ENTITY_COLLISION_EPSILON = 1.0E-4D;
@@ -192,6 +194,8 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     private static final EntityDataAccessor<Boolean> DATA_ENGINE_DAMAGED = SynchedEntityData.defineId(VehicleEntity.class, EntityDataSerializers.BOOLEAN);
     private static final EntityDataAccessor<Boolean> DATA_SUB_ENGINE_DAMAGED = SynchedEntityData.defineId(VehicleEntity.class, EntityDataSerializers.BOOLEAN);
     private static final EntityDataAccessor<Boolean> DATA_TURRET_DAMAGED = SynchedEntityData.defineId(VehicleEntity.class, EntityDataSerializers.BOOLEAN);
+    /** The driver is braking: the brake held, or the throttle against the way the hull is moving (heard by every client). */
+    private static final EntityDataAccessor<Boolean> DATA_DRIVER_BRAKING = SynchedEntityData.defineId(VehicleEntity.class, EntityDataSerializers.BOOLEAN);
     /** A ground vehicle's engine is running (synced: a client may not be sent the crew of a vehicle it can still hear). */
     private static final EntityDataAccessor<Boolean> DATA_GROUND_ENGINE = SynchedEntityData.defineId(VehicleEntity.class, EntityDataSerializers.BOOLEAN);
     private static final EntityDataAccessor<Float> DATA_TURRET_YAW = SynchedEntityData.defineId(VehicleEntity.class, EntityDataSerializers.FLOAT);
@@ -250,9 +254,6 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
      * A jet's third view: an action camera stuck on top of the left wing near its tip, looking forward and in across the
      * wing at the engines and cockpit, rigid on the airframe (it banks with it).
      */
-    private static final double WING_CAMERA_X = 7.6D;
-    private static final double WING_CAMERA_Y = 3.75D;
-    private static final double WING_CAMERA_Z = -2.2D;
     private static final double WING_CAMERA_INBOARD = 20.0D;
     private static final double WING_CAMERA_DOWN = 6.0D;
     /** How close to a vehicle or creature the targeting pod's crosshair has to be for a missile to lock it. */
@@ -262,8 +263,13 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     private static final Map<String, String> VEHICLE_IDLE_ANIMATIONS = Map.of(
             "lav150", "animation.lav_150.idle",
             "speedboat", "animation.speedboat.idle",
+            "tom6", "animation.tom6.idle",
             "laser_tower", "animation.lt.idle",
-            "waveforce_tower", "animation.waveforce_tower.idle"
+            "waveforce_tower", "animation.waveforce_tower.idle",
+            // The base defences have only a rest pose; asking for "idle" logged an error every frame (10,000+ lines a
+            // minute with a sentry in view).
+            "hpj11", "animation.hpj11.rest",
+            "sentry", "animation.sentry.rest"
     );
     private static final float PART_MAX_HEALTH = 10.0F;
     private static final float REPAIR_KIT_HULL_REPAIR = 12.0F;
@@ -509,6 +515,19 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     private String lastVehicleWarningSoundKey = "";
     private int lastVehicleWarningSoundTick = Integer.MIN_VALUE;
     private int boatWaterborneTicks;
+    /** Ticks left of a beaching run (the hull may climb onto the shore it ran at). */
+    private int boatBeachingTicks;
+    /** The top of the shore a beaching run is climbing onto (world y). */
+    private double boatBeachTop;
+    /** Whether the hull is on the plane (server and the driver's client). */
+    private boolean boatPlaning;
+    /** Client: the bow's rise in degrees as every client sees it from the hull's speed, and the propeller and rudder. */
+    private float boatBowRise;
+    private float boatBowRiseO;
+    private float boatPropellerAngle;
+    private float boatPropellerAngleO;
+    private float boatRudder;
+    private float boatRudderO;
     private float turretYawO;
     private float turretPitchO;
     private float propellerRotO;
@@ -732,8 +751,8 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     }
 
     private float collisionLengthScale() {
-        if (this.isSpeedboatVehicle()) {
-            return SPEEDBOAT_COLLISION_LENGTH_SCALE;
+        if (this.vehicleData().defaults().vehicleType() == VehicleType.BOAT && this.vehicleData().boat().collisionLengthScale() != 1.0F) {
+            return this.vehicleData().boat().collisionLengthScale();
         }
         return OTHER_VEHICLE_COLLISION_LENGTH_SCALE;
     }
@@ -844,6 +863,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         builder.define(DATA_ENGINE_DAMAGED, false);
         builder.define(DATA_SUB_ENGINE_DAMAGED, false);
         builder.define(DATA_TURRET_DAMAGED, false);
+        builder.define(DATA_DRIVER_BRAKING, false);
         builder.define(DATA_GROUND_ENGINE, false);
         builder.define(DATA_TURRET_YAW, 0.0F);
         builder.define(DATA_TURRET_PITCH, 0.0F);
@@ -1001,7 +1021,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
             return false;
         }
         var weapons = this.vehicleData().defaults().weapons();
-        if (seatIndex < 0 || slot < 0 || slot >= weapons.size() || !weapons.get(slot).usableBySeat(seatIndex)) {
+        if (seatIndex < 0 || slot < 0 || slot >= weapons.size() || !this.weaponUsableBySeat(weapons.get(slot), seatIndex)) {
             return false;
         }
         if (slot == this.selectedVehicleWeaponIndexForSeat(seatIndex)) {
@@ -1189,7 +1209,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
             return false;
         }
         int fallbackIndex = this.getPassengers().indexOf(passenger);
-        return fallbackIndex >= 0 && weapons.get(weaponIndex).usableBySeat(this.seatIndexForPassenger(passenger, fallbackIndex));
+        return fallbackIndex >= 0 && this.weaponUsableBySeat(weapons.get(weaponIndex), this.seatIndexForPassenger(passenger, fallbackIndex));
     }
 
     public boolean canPassengerUseSelectedVehicleWeapon(Entity passenger) {
@@ -1254,12 +1274,32 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     }
 
     public float turretYaw(float partialTick) {
+        if (this.drawsTurretFromSnapshots()) {
+            return Mth.rotLerp(partialTick, this.turretYawO, this.turretYawSnap);
+        }
         return Mth.rotLerp(partialTick, this.turretYawO, this.turretYaw());
     }
 
     public float turretPitch(float partialTick) {
+        if (this.drawsTurretFromSnapshots()) {
+            return Mth.lerp(partialTick, this.turretPitchO, this.turretPitchSnap);
+        }
         return Mth.lerp(partialTick, this.turretPitchO, this.turretPitch());
     }
+
+    /**
+     * A server-laid turret (one with a traverse or elevation rate) seen on a client is drawn between the synced angles
+     * as they stood at the last two client ticks. Its synced angle arrives whenever the packet does, often mid-tick, and
+     * blending from the tick's start to that live value moved the gun, and a camera riding it, in uneven steps: the
+     * LAV-150's driver view jittered on the move (the user's report, 2026-11-19).
+     */
+    private boolean drawsTurretFromSnapshots() {
+        return this.level().isClientSide() && this.vehicleData().defaults().turret().slewLimited();
+    }
+
+    /** Client, server-laid turret: the synced turret angles as they were at the last client tick. */
+    private float turretYawSnap;
+    private float turretPitchSnap;
 
     public float propellerRot() {
         return this.entityData.get(DATA_PROPELLER_ROT);
@@ -1584,6 +1624,10 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
 
     @Override
     public float maxUpStep() {
+        if (this.boatBeachingTicks > 0) {
+            // Running a boat up a beach: it may climb a shore as high as the hull allows.
+            return Math.max(this.vehicleData().defaults().upStep(), (float) this.vehicleData().boat().beachStep() + 0.1F);
+        }
         return this.vehicleData().defaults().upStep();
     }
 
@@ -1616,8 +1660,8 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     }
 
     public double collisionCenterOffsetZ() {
-        if (this.isSpeedboatVehicle()) {
-            return SPEEDBOAT_COLLISION_FORWARD_SHIFT;
+        if (this.vehicleData().defaults().vehicleType() == VehicleType.BOAT) {
+            return this.vehicleData().boat().collisionForwardShift();
         }
         return 0.0D;
     }
@@ -1822,10 +1866,12 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         float yawStep = Mth.wrapDegrees(this.turretAimTargetYaw - yaw);
         float pitchStep = this.turretAimTargetPitch - pitch;
         if (turret.traverseRate() > 0.0F) {
-            yawStep = Mth.clamp(yawStep, -turret.traverseRate(), turret.traverseRate());
+            this.turretYawSpeed = slewSpeed(this.turretYawSpeed, yawStep, turret.traverseRate());
+            yawStep = Math.abs(yawStep) <= Math.abs(this.turretYawSpeed) ? yawStep : this.turretYawSpeed;
         }
         if (turret.elevationRate() > 0.0F) {
-            pitchStep = Mth.clamp(pitchStep, -turret.elevationRate(), turret.elevationRate());
+            this.turretPitchSpeed = slewSpeed(this.turretPitchSpeed, pitchStep, turret.elevationRate());
+            pitchStep = Math.abs(pitchStep) <= Math.abs(this.turretPitchSpeed) ? pitchStep : this.turretPitchSpeed;
         }
         if (yawStep != 0.0F) {
             this.entityData.set(DATA_TURRET_YAW, Mth.wrapDegrees(yaw + yawStep));
@@ -1833,6 +1879,23 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         if (pitchStep != 0.0F) {
             this.entityData.set(DATA_TURRET_PITCH, pitch + pitchStep);
         }
+    }
+
+    /** Server: a slew-limited turret's present traverse and elevation speeds, degrees a tick (its drives' momentum). */
+    private float turretYawSpeed;
+    private float turretPitchSpeed;
+    /** A turret's drive reaches its full rate in this many ticks, and brakes as hard. */
+    public static final float TURRET_SPIN_UP_TICKS = 10.0F;
+
+    /**
+     * A heavy drive's speed toward an aim {@code error} degrees away: it speeds up by a tenth of its {@code rate} a tick,
+     * no faster than lets it brake to a stop on the aim at the same rate (v = sqrt(2 a d)), so the turret starts, runs and
+     * settles like a mass being driven, not at the mouse's speed (the user's review, 2026-11-18).
+     */
+    static float slewSpeed(float speed, float error, float rate) {
+        float accel = rate / TURRET_SPIN_UP_TICKS;
+        float wanted = Math.signum(error) * Math.min(rate, (float) Math.sqrt(2.0F * accel * Math.abs(error)));
+        return speed + Mth.clamp(wanted - speed, -accel, accel);
     }
 
     /**
@@ -1846,7 +1909,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
 
     /**
      * Server: the pitch a slew-limited turret may be laid to at this turret yaw (both in the turret's own terms, pitch
-     * negative is up): a tank's gun can't depress over its rear deck (the Leopard 2's). Called with the turret's present
+     * negative is up): a tank's gun can't depress into its hull (the YX-100's). Called with the turret's present
      * yaw each tick, so the gun rises as the turret swings into the arc.
      */
     protected float clampTurretPitch(float turretYaw, float pitch) {
@@ -1858,9 +1921,97 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         return true;
     }
 
-    /** Whether this one weapon can fire now (the PLZ-05's gun only at a halt, its roof gun on the move). */
+    /**
+     * Whether this one weapon can fire now (the PLZ-05's gun only at a halt, its roof gun on the move; a swimming BMP-2's
+     * ATGM not at all).
+     */
     protected boolean canFireWeapon(VehicleWeaponInfo weapon) {
+        if (this.amphibiousAfloat()) {
+            int slot = this.vehicleData().defaults().weapons().indexOf(weapon);
+            if (this.vehicleData().amphibious().noFireSlots().contains(slot)) {
+                return false;
+            }
+        }
         return this.canFireWeapons();
+    }
+
+    /**
+     * How readily the hull answers its controls, from its mass (the user's rule of 2026-11-17: a tank feels heavy):
+     * sqrt(12 t / mass), 1 for a 12-tonne hull, about 1.1 for the 10-tonne LAV-150, 0.6 for the 35-tonne PLZ-05, under
+     * 0.5 for the YX-100. Heavier hulls gain and lose speed more slowly, coast further, brake longer and steer more
+     * lazily; their top speed is kept. 1 when the data gives no mass.
+     */
+    public double inertia() {
+        return inertiaOf(this.vehicleData().mass());
+    }
+
+    /**
+     * The mass the drive has to move, in tonnes: the hull's own, plus whatever it pulls (the FSV-6's tow,
+     * {@code SupportVehicleEntity}). NaN when the data gives no mass.
+     */
+    public double drivenMass() {
+        return this.vehicleData().mass();
+    }
+
+    /**
+     * {@link #inertia()} for the drive: from {@link #drivenMass()}, so a load on the hitch makes the tractor slower to
+     * pull away, stop and turn. The hull's suspension and the crew's feel ({@code VehicleFeel}) keep {@link #inertia()}.
+     */
+    public double driveInertia() {
+        return inertiaOf(this.drivenMass());
+    }
+
+    private static double inertiaOf(double mass) {
+        return Double.isNaN(mass) || mass <= 0.0D ? 1.0D : Mth.clamp(Math.sqrt(12.0D / mass), 0.4D, 1.15D);
+    }
+
+    /** A land vehicle that swims, swimming now: its hull floats with its waterline at the surface. */
+    public boolean amphibiousAfloat() {
+        var amphibious = this.vehicleData().amphibious();
+        return amphibious.swims() && !this.onGroundBelowKeel() && this.waterAbove(this.getBoundingBox().minY + amphibious.waterline() * 0.4D);
+    }
+
+    /** Solid ground right under the hull (wading in the shallows, not swimming). */
+    private boolean onGroundBelowKeel() {
+        return this.onGround() && !this.waterAbove(this.getBoundingBox().minY + this.vehicleData().amphibious().waterline() * 0.9D);
+    }
+
+    /** Client: the bow wave and the wake of a swimming land vehicle making way. */
+    private void tickAmphibiousWave() {
+        double moved = Math.sqrt((this.getX() - this.xo) * (this.getX() - this.xo) + (this.getZ() - this.zo) * (this.getZ() - this.zo));
+        if (moved < 0.02D || !this.amphibiousAfloat()) {
+            return;
+        }
+        double front = 0.0D, back = 0.0D, beam = this.getBbWidth() * 0.5D;
+        for (OBBInfo.Box box : this.vehicleData().defaults().obb().boxes()) {
+            if (box.part() == OBBInfo.Part.BODY) {
+                front = Math.max(front, box.z() + box.halfDepth());
+                back = Math.min(back, box.z() - box.halfDepth());
+                beam = Math.max(beam, Math.abs(box.x()) + box.halfWidth());
+            }
+        }
+        Vec3 forward = Vec3.directionFromRotation(0.0F, this.getYRot());
+        Vec3 side = new Vec3(-forward.z, 0.0D, forward.x);
+        double water = this.getBoundingBox().minY + this.vehicleData().amphibious().waterline();
+        var random = this.random;
+        int count = moved > 0.06D ? 3 : 1;
+        // A blunt hull pushes a wave ahead of it that peels off both bow corners.
+        Vec3 bow = this.position().add(forward.scale(front + 0.15D));
+        for (int i = 0; i < count; i++) {
+            double across = (random.nextDouble() - 0.5D) * beam * 2.0D;
+            this.level().addParticle(net.minecraft.core.particles.ParticleTypes.SPLASH, bow.x + side.x * across, water + 0.15D, bow.z + side.z * across,
+                    forward.x * 0.1D, 0.15D + random.nextDouble() * 0.15D, forward.z * 0.1D);
+        }
+        for (int sign = -1; sign <= 1; sign += 2) {
+            Vec3 corner = this.position().add(forward.scale(front * 0.8D)).add(side.scale(sign * (beam + 0.1D)));
+            this.level().addParticle(net.minecraft.core.particles.ParticleTypes.SPLASH, corner.x, water + 0.1D, corner.z,
+                    side.x * sign * 0.15D, 0.12D, side.z * sign * 0.15D);
+        }
+        if (random.nextInt(3) == 0) {
+            Vec3 stern = this.position().add(forward.scale(back - 0.3D));
+            this.level().addParticle(net.minecraft.core.particles.ParticleTypes.BUBBLE_POP, stern.x + side.x * (random.nextDouble() - 0.5D) * beam,
+                    water + 0.05D, stern.z + side.z * (random.nextDouble() - 0.5D) * beam, 0.0D, 0.02D, 0.0D);
+        }
     }
 
     /** A slew-limited turret held at its travel lock (yaw 0, level) whatever its gunner aims at (a packed towed gun). */
@@ -1905,10 +2056,48 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
                 || Math.abs(this.turretAimTargetPitch - this.turretPitch()) > 0.05F;
     }
 
+    /**
+     * The seat that works the turret now: its own seat, or its fallback (the driver) while nobody sits in it, so the
+     * driver keeps the gun when alone and a gunner takes it over on boarding (fleet plan decision 2). Only a player (or
+     * an enemy crewman) mans it: a mob carried in the gunner's seat leaves the gun with the driver.
+     */
+    public int turretSeat() {
+        var turret = this.vehicleData().defaults().turret();
+        if (!turret.hasFallbackSeat() || this.seatManned(turret.seatIndex()) || !this.turretFallsBack()) {
+            return turret.seatIndex();
+        }
+        return turret.fallbackSeat();
+    }
+
+    /** Whether the turret's fallback seat takes it over while its own seat is empty (not while a gun is on automatic). */
+    protected boolean turretFallsBack() {
+        return true;
+    }
+
+    private boolean seatManned(int seat) {
+        var passengers = this.getPassengers();
+        for (int i = 0; i < passengers.size(); i++) {
+            if (canCrewVehicle(passengers.get(i)) && this.seatIndexForPassenger(passengers.get(i), i) == seat) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Whether a seat may use a weapon: the turret's weapons follow the turret to its fallback seat. */
+    public boolean weaponUsableBySeat(VehicleWeaponInfo weapon, int seat) {
+        int weaponSeat = weapon.seatIndex();
+        var turret = this.vehicleData().defaults().turret();
+        if (weaponSeat >= 0 && turret.hasFallbackSeat() && weaponSeat == turret.seatIndex()) {
+            weaponSeat = this.turretSeat();
+        }
+        return weaponSeat < 0 || weaponSeat == seat;
+    }
+
     /** With a turret, only its seat aims it; other armed seats (the Mi-28 pilot's rockets) overwrote the gunner's aim. */
     private boolean controlsTurret(LivingEntity player) {
         var turret = this.vehicleData().defaults().turret();
-        return !turret.enabled() || this.seatIndexForPassenger(player, this.getPassengers().indexOf(player)) == turret.seatIndex();
+        return !turret.enabled() || this.seatIndexForPassenger(player, this.getPassengers().indexOf(player)) == this.turretSeat();
     }
 
     private boolean shouldAlignDriverView(int seatIndex) {
@@ -1970,8 +2159,19 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
             this.rotaryGunAngle -= 360.0F;
             this.rotaryGunAngleO -= 360.0F;
         }
-        this.turretYawO = this.turretYaw();
-        this.turretPitchO = this.turretPitch();
+        if (this.drawsTurretFromSnapshots()) {
+            this.turretYawO = this.turretYawSnap;
+            this.turretPitchO = this.turretPitchSnap;
+            this.turretYawSnap = this.turretYaw();
+            this.turretPitchSnap = this.turretPitch();
+            if (this.tickCount <= 1) {
+                this.turretYawO = this.turretYawSnap;
+                this.turretPitchO = this.turretPitchSnap;
+            }
+        } else {
+            this.turretYawO = this.turretYaw();
+            this.turretPitchO = this.turretPitch();
+        }
         this.propellerRotO = this.propellerRot();
         if (this.level().isClientSide() && !this.shouldRunClientPrediction()) {
             this.hasPredictedRoll = false;
@@ -1988,6 +2188,9 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         if (this.level().isClientSide()) {
             this.tickDamageEffects();
             this.tickTrackTravel();
+            if (this.vehicleData().amphibious().swims()) {
+                this.tickAmphibiousWave();
+            }
         } else if (this.groundSounds() != null && this.entityData.get(DATA_GROUND_ENGINE) != this.groundEngineRunning()) {
             this.entityData.set(DATA_GROUND_ENGINE, this.groundEngineRunning());
         }
@@ -2106,14 +2309,11 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         if (gunFiring) {
             // The gun's gas: a thick grey cloud off the nose. Some keeps pace with the jet for a moment and rolls back
             // over the canopy, the rest hangs in the air behind as a trail.
-            this.jetTrail(ParticleTypes.LARGE_SMOKE, JET_GUN_MUZZLE, 4, 1.0D, 0.85D);
-            this.jetTrail(ParticleTypes.LARGE_SMOKE, JET_GUN_MUZZLE, 2, 0.8D, 0.2D);
-            this.jetTrail(ParticleTypes.CAMPFIRE_COSY_SMOKE, JET_GUN_MUZZLE, 1, 1.2D, 0.6D);
-            if (this.tickCount % 2 == 0) {
-                this.jetTrail(ParticleTypes.CAMPFIRE_COSY_SMOKE, JET_GUN_MUZZLE, 1, 1.0D, 0.1D);
-            }
+            // Real smoke (SmokeFx), 2026-11-19.
+            this.jetSmoke(JET_GUN_MUZZLE, 3, ttv.migami.jeg.vehicle.effect.SmokeFx.GREY, 1.7F, 0.85D);
+            this.jetSmoke(JET_GUN_MUZZLE, 2, ttv.migami.jeg.vehicle.effect.SmokeFx.GREY, 1.4F, 0.2D);
         } else if (this.jetGunSpin > 0.3F && this.tickCount % 3 == 0) {
-            this.jetTrail(ParticleTypes.SMOKE, JET_GUN_MUZZLE, 1, 0.2D, 0.5D);
+            this.jetSmoke(JET_GUN_MUZZLE, 1, ttv.migami.jeg.vehicle.effect.SmokeFx.GREY, 0.6F, 0.5D);
         }
         // A hard bank at speed streams vapour over the top of the wings, heavier the steeper the bank.
         float bank = Math.abs(Mth.wrapDegrees(this.roll()));
@@ -2121,13 +2321,13 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         if (!this.onGround() && moved.length() > 1.8D * speedScale && bank > 40.0F && bank < 140.0F) {
             int puffs = bank > 60.0F ? 2 : 1;
             for (double[] point : JET_WING_VAPOUR) {
-                this.jetTrail(ParticleTypes.CLOUD, point, puffs, 0.25D, 0.02D);
+                this.jetSmoke(point, puffs, ttv.migami.jeg.vehicle.effect.SmokeFx.WHITE, 0.9F, 0.02D);
             }
         }
         // Hard turns pull condensation off the wingtips (above about three and a half g).
         if (!this.onGround() && moved.length() > 1.9D * speedScale && acceleration > 0.11D * speedScale) {
             for (double[] tip : JET_WINGTIPS) {
-                this.jetTrail(ParticleTypes.CLOUD, tip, 2, 0.05D, 0.05D);
+                this.jetSmoke(tip, 2, ttv.migami.jeg.vehicle.effect.SmokeFx.WHITE, 0.45F, 0.05D);
             }
         }
     }
@@ -2138,36 +2338,29 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
      * a black trail below 15% and while it goes down.
      */
     private void tickJetDamageEffects(float ratio, int wreck) {
+        // Real smoke and flame trailing behind (SmokeFx), not vanilla's sprites (the user's review, 2026-11-19).
         if (wreck == WRECK_BURNING) {
             for (int i = 0; i < 3; i++) {
                 double[] point = {(this.random.nextDouble() - 0.5D) * 12.0D, 2.0D + this.random.nextDouble() * 1.5D, (this.random.nextDouble() - 0.5D) * 12.0D};
-                Vec3 at = this.jetPoint(point);
-                this.level().addParticle(ParticleTypes.FLAME, at.x, at.y, at.z, 0.0D, 0.04D, 0.0D);
+                ttv.migami.jeg.vehicle.effect.SmokeFx.emit(this.level(), this.jetPoint(point), new Vec3(0.0D, 0.05D, 0.0D),
+                        ttv.migami.jeg.vehicle.effect.SmokeFx.FIRE, 1.6F);
             }
-            if (this.tickCount % 2 == 0) {
-                Vec3 at = this.jetPoint(JET_RIGHT_EXHAUST);
-                this.level().addAlwaysVisibleParticle(ParticleTypes.CAMPFIRE_SIGNAL_SMOKE, true, at.x, at.y, at.z, 0.0D, 0.07D, 0.0D);
-            }
+            ttv.migami.jeg.vehicle.effect.SmokeFx.emit(this.level(), this.jetPoint(JET_RIGHT_EXHAUST), new Vec3(0.0D, 0.12D, 0.0D),
+                    ttv.migami.jeg.vehicle.effect.SmokeFx.BLACK, 2.0F);
             return;
         }
         if (wreck == WRECK_GOING_DOWN || ratio < 0.15F) {
-            this.jetTrail(ParticleTypes.FLAME, JET_RIGHT_EXHAUST, 3, 0.5D, 0.0D);
-            this.jetTrail(ParticleTypes.FLAME, JET_WING_ROOT, 2, 0.6D, 0.0D);
-            this.jetTrail(ParticleTypes.LARGE_SMOKE, JET_RIGHT_EXHAUST, 3, 0.8D, 0.05D);
+            this.jetSmoke(JET_RIGHT_EXHAUST, 3, ttv.migami.jeg.vehicle.effect.SmokeFx.FIRE, 1.2F);
+            this.jetSmoke(JET_WING_ROOT, 2, ttv.migami.jeg.vehicle.effect.SmokeFx.FIRE, 1.0F);
+            this.jetSmoke(JET_RIGHT_EXHAUST, 2, ttv.migami.jeg.vehicle.effect.SmokeFx.BLACK, 1.4F);
             if (wreck == WRECK_GOING_DOWN) {
-                this.jetTrail(ParticleTypes.FLAME, JET_LEFT_EXHAUST, 2, 0.5D, 0.0D);
-            }
-            if (this.tickCount % 2 == 0) {
-                this.jetTrail(ParticleTypes.CAMPFIRE_SIGNAL_SMOKE, JET_RIGHT_EXHAUST, 1, 0.5D, 0.0D);
+                this.jetSmoke(JET_LEFT_EXHAUST, 2, ttv.migami.jeg.vehicle.effect.SmokeFx.FIRE, 1.2F);
             }
             return;
         }
         if (ratio < 0.35F) {
-            this.jetTrail(ParticleTypes.LARGE_SMOKE, JET_RIGHT_EXHAUST, 2, 0.6D, 0.05D);
-            this.jetTrail(ParticleTypes.WHITE_SMOKE, JET_WING_ROOT, 2, 0.3D, 0.1D);
-            if (this.tickCount % 3 == 0) {
-                this.jetTrail(ParticleTypes.CAMPFIRE_COSY_SMOKE, JET_RIGHT_EXHAUST, 1, 0.5D, 0.0D);
-            }
+            this.jetSmoke(JET_RIGHT_EXHAUST, 2, ttv.migami.jeg.vehicle.effect.SmokeFx.DARK, 1.2F);
+            this.jetSmoke(JET_WING_ROOT, 1, ttv.migami.jeg.vehicle.effect.SmokeFx.GREY, 0.8F);
             if (this.random.nextInt(6) == 0) {
                 Vec3 at = this.jetPoint(JET_RIGHT_EXHAUST);
                 for (int i = 0; i < 5; i++) {
@@ -2177,9 +2370,22 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
             }
             return;
         }
-        this.jetTrail(ParticleTypes.SMOKE, JET_RIGHT_EXHAUST, 2, 0.3D, 0.05D);
-        if (this.tickCount % 3 == 0) {
-            this.jetTrail(ParticleTypes.LARGE_SMOKE, JET_RIGHT_EXHAUST, 1, 0.4D, 0.05D);
+        this.jetSmoke(JET_RIGHT_EXHAUST, 1, ttv.migami.jeg.vehicle.effect.SmokeFx.GREY, 1.0F);
+    }
+
+    /** Puffs laid back along this tick's path from a point on the jet, so the trail stays unbroken at speed. */
+    private void jetSmoke(double[] local, int count, int kind, float scale) {
+        this.jetSmoke(local, count, kind, scale, 0.0D);
+    }
+
+    /** As above, each puff keeping {@code drift} of the jet's own motion for a moment (gun gas rolling back over it). */
+    private void jetSmoke(double[] local, int count, int kind, float scale, double drift) {
+        Vec3 now = this.jetPoint(local);
+        Vec3 moved = this.position().subtract(this.xo, this.yo, this.zo);
+        for (int i = 0; i < count; i++) {
+            double t = (i + this.random.nextDouble()) / count;
+            ttv.migami.jeg.vehicle.effect.SmokeFx.emit(this.level(), now.subtract(moved.scale(t)),
+                    moved.scale(drift).add(this.random.nextGaussian() * 0.02D, 0.02D, this.random.nextGaussian() * 0.02D), kind, scale);
         }
     }
 
@@ -2253,7 +2459,9 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     private void applyVehicleImpactDamage(Vec3 requestedMovement, Vec3 actualMovement, boolean wasVerticallySupported, int unsupportedTicksBeforeMove) {
         if (this.level().isClientSide()
                 || this.vehicleData().defaults().collisionLevel() == CollisionLevel.NONE
-                || this.ramDamageCooldown > 0) {
+                || this.ramDamageCooldown > 0
+                || this.boatBeachingTicks > 0) {
+            // Running a boat up a beach on purpose isn't a crash.
             return;
         }
         VehicleType vehicleType = this.vehicleData().defaults().vehicleType();
@@ -3031,7 +3239,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         }
         VehicleWeaponInfo weapon = selectedWeapon;
         int shooterSeat = this.seatIndexForPassenger(shooter, this.getPassengers().indexOf(shooter));
-        if (!weapon.usableBySeat(shooterSeat)) {
+        if (!this.weaponUsableBySeat(weapon, shooterSeat)) {
             return false;
         }
         GunStats stats = VehicleWeaponStats.get(weapon.weaponId());
@@ -3102,6 +3310,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         }
         BulletEntity bullet = new BulletEntity(this.level(), shooter, stats, shotVelocity, damage, false);
         bullet.setVehicleRound();
+        this.configureVehicleRound(bullet, weapon);
         if (helicopterGun || jetGun || this.firesLongRangeRounds(weapon)) {
             bullet.setLongRangeRound();
         }
@@ -3180,8 +3389,10 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
             this.spawnVehicleMuzzleFlareParticle(serverLevel, new CannonMuzzleFlareOption(0.55F, 0.45F, 0.4F, 18, 0.82F, 2, 0.025F), muzzle, direction, 1, 0.0D, 0.10D);
             return;
         }
-        if (weaponPath.endsWith("_hmg") || weaponPath.endsWith("_rws")) {
+        if (weaponPath.endsWith("_hmg") || weaponPath.endsWith("_rws") || weaponPath.endsWith("_ciws") || weaponPath.startsWith("vehicle_sentry_")) {
             // A pintle gun fired from an open hatch sits in its gunner's face: a modest flash, as the helicopters' guns.
+            // So does a remote gun firing past its operator's camera (the HPJ-11's cannon flare and the sentry's full
+            // machine-gun flash filled their operators' views).
             Vec3 forward = direction.normalize();
             serverLevel.sendParticles(ModParticleTypes.MEDIUM_GUN_MUZZLE_FLASH.get(), muzzle.x, muzzle.y, muzzle.z, 0,
                     forward.x, forward.y, forward.z, 0.12D);
@@ -3189,6 +3400,16 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         }
         if (this.usesGunMuzzleFlash(weaponPath)) {
             this.spawnVehicleGunMuzzleFlash(serverLevel, muzzle, direction);
+            return;
+        }
+        if (weaponPath.equals("vehicle_20mm_cannon") || weaponPath.startsWith("vehicle_30mm_cannon")) {
+            // An autocannon fires every half second: the big gun's 38-tick smoke, still growing as the next round left,
+            // stacked into a cloud that filled the gunner's sight (BMP-2, 2026-11-17). A short flash and a small puff
+            // that clears between rounds.
+            // Still too much for the user (review 2026-11-18): one short flash that shrinks as it fades, the size of a
+            // real 20-30 mm muzzle flash, and a thin puff.
+            this.spawnVehicleMuzzleFlareParticle(serverLevel, new CannonMuzzleFlareOption(1.0F, 0.88F, 0.6F, 3, 0.60F, 1, -0.12F), muzzle, direction, 1, 0.0D, 0.18D);
+            this.spawnVehicleMuzzleFlareParticle(serverLevel, new CannonMuzzleFlareOption(0.5F, 0.46F, 0.42F, 10, 0.80F, 2, 0.0F), muzzle, direction, 1, 0.0D, 0.10D);
             return;
         }
         this.spawnVehicleMuzzleFlareParticle(serverLevel, new CannonMuzzleFlareOption(1.0F, 0.95F, 0.78F, 8, 0.70F, 1, 0.20F), muzzle, direction, 4, 0.10D, 0.30D);
@@ -3209,7 +3430,8 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         // smoke, which are blocks wide) on every round washes out the screen. The MI-28's chin gun sits right on its
         // zoomed sight, so it gets the smallest flash; the AH-6's pylon miniguns a modest one.
         var flash = ModParticleTypes.GUN_MUZZLE_FLASH.get();
-        if ("mi28".equals(this.vehicleDataId().getPath())) {
+        if ("mi28".equals(this.vehicleDataId().getPath()) || this.vehicleData().defaults().vehicleType() == VehicleType.LAND) {
+            // An armoured vehicle's coax fires beside its gunner's sight: the smallest flash (review, 2026-11-18).
             flash = ModParticleTypes.SMALL_GUN_MUZZLE_FLASH.get();
         } else if (this.vehicleData().defaults().vehicleType() == VehicleType.HELICOPTER || this.isJet()) {
             flash = ModParticleTypes.MEDIUM_GUN_MUZZLE_FLASH.get();
@@ -3253,8 +3475,74 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     }
 
     private boolean isRotaryGun(@Nullable VehicleWeaponInfo weapon) {
-        return weapon != null && "mi28".equals(this.vehicleDataId().getPath())
-                && VehicleSoundHelper.isHelicopterGun(this, weapon);
+        return weapon != null && this.isRotaryWeapon(weapon);
+    }
+
+    /** A rotary gun spools up before it fires and runs down after (the Mi-28's chin gun, the HPJ-11's 30 mm). */
+    protected boolean isRotaryWeapon(VehicleWeaponInfo weapon) {
+        return "mi28".equals(this.vehicleDataId().getPath()) && VehicleSoundHelper.isHelicopterGun(this, weapon);
+    }
+
+    /** The rotary gun is wanted with nobody at its trigger (an air defence engaging on automatic). */
+    protected boolean rotaryGunDemanded() {
+        return false;
+    }
+
+    /** Lets a vehicle fit its gun's rounds (an air defence's proximity fuze) as they are fired. */
+    protected void configureVehicleRound(BulletEntity bullet, VehicleWeaponInfo weapon) {
+    }
+
+    /**
+     * Server: fires a gun with nobody at it (an air defence on automatic), along {@code direction}, through the shared
+     * gun path's ammunition, energy, fire rate, muzzle flash and firing loop. The rounds are the vehicle's own.
+     * Returns whether a round left the muzzle.
+     */
+    /** Whether fire with nobody at the gun costs nothing (a base defence on automatic: unlimited ammunition). */
+    protected boolean unmannedFireIsFree() {
+        return false;
+    }
+
+    protected boolean fireUnmanned(int slot, Vec3 direction) {
+        var weapons = this.vehicleData().defaults().weapons();
+        if (slot < 0 || slot >= weapons.size() || this.isTurretDamaged() || this.isWeaponSlotReloading(slot)
+                || this.weaponFireCooldown(slot, -1) > 0 || direction.lengthSqr() < 1.0E-4D) {
+            return false;
+        }
+        VehicleWeaponInfo weapon = weapons.get(slot);
+        GunStats stats = VehicleWeaponStats.get(weapon.weaponId());
+        boolean free = this.unmannedFireIsFree();
+        if (stats == null || !this.canFireWeapon(weapon) || !this.vehicleGunReady(weapon)
+                || !free && (!this.hasEnergy(weapon.energyCost()) || !this.hasAmmo(weapon.ammoId()))) {
+            return false;
+        }
+        if (!free && (!this.consumeEnergy(weapon.energyCost()) || !this.consumeAmmo(weapon.ammoId()))) {
+            return false;
+        }
+        Vec3 aim = direction.normalize();
+        Vec3 muzzle = this.weaponMuzzlePosition(weapon, aim, 1.15D, 0.9D);
+        this.spawnVehicleMuzzleFlare(weapon, muzzle, aim);
+        // Heard as when manned: the gun's report (the sentry on automatic fired silently before, 2026-11-18). A gun
+        // with no report set (the HPJ-11's rotary gun) is heard through its firing loop instead.
+        var report = this.reportFor(weapon);
+        if (report != null && this.level() instanceof ServerLevel reportLevel) {
+            ttv.migami.jeg.network.GunReportPayload.send(reportLevel, this, muzzle, report.sound(), report.loudness());
+        }
+        Vec3 shot = stats.spread() > 0.0F ? this.withGunDispersion(aim, stats.spread()) : aim;
+        BulletEntity bullet = new BulletEntity(this.level(), this, stats, shot.scale(stats.projectileSpeed()), stats.damage());
+        bullet.setVehicleRound();
+        if (this.firesLongRangeRounds(weapon)) {
+            bullet.setLongRangeRound();
+        }
+        this.configureVehicleRound(bullet, weapon);
+        bullet.initialisePosition(muzzle);
+        this.level().addFreshEntity(bullet);
+        if (this.level() instanceof ServerLevel serverLevel) {
+            bullet.sendTrailToClients(serverLevel);
+        }
+        this.setWeaponFireCooldown(slot, -1, stats.fireDelay());
+        this.entityData.set(DATA_WEAPON_FIRING, true);
+        this.entityData.set(DATA_ACTIVE_FIRE_WEAPON, slot);
+        return true;
     }
 
     private boolean vehicleGunReady(@Nullable VehicleWeaponInfo weapon) {
@@ -3262,7 +3550,8 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     }
 
     private void tickRotaryGun(@Nullable LivingEntity shooter, @Nullable VehicleWeaponInfo weapon) {
-        boolean requested = this.isRotaryGun(weapon) && this.shouldLoopVehicleFireSound(shooter, weapon, this.weaponFireInput);
+        boolean requested = this.isRotaryGun(weapon) && this.shouldLoopVehicleFireSound(shooter, weapon, this.weaponFireInput)
+                || this.rotaryGunDemanded();
         for (var entry : this.aiWeaponControlBySeat.entrySet()) {
             LivingEntity controller = this.aiWeaponController(entry.getValue(), entry.getKey());
             VehicleWeaponInfo aiWeapon = controller == null ? null : this.selectedWeapon(controller);
@@ -4231,7 +4520,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
             return false;
         }
         int seatIndex = this.seatIndexForPassenger(player, this.getPassengers().indexOf(player));
-        if (!weapons.get(slot).usableBySeat(seatIndex)) {
+        if (!this.weaponUsableBySeat(weapons.get(slot), seatIndex)) {
             return false;
         }
         if (slot == this.selectedVehicleWeaponIndexForSeat(seatIndex)) {
@@ -4486,7 +4775,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         var passengers = this.getPassengers();
         for (int index = 0; index < passengers.size(); index++) {
             Entity passenger = passengers.get(index);
-            if (passenger instanceof LivingEntity && canCrewVehicle(passenger) && weapon.usableBySeat(this.seatIndexForPassenger(passenger, index))) {
+            if (passenger instanceof LivingEntity && canCrewVehicle(passenger) && this.weaponUsableBySeat(weapon, this.seatIndexForPassenger(passenger, index))) {
                 return true;
             }
         }
@@ -4710,7 +4999,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         int step = direction < 0 ? -1 : 1;
         for (int offset = 1; offset <= weapons.size(); offset++) {
             int next = Mth.positiveModulo(current + offset * step, weapons.size());
-            if (weapons.get(next).usableBySeat(seatIndex)) {
+            if (this.weaponUsableBySeat(weapons.get(next), seatIndex)) {
                 if (next == current) {
                     this.setSelectedWeaponSlotForSeat(seatIndex, next);
                     if (next != this.selectedVehicleWeaponIndex()) {
@@ -4741,7 +5030,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         if (seatIndex < 0 || slot < 0 || slot >= weapons.size()) {
             return;
         }
-        if (weapons.get(slot).usableBySeat(seatIndex)) {
+        if (this.weaponUsableBySeat(weapons.get(slot), seatIndex)) {
             this.selectedWeaponSlotBySeat.put(seatIndex, slot);
         }
     }
@@ -4755,11 +5044,11 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         if (selectedSlot != null
                 && selectedSlot >= 0
                 && selectedSlot < weapons.size()
-                && weapons.get(selectedSlot).usableBySeat(seatIndex)) {
+                && this.weaponUsableBySeat(weapons.get(selectedSlot), seatIndex)) {
             return selectedSlot;
         }
         int syncedSlot = this.selectedWeaponFromSyncedSeatData(seatIndex);
-        if (syncedSlot >= 0 && syncedSlot < weapons.size() && weapons.get(syncedSlot).usableBySeat(seatIndex)) {
+        if (syncedSlot >= 0 && syncedSlot < weapons.size() && this.weaponUsableBySeat(weapons.get(syncedSlot), seatIndex)) {
             return syncedSlot;
         }
         return this.firstUsableWeaponSlotForSeat(seatIndex);
@@ -4768,7 +5057,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     private int firstUsableWeaponSlotForSeat(int seatIndex) {
         var weapons = this.vehicleData().defaults().weapons();
         for (int index = 0; index < weapons.size(); index++) {
-            if (weapons.get(index).usableBySeat(seatIndex)) {
+            if (this.weaponUsableBySeat(weapons.get(index), seatIndex)) {
                 return index;
             }
         }
@@ -4776,12 +5065,12 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     }
 
     private boolean canUseSelectedWeapon(LivingEntity passenger, VehicleWeaponInfo weapon) {
-        return weapon.usableBySeat(this.seatIndexForPassenger(passenger, this.getPassengers().indexOf(passenger)));
+        return this.weaponUsableBySeat(weapon, this.seatIndexForPassenger(passenger, this.getPassengers().indexOf(passenger)));
     }
 
     private boolean hasWeaponUsableBySeat(int seatIndex) {
         for (VehicleWeaponInfo weapon : this.vehicleData().defaults().weapons()) {
-            if (weapon.usableBySeat(seatIndex)) {
+            if (this.weaponUsableBySeat(weapon, seatIndex)) {
                 return true;
             }
         }
@@ -5080,7 +5369,13 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
      */
     public Vec3 tailCameraPosition(float partialTick) {
         if (this.isJet()) {
-            return this.interpolatedVehiclePosition(partialTick).add(this.rotateLocalOffsetWithPose(WING_CAMERA_X, WING_CAMERA_Y, WING_CAMERA_Z, partialTick));
+            // Where on the wing is each aircraft's own ("aircraft" data, wing_camera; the A-10's by default).
+            double[] wing = this.vehicleData().aircraft().wingCamera();
+            return this.interpolatedVehiclePosition(partialTick).add(this.rotateLocalOffsetWithPose(wing[0], wing[1], wing[2], partialTick));
+        }
+        if (this.hasHullCamera()) {
+            double[] at = this.hullCameraOffset();
+            return this.interpolatedVehiclePosition(partialTick).add(this.rotateLocalOffsetWithPose(at[0], at[1], at[2], partialTick));
         }
         OBBInfo.Box tail = null;
         for (OBBInfo.Box box : this.obbBoxes()) {
@@ -5104,11 +5399,48 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
             double[] angles = JetFlight.euler(view);
             return new Vec3(angles[0], angles[1], angles[2]);
         }
+        if (this.hasHullCamera()) {
+            // Looking forward along the hull's side, turned in a little so the hull and turret fill the right of the frame.
+            return new Vec3(
+                    Mth.rotLerp(partialTick, this.yRotO, this.getYRot()) + HULL_CAMERA_INBOARD,
+                    Mth.lerp(partialTick, this.xRotO, this.getXRot()) + HULL_CAMERA_DOWN_TILT,
+                    this.roll(partialTick));
+        }
         return new Vec3(
                 Mth.rotLerp(partialTick, this.yRotO, this.getYRot()),
                 Mth.lerp(partialTick, this.xRotO, this.getXRot()) + TAIL_CAMERA_DOWN_TILT,
                 this.roll(partialTick)
         );
+    }
+
+    /** The hull camera turns in towards the hull by this much, and looks down this much, degrees. */
+    public static final float HULL_CAMERA_INBOARD = 9.0F;
+    public static final float HULL_CAMERA_DOWN_TILT = 4.0F;
+
+    /**
+     * Land vehicles and boats carry an action camera too (the last F5 view, as the helicopters' tail camera and the
+     * A-10's wing camera; the user's review, 2026-11-18): clamped to the rear corner of the hull's left side, looking
+     * forward along it, rocking with the suspension.
+     */
+    public boolean hasHullCamera() {
+        VehicleType type = this.vehicleData().defaults().vehicleType();
+        return (type == VehicleType.LAND || type == VehicleType.BOAT) && !this.obbBoxes().isEmpty();
+    }
+
+    /** Where the hull camera sits, vehicle coordinates: off the hull's widest side, two-thirds up it, near its tail. */
+    private double[] hullCameraOffset() {
+        double side = 0.0D, rear = 0.0D, top = 0.0D, bottom = Double.MAX_VALUE;
+        boolean first = true;
+        for (OBBInfo.Box box : this.obbBoxes()) {
+            if (box.follows() != OBBInfo.Follows.HULL) continue;
+            side = Math.max(side, box.x() + box.halfWidth());
+            rear = first ? box.z() - box.halfDepth() : Math.min(rear, box.z() - box.halfDepth());
+            top = Math.max(top, box.y() + box.halfHeight());
+            bottom = Math.min(bottom, box.y() - box.halfHeight());
+            first = false;
+        }
+        if (bottom == Double.MAX_VALUE) bottom = 0.0D;
+        return new double[]{side + 0.3D, bottom + (top - bottom) * 0.75D + 0.2D, rear + 0.5D};
     }
 
     public Vec3 aircraftCameraRotationFor(float partialTick) {
@@ -5492,12 +5824,16 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     }
 
     private void tickBoatMovement(EngineInfo engine, boolean consumeEnergy) {
+        var hull = this.vehicleData().boat();
         Vec3 velocity = this.getDeltaMovement();
         int forwardAxis = this.input.forwardAxis();
         int steeringAxis = this.steeringAxis();
         boolean waterContact = this.hasBoatWaterContact();
-        boolean inWater = this.isBoatWaterborne(waterContact);
+        boolean inWater = this.isBoatWaterborne(waterContact || this.hasBoatWaterBelow(BOAT_AFLOAT_PROBE_BELOW));
         double mobility = this.mobilityMultiplier();
+        if (this.boatBeachingTicks > 0) {
+            this.boatBeachingTicks--;
+        }
 
         if (forwardAxis > 0) {
             this.enginePower = Math.min(this.enginePower + engine.acceleration(), 1.0D);
@@ -5529,7 +5865,8 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         Vec3 horizontal = new Vec3(velocity.x, 0.0D, velocity.z);
         double horizontalSpeed = horizontal.length();
         if (Math.abs(this.wheelSteering) > 1.0E-4D) {
-            double yawDelta = Math.max(8.0D, horizontalSpeed * 16.0D) * this.wheelSteering * (this.enginePower >= 0.0D ? 1.0D : -0.7D);
+            // Ashore it pivots slowly on its keel.
+            double yawDelta = Math.max(inWater ? 8.0D : 1.5D, horizontalSpeed * 16.0D) * this.wheelSteering * (this.enginePower >= 0.0D ? 1.0D : -0.7D);
             float previousYaw = this.getYRot();
             this.yRotO = previousYaw;
             this.setYRot(previousYaw + (float) yawDelta);
@@ -5539,24 +5876,46 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         float yaw = this.getYRot();
         double yawRadians = Math.toRadians(yaw);
         Vec3 forward = new Vec3(-Math.sin(yawRadians), 0.0D, Math.cos(yawRadians));
-        double targetSpeed = (this.enginePower >= 0.0D ? engine.maxForwardSpeed() : engine.maxReverseSpeed()) * mobility;
-        double thrustScale = inWater ? 0.11D : 0.05D;
+        double forwardSpeed = horizontal.dot(forward);
+        // Once on the plane the hull stays there until it slows well below the speed that put it there.
+        this.boatPlaning = inWater && hull.planes() && forwardSpeed > hull.planeSpeed() * (this.boatPlaning ? 0.85D : 1.0D);
+        // Ashore the screw only crawls it along (as far ahead as astern: enough to back off a beach).
+        double targetSpeed = (this.enginePower >= 0.0D || !inWater ? engine.maxForwardSpeed() : engine.maxReverseSpeed()) * mobility;
+        double thrustScale = inWater ? hull.thrust() : 0.05D;
         velocity = velocity.add(forward.scale(thrustScale * targetSpeed * this.enginePower));
 
         horizontal = new Vec3(velocity.x, 0.0D, velocity.z);
-        double maxSpeed = (this.enginePower < 0.0D ? engine.maxReverseSpeed() : engine.maxForwardSpeed()) * mobility * (inWater ? 1.0D : 0.45D);
-        if (horizontal.length() > maxSpeed) {
+        double maxSpeed = inWater ? (this.enginePower < 0.0D ? engine.maxReverseSpeed() : engine.maxForwardSpeed()) * mobility
+                : engine.maxForwardSpeed() * mobility * BOAT_LAND_SPEED_SHARE;
+        if (horizontal.length() > maxSpeed && this.boatBeachingTicks <= 0) {
             horizontal = horizontal.normalize().scale(maxSpeed);
             velocity = new Vec3(horizontal.x, velocity.y, horizontal.z);
         }
         if (inWater) {
             double vertical = waterContact ? Math.min(0.035D, velocity.y + 0.014D) : Math.max(-0.035D, velocity.y - 0.006D);
-            velocity = new Vec3(velocity.x * engine.friction(), vertical, velocity.z * engine.friction());
+            double friction = this.boatPlaning ? hull.planedFriction() : hull.displacementFriction();
+            if (friction <= 0.0D) {
+                friction = engine.friction();
+            }
+            velocity = new Vec3(velocity.x * friction, vertical, velocity.z * friction);
+            // The keel: most sideways slip is lost each tick, so the hull carves a turn instead of skidding.
+            if (hull.keelGrip() > 0.0D) {
+                Vec3 flat = new Vec3(velocity.x, 0.0D, velocity.z);
+                Vec3 along = forward.scale(flat.dot(forward));
+                Vec3 side = flat.subtract(along).scale(1.0D - hull.keelGrip());
+                velocity = new Vec3(along.x + side.x, velocity.y, along.z + side.z);
+            }
         } else {
-            velocity = velocity.add(0.0D, -GRAVITY, 0.0D).multiply(0.94D, 0.98D, 0.94D);
+            // A hull on the ground slides up the beach and scrapes to a stop over a few blocks (it stopped in two, a jolt).
+            double scrape = this.onGround() ? 0.88D : 0.95D;
+            velocity = velocity.add(0.0D, -GRAVITY, 0.0D).multiply(scrape, 0.98D, scrape);
         }
-        velocity = this.stabilizeSpeedboatWaterCruise(velocity, forward, forwardAxis, inWater, mobility, engine);
-        velocity = this.limitSpeedboatBlockCollision(velocity);
+        velocity = this.limitBoatBowCollision(velocity, hull, inWater);
+        if (this.boatBeachingTicks > 0 && this.getBoundingBox().minY < this.boatBeachTop) {
+            // Vanilla only steps an entity that stands on ground, and a floating hull never does: the bow lifts itself
+            // onto the shore while the run carries it forward.
+            velocity = new Vec3(velocity.x, Math.min(0.16D, this.boatBeachTop - this.getBoundingBox().minY + 0.05D), velocity.z);
+        }
 
         Vec3 before = this.position();
         this.setDeltaMovement(velocity);
@@ -5568,6 +5927,11 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
             this.hurtMarked = true;
             this.needsSync = true;
         }
+    }
+
+    /** Whether the hull is on the plane (the server's and the driver's view of it). */
+    public boolean isBoatPlaning() {
+        return this.boatPlaning;
     }
 
     private boolean isBoatWaterborne(boolean waterContact) {
@@ -5583,13 +5947,46 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     }
 
     private boolean hasBoatWaterContact() {
-        if (this.isInWater() || this.isUnderWater()) {
-            return true;
+        double draft = this.vehicleData().boat().draft();
+        if (Double.isNaN(draft)) {
+            if (this.isInWater() || this.isUnderWater()) {
+                return true;
+            }
+            return this.hasBoatWaterBelow(BOAT_WATER_PROBE_BELOW);
         }
+        return this.waterAbove(this.getBoundingBox().minY + draft);
+    }
+
+    /**
+     * Whether the water surface under the hull stands at or above this height (the hull's waterline): buoyancy lifts
+     * the hull until its waterline sits at the surface, so a hull with a "draft" floats as deep as it is drawn.
+     */
+    private boolean waterAbove(double waterline) {
+        AABB box = this.getBoundingBox();
+        BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
+        double[] xs = {box.minX + 0.3D, (box.minX + box.maxX) * 0.5D, box.maxX - 0.3D};
+        double[] zs = {box.minZ + 0.3D, (box.minZ + box.maxZ) * 0.5D, box.maxZ - 0.3D};
+        int y0 = Mth.floor(waterline) - 1;
+        for (double x : xs) {
+            for (double z : zs) {
+                for (int y = y0; y <= y0 + 2; y++) {
+                    cursor.set(x, y, z);
+                    var fluid = this.level().getFluidState(cursor);
+                    if (fluid.is(FluidTags.WATER) && y + fluid.getHeight(this.level(), cursor) >= waterline) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
+    /** Whether water lies under the hull within this depth below its keel. */
+    private boolean hasBoatWaterBelow(double depth) {
         AABB box = this.getBoundingBox();
         int minX = Mth.floor(box.minX + 1.0E-4D);
         int maxX = Mth.floor(box.maxX - 1.0E-4D);
-        int minY = Mth.floor(box.minY - BOAT_WATER_PROBE_BELOW);
+        int minY = Mth.floor(box.minY - depth);
         int maxY = Mth.floor(Math.min(box.minY + BOAT_WATER_PROBE_ABOVE, box.maxY));
         int minZ = Mth.floor(box.minZ + 1.0E-4D);
         int maxZ = Mth.floor(box.maxZ - 1.0E-4D);
@@ -5606,52 +6003,84 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         return false;
     }
 
-    private Vec3 stabilizeSpeedboatWaterCruise(Vec3 velocity, Vec3 forward, int forwardAxis, boolean inWater, double mobility, EngineInfo engine) {
-        if (!this.isSpeedboatVehicle() || !inWater || forwardAxis <= 0 || this.input.brake() || this.enginePower <= 0.0D) {
-            return velocity;
-        }
-        double maxForwardSpeed = engine.maxForwardSpeed() * mobility;
-        double targetSpeed = Math.min(SPEEDBOAT_WATER_CRUISE_SPEED, maxForwardSpeed) * Mth.clamp(this.enginePower, 0.0D, 1.0D);
-        if (targetSpeed <= 1.0E-5D) {
-            return velocity;
-        }
-        Vec3 horizontal = forward.normalize().scale(targetSpeed);
-        return new Vec3(horizontal.x, velocity.y, horizontal.z);
-    }
-
-    private Vec3 limitSpeedboatBlockCollision(Vec3 velocity) {
-        if (!this.isSpeedboatVehicle()) {
+    /**
+     * The bow meeting a block: run fast at a low shore (a beach no higher than the hull's "beach_step"), the hull climbs
+     * onto it and grounds; anything else stops it dead instead of grinding into the bank.
+     */
+    private Vec3 limitBoatBowCollision(Vec3 velocity, ttv.migami.jeg.vehicle.data.subdata.BoatInfo hull, boolean inWater) {
+        if (!hull.probesBow() || this.boatBeachingTicks > 0) {
             return velocity;
         }
         Vec3 horizontal = new Vec3(velocity.x, 0.0D, velocity.z);
-        if (horizontal.lengthSqr() < 1.0E-7D || !this.isSpeedboatBowBlocked(horizontal)) {
+        if (horizontal.lengthSqr() < 1.0E-7D) {
             return velocity;
         }
-        this.enginePower *= 0.35D;
-        this.wheelSteering *= 0.5D;
-        return new Vec3(0.0D, velocity.y, 0.0D);
+        double shore = this.boatBowObstacle(horizontal, hull);
+        if (Double.isNaN(shore)) {
+            return velocity;
+        }
+        // The shore's height above the waterline (the keel sits a draft below it).
+        double aboveWater = shore - (Double.isNaN(hull.draft()) ? 0.0D : Math.max(0.0D, hull.draft()));
+        if (inWater && hull.beaches() && horizontal.length() >= hull.beachSpeed() && aboveWater <= hull.beachStep()) {
+            this.boatBeachingTicks = BOAT_BEACHING_TICKS;
+            this.boatBeachTop = this.getBoundingBox().minY + shore;
+            return velocity;
+        }
+        // Too high to climb: it runs up against the bank and loses its way over a couple of ticks rather than stopping
+        // dead in one (the speedboat "glitched out" at the shore: the user's review, 2026-11-18).
+        this.enginePower *= 0.6D;
+        this.wheelSteering *= 0.7D;
+        return new Vec3(velocity.x * 0.3D, velocity.y, velocity.z * 0.3D);
     }
 
-    private boolean isSpeedboatBowBlocked(Vec3 horizontal) {
+    /**
+     * How high the solid ground ahead of the bow rises above the keel (blocks), or NaN when the way is clear. Looked for
+     * across the bow at the hull's two probe heights; the height is the tallest column met.
+     */
+    private double boatBowObstacle(Vec3 horizontal, ttv.migami.jeg.vehicle.data.subdata.BoatInfo hull) {
         Vec3 direction = horizontal.normalize();
         Vec3 side = new Vec3(direction.z, 0.0D, -direction.x);
         AABB box = this.getBoundingBox();
-        double distance = Math.max(this.getBbWidth() * 0.5D, this.getBbWidth() * this.collisionLengthScale() * 0.5D) + horizontal.length() + SPEEDBOAT_BOW_BLOCK_PROBE_DISTANCE;
+        // From the front of the box the hull collides with blocks by (a bow gun overhanging the stem included), so the
+        // shore is seen before that box meets it.
+        BlockCollisionBounds bounds = this.blockCollisionBounds();
+        double front = bounds != null ? bounds.centerZ() + bounds.halfLength()
+                : Math.max(this.getBbWidth() * 0.5D, this.getBbWidth() * this.collisionLengthScale() * 0.5D);
+        double distance = front + horizontal.length() + hull.bowProbeDistance();
         Vec3 bowCenter = this.position().add(direction.scale(distance));
-        double[] sideOffsets = {-SPEEDBOAT_BOW_BLOCK_PROBE_HALF_WIDTH, 0.0D, SPEEDBOAT_BOW_BLOCK_PROBE_HALF_WIDTH};
-        double[] yOffsets = {SPEEDBOAT_BOW_BLOCK_PROBE_LOW_Y, SPEEDBOAT_BOW_BLOCK_PROBE_HIGH_Y};
+        double[] sideOffsets = {-hull.bowProbeHalfWidth(), 0.0D, hull.bowProbeHalfWidth()};
+        double[] yOffsets = {hull.bowProbeLowY(), hull.bowProbeHighY()};
         BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
-        for (double yOffset : yOffsets) {
-            for (double sideOffset : sideOffsets) {
-                Vec3 sample = bowCenter.add(side.scale(sideOffset));
+        double highest = Double.NaN;
+        for (double sideOffset : sideOffsets) {
+            Vec3 sample = bowCenter.add(side.scale(sideOffset));
+            boolean blocked = false;
+            for (double yOffset : yOffsets) {
                 cursor.set(sample.x, box.minY + yOffset, sample.z);
-                BlockState state = this.level().getBlockState(cursor);
-                if (!state.getCollisionShape(this.level(), cursor).isEmpty()) {
-                    return true;
+                if (!this.level().getBlockState(cursor).getCollisionShape(this.level(), cursor).isEmpty()) {
+                    blocked = true;
+                    break;
                 }
             }
+            if (!blocked) {
+                continue;
+            }
+            // The top of this column of ground: the first open space above the keel's level.
+            int x = Mth.floor(sample.x);
+            int z = Mth.floor(sample.z);
+            double top = box.minY;
+            for (int y = Mth.floor(box.minY); y <= Mth.floor(box.minY) + 4; y++) {
+                cursor.set(x, y, z);
+                var shape = this.level().getBlockState(cursor).getCollisionShape(this.level(), cursor);
+                if (shape.isEmpty()) {
+                    break;
+                }
+                top = y + shape.max(net.minecraft.core.Direction.Axis.Y);
+            }
+            double rise = top - box.minY;
+            highest = Double.isNaN(highest) ? rise : Math.max(highest, rise);
         }
-        return false;
+        return highest;
     }
 
     boolean hasEngineEnergy(EngineInfo engine, boolean active) {
@@ -5693,13 +6122,16 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     private void tickSteeredLandMovement(EngineInfo engine, Vec3 velocity, int forwardAxis, int steeringAxis, boolean engineSound) {
         double mobility = this.mobilityMultiplier();
         Vec3 forward = this.landDriveForward();
+        // Weight (inertia(), from "mass"): a heavy hull takes longer to wind up, to stop and to start a turn.
+        double inertia = this.driveInertia();
+        double acceleration = engine.acceleration() * inertia;
 
         Vec3 horizontal = new Vec3(velocity.x, 0.0D, velocity.z);
         double horizontalSpeed = horizontal.length();
         if (forwardAxis > 0) {
-            this.enginePower = Math.min(this.enginePower + (this.enginePower < 0.0D ? engine.acceleration() * 2.0D : engine.acceleration()), 1.0D);
+            this.enginePower = Math.min(this.enginePower + (this.enginePower < 0.0D ? acceleration * 2.0D : acceleration), 1.0D);
         } else if (forwardAxis < 0) {
-            this.enginePower = Math.max(this.enginePower - (this.enginePower > 0.0D ? engine.acceleration() * 2.0D : engine.acceleration()), -1.0D);
+            this.enginePower = Math.max(this.enginePower - (this.enginePower > 0.0D ? acceleration * 2.0D : acceleration), -1.0D);
         } else {
             this.enginePower *= 0.97D;
         }
@@ -5708,6 +6140,13 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         }
         if (steeringAxis != 0) {
             this.enginePower *= 0.98D;
+        }
+        if (engineSound) {
+            double along = velocity.x * forward.x + velocity.z * forward.z;
+            boolean braking = horizontalSpeed > 0.08D && (this.input.brake() || forwardAxis != 0 && Math.signum(forwardAxis) != Math.signum(along));
+            if (this.entityData.get(DATA_DRIVER_BRAKING) != braking) {
+                this.entityData.set(DATA_DRIVER_BRAKING, braking);
+            }
         }
 
         if (engineSound) {
@@ -5718,7 +6157,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         }
 
         if (steeringAxis != 0) {
-            this.wheelSteering += steeringAxis * engine.steeringSpeed();
+            this.wheelSteering += steeringAxis * engine.steeringSpeed() * Math.sqrt(inertia);
         }
         this.wheelSteering *= Math.max(0.78D - 0.25D * horizontalSpeed, 0.1D);
 
@@ -5742,22 +6181,43 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
             }
         }
 
-        double targetSpeed = (this.enginePower > 0.0D ? engine.maxForwardSpeed() : engine.maxReverseSpeed()) * mobility;
-        velocity = velocity.add(forward.scale(0.15D * targetSpeed * this.enginePower));
+        // Swimming (the BMP-2, LAV-150): slow, still steered by the tracks or wheels, floating at its waterline.
+        var amphibious = this.vehicleData().amphibious();
+        boolean afloat = this.amphibiousAfloat();
+        double forwardTop = afloat ? amphibious.maxSpeed() : engine.maxForwardSpeed();
+        double reverseTop = afloat ? amphibious.maxSpeed() * 0.5D : engine.maxReverseSpeed();
+        double targetSpeed = (this.enginePower > 0.0D ? forwardTop : reverseTop) * mobility;
+        // Ground friction keeps f of the speed each tick; a heavy hull keeps more (it coasts) and is pushed less, scaled so
+        // it levels off at the same top speed: thrust 0.15 x inertia x f / f', friction f' = 1 - (1 - f) x inertia.
+        double groundFriction = 1.0D - (1.0D - engine.friction()) * inertia;
+        double thrust = afloat ? 0.15D : 0.15D * inertia * engine.friction() / groundFriction;
+        velocity = velocity.add(forward.scale(thrust * targetSpeed * this.enginePower));
         horizontal = new Vec3(velocity.x, 0.0D, velocity.z);
         horizontalSpeed = horizontal.length();
 
-        double maxSpeed = (this.enginePower < 0.0D ? engine.maxReverseSpeed() : engine.maxForwardSpeed()) * mobility;
+        double maxSpeed = (this.enginePower < 0.0D ? reverseTop : forwardTop) * mobility;
         if (horizontalSpeed > maxSpeed) {
             horizontal = horizontal.normalize().scale(maxSpeed);
             velocity = new Vec3(horizontal.x, velocity.y, horizontal.z);
         }
 
-        double friction = this.input.brake() ? 0.55D : engine.friction();
-        if (this.onGround()) {
+        double friction = this.input.brake() ? 1.0D - 0.45D * inertia : groundFriction;
+        if (this.onGround() && !afloat) {
             velocity = new Vec3(velocity.x * friction, velocity.y, velocity.z * friction);
         }
-        if (!this.isNoGravity()) {
+        if (afloat) {
+            // Buoyancy holds the waterline at the surface; water drag slows it, more so across the hull than along it.
+            boolean deep = this.waterAbove(this.getBoundingBox().minY + amphibious.waterline());
+            double vy = Mth.clamp(velocity.y * 0.8D + (deep ? 0.03D : -0.02D), -0.12D, 0.12D);
+            if (this.horizontalCollision && Math.abs(this.enginePower) > 0.1D) {
+                // The bow against a bank or the shelving bottom: the tracks bite and haul the hull up it. (Afloat it isn't
+                // on the ground, so the vanilla step-up never lifts it.)
+                vy = Math.max(vy, 0.22D);
+            }
+            Vec3 along = forward.scale(velocity.x * forward.x + velocity.z * forward.z);
+            Vec3 across = new Vec3(velocity.x - along.x, 0.0D, velocity.z - along.z);
+            velocity = new Vec3(along.x * 0.96D + across.x * 0.7D, vy, along.z * 0.96D + across.z * 0.7D);
+        } else if (!this.isNoGravity()) {
             velocity = velocity.add(0.0D, -GRAVITY, 0.0D);
         }
 
@@ -6303,8 +6763,15 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
 
     /** Nose-down tilt passes through; nose-up tilt follows it at first, then levels off towards the hull's limit. */
     private static float softenedNoseUp(float tilt) {
-        return tilt >= 0.0F ? tilt : -WEIGHTY_HULL_MAX_NOSE_UP * (1.0F - (float) Math.exp(tilt / WEIGHTY_HULL_MAX_NOSE_UP));
+        // Nose down eases off towards a cruise attitude (a real attack helicopter flies about 10 degrees nose down flat
+        // out; the full 20 of thrust tilt looked like a dive: the Mi-28 at full throttle, the user's review, 2026-11-18).
+        // The thrust itself is unchanged; only the drawn hull and camera follow this.
+        return tilt >= 0.0F ? HULL_CRUISE_NOSE_DOWN * (float) Math.tanh(tilt / HULL_CRUISE_NOSE_DOWN)
+                : -WEIGHTY_HULL_MAX_NOSE_UP * (1.0F - (float) Math.exp(tilt / WEIGHTY_HULL_MAX_NOSE_UP));
     }
+
+    /** The drawn hull's nose-down attitude approaches this at full forward thrust, degrees. */
+    private static final float HULL_CRUISE_NOSE_DOWN = 11.0F;
 
     /**
      * Pitch the helicopter's cameras and pilot look along. In weighty flight that is the mouse aim plus a small, slowly
@@ -6587,16 +7054,36 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
 
     private void applyPassengerYaw() {
         Entity passenger = this.getControllingPassenger();
-        VehicleType type = this.vehicleData().defaults().vehicleType();
-        if (passenger == null || this.isFreeLookInputDown() || type == VehicleType.LAND || type == VehicleType.HELICOPTER || type == VehicleType.AIRCRAFT) {
-            return;
-        }
-        int fallbackIndex = this.getPassengers().indexOf(passenger);
-        if (fallbackIndex >= 0 && this.usesArticulatedSeatTransform(this.seatForPassenger(passenger, fallbackIndex))) {
+        if (passenger == null || !this.yawFollowsRider(passenger)) {
             return;
         }
         this.setYRot(passenger.getYRot());
         this.yRotO = this.getYRot();
+    }
+
+    /**
+     * Whether this vehicle takes its heading from {@code rider}'s view (artillery and boats without a turret seat, the
+     * mortar's baseplate): then the rider's view must not also turn with the vehicle, or each feeds the other and one
+     * mouse nudge spins it for ever (the mortar, 2026-11-18; VehicleInputHandler.clampSeatView).
+     */
+    public boolean yawFollowsRider(Entity rider) {
+        VehicleType type = this.vehicleData().defaults().vehicleType();
+        if (rider != this.getControllingPassenger() || this.isFreeLookInputDown() || type == VehicleType.LAND
+                || type == VehicleType.HELICOPTER || type == VehicleType.AIRCRAFT) {
+            return false;
+        }
+        int fallbackIndex = this.getPassengers().indexOf(rider);
+        if (fallbackIndex < 0) {
+            return true;
+        }
+        // Whether the rider's seat can work the turret at all, not whether it has it now: the speedboat's driver keeps the
+        // gun only while the gunner's seat is empty and the gun is on manual, and when a gunner took it or it went on
+        // automatic the boat swung to wherever the driver looked (the user's review, 2026-11-19: "speed boat bugs out if
+        // the sentry is on auto mode").
+        var turret = this.vehicleData().defaults().turret();
+        int seat = this.seatForPassenger(rider, fallbackIndex).index();
+        boolean turretSeat = turret.enabled() && (seat == turret.seatIndex() || turret.hasFallbackSeat() && seat == turret.fallbackSeat());
+        return !turretSeat;
     }
 
     @Override
@@ -6656,6 +7143,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         double moved = (this.getX() - xo) * forward.x + (this.getZ() - zo) * forward.z;
         this.tickClientMotion(Math.abs(moved) > 4.0D ? 0.0D : moved);
         this.tickWheels(Math.abs(moved) > 4.0D ? 0.0D : moved, Mth.wrapDegrees(this.getYRot() - yawO));
+        this.tickBoatVisuals(Math.abs(moved) > 4.0D ? 0.0D : moved, Mth.wrapDegrees(this.getYRot() - yawO));
         var tracks = this.vehicleData().tracks();
         if (tracks == null) {
             return;
@@ -6724,6 +7212,108 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         this.clientForwardSpeed = moved;
     }
 
+    /**
+     * Client: a boat's bow rise, propeller and rudder from how every client sees the hull move (no extra sync), and the
+     * spray and wake once it is on the plane. The bow comes up through the hump below planing speed and settles to half
+     * as the hull runs flat out.
+     */
+    private void tickBoatVisuals(double moved, float yawDelta) {
+        if (this.vehicleData().defaults().vehicleType() != VehicleType.BOAT) {
+            return;
+        }
+        var hull = this.vehicleData().boat();
+        this.boatBowRiseO = this.boatBowRise;
+        this.boatPropellerAngleO = this.boatPropellerAngle;
+        this.boatRudderO = this.boatRudder;
+        boolean afloat = this.hasBoatWaterContact() || this.hasBoatWaterBelow(BOAT_AFLOAT_PROBE_BELOW);
+        float target = 0.0F;
+        if (afloat && hull.planes() && hull.bowRiseDegrees() > 0.0F) {
+            double onset = hull.planeSpeed() * 0.55D;
+            double top = Math.max(hull.planeSpeed() + 0.01D, this.vehicleData().defaults().engine().maxForwardSpeed());
+            if (moved > onset && moved < hull.planeSpeed()) {
+                target = (float) (hull.bowRiseDegrees() * (moved - onset) / (hull.planeSpeed() - onset));
+            } else if (moved >= hull.planeSpeed()) {
+                target = (float) (hull.bowRiseDegrees() * (1.0D - 0.5D * Math.min(1.0D, (moved - hull.planeSpeed()) / (top - hull.planeSpeed()))));
+            }
+        }
+        this.boatBowRise += (target - this.boatBowRise) * 0.12F;
+        // The screw turns with the water past it, and ticks over at idle while someone is at the helm.
+        float spin = (float) (moved * 720.0D) + (this.getControllingPassenger() != null ? 18.0F : 0.0F);
+        this.boatPropellerAngle += spin;
+        if (Math.abs(this.boatPropellerAngle) > 3600.0F) {
+            this.boatPropellerAngle %= 360.0F;
+            this.boatPropellerAngleO = this.boatPropellerAngle - spin;
+        }
+        this.boatRudder += (Mth.clamp(-yawDelta * 6.0F, -30.0F, 30.0F) - this.boatRudder) * 0.3F;
+        if (afloat && hull.planes() && moved > hull.planeSpeed() * 0.8D) {
+            this.spawnBoatSpray(moved);
+        }
+    }
+
+    private void spawnBoatSpray(double speed) {
+        // The hull's own extent, from its "body" boxes (the entity box is square, and a bow gun overhangs the stem).
+        double front = 0.0D, back = 0.0D, beam = this.getBbWidth() * 0.5D;
+        for (OBBInfo.Box box : this.vehicleData().defaults().obb().boxes()) {
+            if (box.part() == OBBInfo.Part.BODY) {
+                front = Math.max(front, box.z() + box.halfDepth());
+                back = Math.min(back, box.z() - box.halfDepth());
+                beam = Math.max(beam, Math.abs(box.x()) + box.halfWidth());
+            }
+        }
+        Vec3 forward = Vec3.directionFromRotation(0.0F, this.getYRot());
+        Vec3 side = new Vec3(-forward.z, 0.0D, forward.x);
+        double draft = this.vehicleData().boat().draft();
+        double water = this.getY() + (Double.isNaN(draft) ? -0.2D : draft) + 0.05D;
+        var random = this.random;
+        // Bow spray thrown up and out from both sides a third of the way back from the stem, and the wake churned white
+        // behind the transom.
+        for (int sign = -1; sign <= 1; sign += 2) {
+            Vec3 bow = this.position().add(forward.scale(front * 0.45D)).add(side.scale(sign * (beam + 0.1D)));
+            for (int i = 0; i < 5; i++) {
+                double along = (random.nextDouble() - 0.5D) * 1.6D;
+                this.level().addParticle(net.minecraft.core.particles.ParticleTypes.SPLASH, bow.x + forward.x * along, water + 0.3D, bow.z + forward.z * along,
+                        side.x * sign * 0.3D, 0.3D + random.nextDouble() * 0.25D, side.z * sign * 0.3D);
+            }
+            if (random.nextInt(2) == 0) {
+                this.level().addParticle(net.minecraft.core.particles.ParticleTypes.CLOUD, bow.x, water + 0.35D, bow.z,
+                        side.x * sign * 0.08D, 0.03D, side.z * sign * 0.08D);
+            }
+        }
+        Vec3 stern = this.position().add(forward.scale(back - 0.4D));
+        for (int i = 0; i < 3; i++) {
+            double spread = (random.nextDouble() - 0.5D) * beam * 1.4D;
+            this.level().addParticle(net.minecraft.core.particles.ParticleTypes.CLOUD, stern.x + side.x * spread, water + 0.3D, stern.z + side.z * spread,
+                    -forward.x * speed * 0.15D, 0.01D, -forward.z * speed * 0.15D);
+            this.level().addParticle(net.minecraft.core.particles.ParticleTypes.SPLASH, stern.x + side.x * spread, water + 0.3D, stern.z + side.z * spread,
+                    0.0D, 0.15D, 0.0D);
+        }
+    }
+
+    /** Client: the bow's rise above level, degrees. */
+    public float boatBowRise(float partialTick) {
+        return Mth.lerp(partialTick, this.boatBowRiseO, this.boatBowRise);
+    }
+
+    /** Client: the propeller's turn, degrees. */
+    public float boatPropellerAngle(float partialTick) {
+        return Mth.lerp(partialTick, this.boatPropellerAngleO, this.boatPropellerAngle);
+    }
+
+    /** Client: the rudder's angle, degrees, positive to port. */
+    public float boatRudder(float partialTick) {
+        return Mth.lerp(partialTick, this.boatRudderO, this.boatRudder);
+    }
+
+    /** Client: how far the hull moved forward last tick, as every client sees it (blocks a tick). */
+    public double clientForwardSpeed() {
+        return this.clientForwardSpeed;
+    }
+
+    /** The driver is braking (the brake held, or throttling against the hull's motion); synced to every client. */
+    public boolean driverBraking() {
+        return this.entityData.get(DATA_DRIVER_BRAKING);
+    }
+
     /** Client: the hull is slowing (its brake lamps light), as every client sees it from its motion. */
     public boolean clientBraking() {
         return this.clientBraking;
@@ -6744,8 +7334,9 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
      * Whether a seat rides on the turret (a hatch in its roof, the PLZ-05's): its position, given in hull coordinates
      * with the turret straight ahead, turns with the turret.
      */
+    /** A seat that rides the turret (a hatch on its roof) and turns with it: the data's "turret_riders". */
     protected boolean seatRidesTurret(SeatInfo seat) {
-        return false;
+        return this.vehicleData().turretRiders().contains(seat.index());
     }
 
     public boolean usesVehiclePoseTransform() {
@@ -6819,7 +7410,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     }
 
     private boolean usesArticulatedSeatTransform(SeatInfo seat) {
-        return this.vehicleData().defaults().turret().enabled() && seat.index() == this.vehicleData().defaults().turret().seatIndex();
+        return this.vehicleData().defaults().turret().enabled() && seat.index() == this.turretSeat();
     }
 
     private boolean usesArticulatedTurretAim(LivingEntity shooter) {
@@ -6827,7 +7418,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         if (weapon == null || !this.vehicleData().defaults().turret().enabled()) {
             return false;
         }
-        int turretSeat = this.vehicleData().defaults().turret().seatIndex();
+        int turretSeat = this.turretSeat();
         return this.canUseSelectedWeapon(shooter, weapon)
                 && this.seatIndexForPassenger(shooter, this.getPassengers().indexOf(shooter)) == turretSeat
                 && (!weapon.guided() || this.guidedWeaponsUseArticulatedTurret());
@@ -7048,10 +7639,13 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     }
 
     private Vec3 interpolatedVehiclePosition(float partialTick) {
+        // From xOld, as the entity renderer draws the hull (EntityRenderer lerps xOld; xo is the camera entity's). Taken
+        // from xo, a crew camera and the cab drawn round it could stand a fraction apart within a tick and the cab shook
+        // round the driver (the FSV-6 in first person, the user's review, 2026-11-18).
         return new Vec3(
-                Mth.lerp(partialTick, this.xo, this.getX()),
-                Mth.lerp(partialTick, this.yo, this.getY()),
-                Mth.lerp(partialTick, this.zo, this.getZ())
+                Mth.lerp(partialTick, this.xOld, this.getX()),
+                Mth.lerp(partialTick, this.yOld, this.getY()),
+                Mth.lerp(partialTick, this.zOld, this.getZ())
         );
     }
 
@@ -7297,13 +7891,13 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
             // Aircraft do not vanish: they go down burning, blow up where they hit, and burn out (tickWreck).
             this.entityData.set(DATA_WRECK, WRECK_GOING_DOWN);
             this.wreckTicks = 0;
-            this.wreckStartedGrounded = this.onGround() || this.verticalCollisionBelow || this.isInWater();
+            this.wreckStartedGrounded = this.wrecksOnTheGround() || this.onGround() || this.verticalCollisionBelow || this.isInWater();
             if (this.isJet()) {
                 // A wing and fin tear away; a jet that hit the ground fast goes up at once.
                 serverLevel.sendParticles(new net.minecraft.core.particles.BlockParticleOption(ParticleTypes.BLOCK,
                                 net.minecraft.world.level.block.Blocks.IRON_BLOCK.defaultBlockState()),
                         this.getX(), this.getY() + 2.0D, this.getZ(), 80, 4.0D, 1.0D, 4.0D, 0.4D);
-                serverLevel.sendParticles(ParticleTypes.LARGE_SMOKE, this.getX(), this.getY() + 2.0D, this.getZ(), 30, 3.0D, 1.0D, 3.0D, 0.08D);
+                ttv.migami.jeg.network.SmokeScreenPayload.send(serverLevel, this.position().add(0.0D, 1.0D, 0.0D), 4.0F, 60, 384.0D);
                 if (this.wreckStartedGrounded && this.lastTickSpeed > 0.8D) {
                     this.wreckTicks = WRECK_COOK_OFF_TICKS;
                 }
@@ -7316,10 +7910,12 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
             return;
         }
         if (this.level() instanceof ServerLevel serverLevel) {
-            serverLevel.sendParticles(ModParticleTypes.SMALL_EXPLOSION.get(), this.getX(), this.getY() + 0.6D, this.getZ(), 12, 0.8D, 0.5D, 0.8D, 0.08D);
             var destroy = this.vehicleData().defaults().destroy();
             if (destroy.explodes() && destroy.explosionPower() > 0.0F) {
-                this.level().explode(this, this.getX(), this.getY() + 0.4D, this.getZ(), destroy.explosionPower(), ExplosionInteraction.MOB);
+                ttv.migami.jeg.vehicle.projectile.RealisticBlast.explode(serverLevel, this, null, this.position().add(0.0D, 0.4D, 0.0D),
+                        destroy.explosionPower(), true, ExplosionInteraction.MOB);
+            } else {
+                ttv.migami.jeg.vehicle.projectile.RealisticBlast.show(serverLevel, this.position().add(0.0D, 0.6D, 0.0D), 2.0F, 3.0F, false);
             }
             // After the blast, so it does not destroy what was aboard.
             this.spillCargo(serverLevel);
@@ -7351,17 +7947,27 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         double ex = this.getX() + Math.sin(yaw) * back;
         double ey = this.getY() + this.getBbHeight() * 0.75D;
         double ez = this.getZ() - Math.cos(yaw) * back;
+        if (wreck != WRECK_NONE && this.sinksAsWreck() && this.wreckSubmerged()) {
+            // A sunk boat: no fire under water, only air escaping (the server sends the sinking's bubbles).
+            if (random.nextInt(3) == 0) {
+                level.addParticle(ParticleTypes.BUBBLE, this.getX() + (random.nextDouble() - 0.5D) * this.getBbWidth(),
+                        this.getY() + this.getBbHeight() * 0.6D, this.getZ() + (random.nextDouble() - 0.5D) * this.getBbWidth(), 0.0D, 0.08D, 0.0D);
+            }
+            return;
+        }
+        // Real smoke and flame (SmokeFx: the blasts' soft lit puffs), not vanilla's sprites (the user's review,
+        // 2026-11-19): grey from a hit engine, dark when badly hurt, then fire under a thick black column; a burning
+        // hulk is ablaze along its length.
+        Vec3 engine = new Vec3(ex, ey, ez);
         if (wreck == WRECK_BURNING) {
+            double w = this.getBbWidth();
             for (int i = 0; i < 3; i++) {
-                level.addParticle(ParticleTypes.FLAME, this.getX() + (random.nextDouble() - 0.5D) * this.getBbWidth(),
-                        this.getY() + random.nextDouble() * this.getBbHeight() * 0.7D,
-                        this.getZ() + (random.nextDouble() - 0.5D) * this.getBbWidth(), 0.0D, 0.04D, 0.0D);
+                Vec3 at = new Vec3(this.getX() + (random.nextDouble() - 0.5D) * w, this.getY() + random.nextDouble() * this.getBbHeight() * 0.7D,
+                        this.getZ() + (random.nextDouble() - 0.5D) * w);
+                ttv.migami.jeg.vehicle.effect.SmokeFx.emit(level, at, new Vec3(0.0D, 0.05D, 0.0D), ttv.migami.jeg.vehicle.effect.SmokeFx.FIRE, 1.0F + (float) w * 0.15F);
             }
-            if (this.tickCount % 2 == 0) {
-                level.addAlwaysVisibleParticle(ParticleTypes.CAMPFIRE_SIGNAL_SMOKE, true, ex + (random.nextDouble() - 0.5D),
-                        ey, ez + (random.nextDouble() - 0.5D), 0.0D, 0.07D, 0.0D);
-            }
-            level.addParticle(ParticleTypes.LARGE_SMOKE, ex, ey, ez, (random.nextDouble() - 0.5D) * 0.05D, 0.06D, (random.nextDouble() - 0.5D) * 0.05D);
+            ttv.migami.jeg.vehicle.effect.SmokeFx.emit(level, engine.add((random.nextDouble() - 0.5D) * w * 0.5D, 0.2D, (random.nextDouble() - 0.5D) * w * 0.5D),
+                    new Vec3((random.nextDouble() - 0.5D) * 0.03D, 0.12D, (random.nextDouble() - 0.5D) * 0.03D), ttv.migami.jeg.vehicle.effect.SmokeFx.BLACK, 1.0F + (float) w * 0.2F);
             if (random.nextInt(8) == 0) {
                 level.addParticle(ParticleTypes.LAVA, ex, ey, ez, 0.0D, 0.0D, 0.0D);
             }
@@ -7369,20 +7975,16 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         }
         if (wreck == WRECK_GOING_DOWN || ratio < 0.15F) {
             for (int i = 0; i < 2; i++) {
-                level.addParticle(ParticleTypes.FLAME, ex + (random.nextDouble() - 0.5D) * 0.6D, ey, ez + (random.nextDouble() - 0.5D) * 0.6D,
-                        0.0D, 0.03D, 0.0D);
-                level.addParticle(ParticleTypes.LARGE_SMOKE, ex, ey + 0.2D, ez, (random.nextDouble() - 0.5D) * 0.04D, 0.05D, (random.nextDouble() - 0.5D) * 0.04D);
+                ttv.migami.jeg.vehicle.effect.SmokeFx.emit(level, engine.add((random.nextDouble() - 0.5D) * 0.6D, 0.0D, (random.nextDouble() - 0.5D) * 0.6D),
+                        new Vec3(0.0D, 0.05D, 0.0D), ttv.migami.jeg.vehicle.effect.SmokeFx.FIRE, 0.9F);
             }
-            if (this.tickCount % 3 == 0) {
-                level.addAlwaysVisibleParticle(ParticleTypes.CAMPFIRE_COSY_SMOKE, true, ex, ey + 0.3D, ez, 0.0D, 0.05D, 0.0D);
-            }
+            ttv.migami.jeg.vehicle.effect.SmokeFx.emit(level, engine.add(0.0D, 0.3D, 0.0D),
+                    new Vec3((random.nextDouble() - 0.5D) * 0.03D, 0.1D, (random.nextDouble() - 0.5D) * 0.03D), ttv.migami.jeg.vehicle.effect.SmokeFx.BLACK, 1.0F);
             return;
         }
         if (ratio < 0.35F) {
-            level.addParticle(ParticleTypes.LARGE_SMOKE, ex, ey, ez, (random.nextDouble() - 0.5D) * 0.03D, 0.06D, (random.nextDouble() - 0.5D) * 0.03D);
-            if (this.tickCount % 4 == 0) {
-                level.addAlwaysVisibleParticle(ParticleTypes.CAMPFIRE_COSY_SMOKE, true, ex, ey + 0.2D, ez, 0.0D, 0.04D, 0.0D);
-            }
+            ttv.migami.jeg.vehicle.effect.SmokeFx.emit(level, engine, new Vec3((random.nextDouble() - 0.5D) * 0.03D, 0.08D,
+                    (random.nextDouble() - 0.5D) * 0.03D), ttv.migami.jeg.vehicle.effect.SmokeFx.DARK, 1.0F);
             if (random.nextInt(6) == 0) {
                 for (int i = 0; i < 5; i++) {
                     level.addParticle(ParticleTypes.ELECTRIC_SPARK, ex, ey, ez, (random.nextDouble() - 0.5D) * 0.5D,
@@ -7393,17 +7995,29 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         }
         // A grey plume from a hit engine, plain to see from a distance.
         if (this.tickCount % 2 == 0) {
-            level.addParticle(ParticleTypes.SMOKE, ex, ey, ez, (random.nextDouble() - 0.5D) * 0.02D, 0.05D, (random.nextDouble() - 0.5D) * 0.02D);
-        }
-        if (this.tickCount % 5 == 0) {
-            level.addParticle(ParticleTypes.LARGE_SMOKE, ex, ey, ez, (random.nextDouble() - 0.5D) * 0.02D, 0.05D, (random.nextDouble() - 0.5D) * 0.02D);
+            ttv.migami.jeg.vehicle.effect.SmokeFx.emit(level, new Vec3(ex, ey, ez), new Vec3((random.nextDouble() - 0.5D) * 0.02D, 0.06D,
+                    (random.nextDouble() - 0.5D) * 0.02D), ttv.migami.jeg.vehicle.effect.SmokeFx.GREY, 0.9F);
         }
     }
 
-    /** Helicopters and aircraft go down as a wreck instead of vanishing on the spot. */
-    private boolean goesDownAsWreck() {
+    /**
+     * Whether destruction leaves a wreck instead of vanishing on the spot. Aircraft go down burning; land vehicles and
+     * guns cook off where they stand (smoke and sparks, then the fireball) and burn as a charred hulk before breaking
+     * apart; boats burn on the water, their fuel goes up, and they sink ({@link #sinksAsWreck()}).
+     */
+    protected boolean goesDownAsWreck() {
+        return true;
+    }
+
+    /** A boat's wreck sinks stern first after its fuel goes up, rather than burning where it lies (tickSinkingWreck). */
+    public boolean sinksAsWreck() {
+        return this.vehicleData().defaults().vehicleType() == VehicleType.BOAT;
+    }
+
+    /** A vehicle that never leaves the ground: its wreck cooks off where it stands rather than spinning down. */
+    private boolean wrecksOnTheGround() {
         VehicleType type = this.vehicleData().defaults().vehicleType();
-        return type == VehicleType.HELICOPTER || type == VehicleType.AIRCRAFT;
+        return type == VehicleType.LAND || type == VehicleType.ARTILLERY;
     }
 
     /** WRECK_NONE while intact, else WRECK_GOING_DOWN or WRECK_BURNING. */
@@ -7431,7 +8045,9 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
             Vec3 velocity = this.getDeltaMovement();
             velocity = new Vec3(velocity.x * 0.97D, Math.max(velocity.y - WRECK_GRAVITY, -WRECK_MAX_FALL_SPEED), velocity.z * 0.97D);
             if (grounded) {
-                velocity = new Vec3(velocity.x * 0.5D, Math.max(velocity.y, 0.0D), velocity.z * 0.5D);
+                // A boat burning on the water loses way gently; a hull on the ground stops short.
+                double keep = this.sinksAsWreck() && this.isInWater() ? 0.92D : 0.5D;
+                velocity = new Vec3(velocity.x * keep, Math.max(velocity.y, 0.0D), velocity.z * keep);
             }
             if (!this.wreckStartedGrounded && this.isJet()) {
                 velocity = new Vec3(this.getDeltaMovement().x * 0.995D, Math.max(this.getDeltaMovement().y - WRECK_GRAVITY * 0.6D, -2.4D), this.getDeltaMovement().z * 0.995D);
@@ -7455,6 +8071,10 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
             this.move(MoverType.SELF, velocity);
             return;
         }
+        if (this.sinksAsWreck()) {
+            this.tickSinkingWreck(level);
+            return;
+        }
         // Burning hulk: settles where it came down, then breaks apart.
         Vec3 velocity = this.onGround() ? Vec3.ZERO : new Vec3(0.0D, Math.max(this.getDeltaMovement().y - WRECK_GRAVITY, -WRECK_MAX_FALL_SPEED), 0.0D);
         this.setDeltaMovement(velocity);
@@ -7465,11 +8085,86 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
             level.playSound(null, this.getX(), this.getY(), this.getZ(), SoundEvents.FIRE_AMBIENT, SoundSource.NEUTRAL, 1.6F, 0.7F + this.random.nextFloat() * 0.3F);
         }
         if (this.wreckTicks >= WRECK_BURN_TICKS) {
-            level.sendParticles(ParticleTypes.LARGE_SMOKE, this.getX(), this.getY() + 0.8D, this.getZ(), 40, 1.0D, 0.6D, 1.0D, 0.04D);
+            this.breakUpWreck(level, false);
+        }
+    }
+
+    /** How long a boat's wreck burns afloat, settling by the stern, before it goes under; and lies on the bottom. */
+    private static final int SINK_AFLOAT_TICKS = 50, SINK_REST_TICKS = 160, SINK_MAX_TICKS = 900;
+    private int wreckRestTicks;
+
+    /** Whether the wreck's hull (its middle) is under water. */
+    public boolean wreckSubmerged() {
+        return this.level().getFluidState(BlockPos.containing(this.getX(), this.getY() + this.getBbHeight() * 0.6D, this.getZ()))
+                .is(net.minecraft.tags.FluidTags.WATER);
+    }
+
+    /**
+     * A boat after its fuel went up: it burns on the water while it floods, settling by the stern and listing; then it
+     * goes under, stern first, sinking at about half a block a second with air bubbling up, settles on the bottom and
+     * breaks up there. Out of water (beached), it burns out as a land wreck does.
+     */
+    private void tickSinkingWreck(ServerLevel level) {
+        boolean water = this.isInWater() || this.wreckSubmerged();
+        if (!water) {
+            Vec3 velocity = this.onGround() ? Vec3.ZERO : new Vec3(0.0D, Math.max(this.getDeltaMovement().y - WRECK_GRAVITY, -WRECK_MAX_FALL_SPEED), 0.0D);
+            this.setDeltaMovement(velocity);
+            if (velocity.lengthSqr() > 0.0D) this.move(MoverType.SELF, velocity);
+            if (this.wreckTicks % 25 == 0) {
+                level.playSound(null, this.getX(), this.getY(), this.getZ(), SoundEvents.FIRE_AMBIENT, SoundSource.NEUTRAL, 1.6F, 0.7F + this.random.nextFloat() * 0.3F);
+            }
+            if (this.wreckTicks >= WRECK_BURN_TICKS) this.breakUpWreck(level, false);
+            return;
+        }
+        boolean afloat = this.wreckTicks < SINK_AFLOAT_TICKS;
+        boolean submerged = this.wreckSubmerged();
+        // Settling as it floods, then going down; stopped by the bottom.
+        double sink = afloat ? -0.006D : -0.03D;
+        Vec3 drift = this.getDeltaMovement();
+        Vec3 velocity = new Vec3(drift.x * 0.9D, this.onGround() ? 0.0D : sink, drift.z * 0.9D);
+        this.setDeltaMovement(velocity);
+        this.move(MoverType.SELF, velocity);
+        // Down by the stern (bow up) and listing, more as it floods; it levels a little on the bottom.
+        float bow = this.onGround() ? -8.0F : afloat ? -6.0F : -20.0F;
+        this.xRotO = this.getXRot();
+        this.setXRot(Mth.lerp(0.03F, this.getXRot(), bow));
+        this.setRoll(Mth.lerp(0.03F, this.roll(), this.onGround() ? 6.0F : 14.0F));
+        if (this.wreckTicks == SINK_AFLOAT_TICKS) {
+            // Going under: the water closes over it.
+            level.playSound(null, this.getX(), this.getY(), this.getZ(), SoundEvents.GENERIC_SPLASH, SoundSource.NEUTRAL, 2.0F, 0.6F);
+            level.sendParticles(ParticleTypes.SPLASH, this.getX(), this.getY() + this.getBbHeight() * 0.5D, this.getZ(), 60, 1.6D, 0.2D, 1.6D, 0.2D);
+        }
+        if (!afloat && !this.onGround()) {
+            // Air coming out of the hull as it sinks.
+            level.sendParticles(ParticleTypes.BUBBLE_COLUMN_UP, this.getX(), this.getY() + this.getBbHeight() * 0.5D, this.getZ(), 6, 0.9D, 0.3D, 0.9D, 0.05D);
+            if (this.wreckTicks % 16 == 0) {
+                level.playSound(null, this.getX(), this.getY(), this.getZ(), SoundEvents.BUBBLE_COLUMN_UPWARDS_AMBIENT, SoundSource.NEUTRAL, 1.4F, 0.7F + this.random.nextFloat() * 0.2F);
+            }
+        } else if (submerged && this.wreckTicks % 5 == 0) {
+            level.sendParticles(ParticleTypes.BUBBLE, this.getX(), this.getY() + this.getBbHeight() * 0.5D, this.getZ(), 3, 0.8D, 0.2D, 0.8D, 0.02D);
+        }
+        if (!submerged && this.wreckTicks % 25 == 0) {
+            level.playSound(null, this.getX(), this.getY(), this.getZ(), SoundEvents.FIRE_AMBIENT, SoundSource.NEUTRAL, 1.6F, 0.7F + this.random.nextFloat() * 0.3F);
+        }
+        if (this.onGround() && !afloat) {
+            this.wreckRestTicks++;
+        }
+        if (this.wreckRestTicks >= SINK_REST_TICKS || this.wreckTicks >= SINK_MAX_TICKS) {
+            this.breakUpWreck(level, true);
+        }
+    }
+
+    /** The wreck breaks apart: under water in a last rush of air; on land in a burst of smoke and embers. */
+    private void breakUpWreck(ServerLevel level, boolean underwater) {
+        if (underwater) {
+            level.sendParticles(ParticleTypes.BUBBLE_COLUMN_UP, this.getX(), this.getY() + 0.6D, this.getZ(), 40, 1.2D, 0.4D, 1.2D, 0.1D);
+            level.playSound(null, this.getX(), this.getY(), this.getZ(), SoundEvents.BUBBLE_COLUMN_UPWARDS_INSIDE, SoundSource.NEUTRAL, 1.5F, 0.6F);
+        } else {
+            ttv.migami.jeg.network.SmokeScreenPayload.send(level, this.position(), 2.5F, 50, 256.0D);
             level.sendParticles(ParticleTypes.LAVA, this.getX(), this.getY() + 0.6D, this.getZ(), 12, 0.8D, 0.3D, 0.8D, 0.0D);
             level.playSound(null, this.getX(), this.getY(), this.getZ(), SoundEvents.FIRE_EXTINGUISH, SoundSource.NEUTRAL, 1.5F, 0.6F);
-            this.discard();
         }
+        this.discard();
     }
 
     /** The fuel and munitions go up: a fireball where the wreck hit, what was aboard thrown clear, then it burns. */

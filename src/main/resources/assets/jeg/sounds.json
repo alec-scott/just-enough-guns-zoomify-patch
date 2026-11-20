@@ -1718,6 +1718,46 @@
       }
     ]
   },
+  "vehicle.hpj11.fire_distant": {
+    "subtitle": "subtitle.jeg.vehicle.hpj11.fire",
+    "sounds": [
+      {
+        "name": "jeg:vehicle/hpj11/fire_distant"
+      }
+    ]
+  },
+  "vehicle.hpj11.fire_stop": {
+    "subtitle": "subtitle.jeg.vehicle.hpj11.fire",
+    "sounds": [
+      {
+        "name": "jeg:vehicle/hpj11/fire_stop"
+      }
+    ]
+  },
+  "vehicle.hpj11.fire_stop_distant": {
+    "subtitle": "subtitle.jeg.vehicle.hpj11.fire",
+    "sounds": [
+      {
+        "name": "jeg:vehicle/hpj11/fire_stop_distant"
+      }
+    ]
+  },
+  "vehicle.hpj11.spin_up": {
+    "subtitle": "subtitle.jeg.vehicle.hpj11.spin",
+    "sounds": [
+      {
+        "name": "jeg:vehicle/hpj11/spin_up"
+      }
+    ]
+  },
+  "vehicle.hpj11.spin_down": {
+    "subtitle": "subtitle.jeg.vehicle.hpj11.spin",
+    "sounds": [
+      {
+        "name": "jeg:vehicle/hpj11/spin_down"
+      }
+    ]
+  },
   "vehicle.hpj11.fire": {
     "subtitle": "subtitle.jeg.vehicle.fire",
     "sounds": [
@@ -1782,22 +1822,34 @@
       {"name": "jeg:vehicle/mk42/load_3"}
     ]
   },
+  "vehicle.tow.launch": {
+    "subtitle": "subtitle.jeg.vehicle.tow.launch",
+    "sounds": [
+      {"name": "jeg:vehicle/tow/launch"}
+    ]
+  },
   "vehicle.howitzer.fire": {
     "subtitle": "subtitle.jeg.vehicle.fire",
     "sounds": [
-      {"name": "jeg:vehicle/mk42/fire", "pitch": 0.85}
+      {"name": "jeg:vehicle/howitzer/fire"},
+      {"name": "jeg:vehicle/howitzer/fire_2"},
+      {"name": "jeg:vehicle/howitzer/fire_3"}
     ]
   },
   "vehicle.howitzer.fire_distant": {
     "subtitle": "subtitle.jeg.vehicle.fire",
     "sounds": [
-      {"name": "jeg:vehicle/mk42/fire_distant", "pitch": 0.85}
+      {"name": "jeg:vehicle/howitzer/fire_distant_1"},
+      {"name": "jeg:vehicle/howitzer/fire_distant_2"},
+      {"name": "jeg:vehicle/howitzer/fire_distant_3"}
     ]
   },
   "vehicle.howitzer.fire_interior": {
     "subtitle": "subtitle.jeg.vehicle.fire",
     "sounds": [
-      {"name": "jeg:vehicle/mk42/fire", "pitch": 0.85}
+      {"name": "jeg:vehicle/howitzer/fire_interior"},
+      {"name": "jeg:vehicle/howitzer/fire_interior_2"},
+      {"name": "jeg:vehicle/howitzer/fire_interior_3"}
     ]
   },
   "vehicle.howitzer.load": {
@@ -1926,11 +1978,99 @@
       }
     ]
   },
+  "vehicle.speedboat.engine_idle": {
+    "subtitle": "subtitle.jeg.vehicle.engine",
+    "sounds": [
+      {
+        "name": "jeg:vehicle/speedboat/engine_idle"
+      }
+    ]
+  },
+  "vehicle.speedboat.engine_load": {
+    "subtitle": "subtitle.jeg.vehicle.engine",
+    "sounds": [
+      {
+        "name": "jeg:vehicle/speedboat/engine_load"
+      }
+    ]
+  },
+  "vehicle.speedboat.engine_cab": {
+    "subtitle": "subtitle.jeg.vehicle.engine",
+    "sounds": [
+      {
+        "name": "jeg:vehicle/speedboat/engine_cab"
+      }
+    ]
+  },
+  "vehicle.speedboat.engine_distant": {
+    "subtitle": "subtitle.jeg.vehicle.engine",
+    "sounds": [
+      {
+        "name": "jeg:vehicle/speedboat/engine_distant"
+      }
+    ]
+  },
   "vehicle.tom6.engine": {
     "subtitle": "subtitle.jeg.vehicle.engine",
     "sounds": [
       {
         "name": "jeg:vehicle/tom6/engine"
+      }
+    ]
+  },
+  "vehicle.tom6.engine_cockpit": {
+    "subtitle": "subtitle.jeg.vehicle.engine",
+    "sounds": [
+      {
+        "name": "jeg:vehicle/tom6/engine_cockpit"
+      }
+    ]
+  },
+  "vehicle.tom6.engine_distant": {
+    "subtitle": "subtitle.jeg.vehicle.engine",
+    "sounds": [
+      {
+        "name": "jeg:vehicle/tom6/engine_distant"
+      }
+    ]
+  },
+  "vehicle.tom6.engine_start": {
+    "subtitle": "subtitle.jeg.vehicle.engine",
+    "sounds": [
+      {
+        "name": "jeg:vehicle/tom6/engine_start"
+      }
+    ]
+  },
+  "vehicle.tom6.engine_start_cockpit": {
+    "subtitle": "subtitle.jeg.vehicle.engine",
+    "sounds": [
+      {
+        "name": "jeg:vehicle/tom6/engine_start_cockpit"
+      }
+    ]
+  },
+  "vehicle.tom6.engine_idle": {
+    "subtitle": "subtitle.jeg.vehicle.engine",
+    "sounds": [{"name": "jeg:vehicle/tom6/engine_idle", "stream": false}]
+  },
+  "vehicle.tom6.engine_idle_cockpit": {
+    "subtitle": "subtitle.jeg.vehicle.engine",
+    "sounds": [{"name": "jeg:vehicle/tom6/engine_idle_cockpit", "stream": false}]
+  },
+  "vehicle.tom6.runway_roll": {
+    "subtitle": "subtitle.jeg.vehicle.engine",
+    "sounds": [{"name": "jeg:vehicle/tyres/gravel", "volume": 0.5, "stream": false}]
+  },
+  "vehicle.tom6.runway_roll_cockpit": {
+    "subtitle": "subtitle.jeg.vehicle.engine",
+    "sounds": [{"name": "jeg:vehicle/tyres/gravel", "volume": 0.3, "pitch": 0.8, "stream": false}]
+  },
+  "vehicle.tom6.flyby": {
+    "subtitle": "subtitle.jeg.vehicle.engine",
+    "sounds": [
+      {
+        "name": "jeg:vehicle/tom6/flyby"
       }
     ]
   },
@@ -2175,7 +2315,7 @@
   "vehicle.truck.reverse": {"subtitle": "subtitle.jeg.truck.reverse", "sounds": [{"name": "jeg:vehicle/bulldozer/reverse", "attenuation_distance": 48, "stream": false}]},
   "vehicle.truck.horn": {"subtitle": "subtitle.jeg.truck.horn", "sounds": [{"name": "jeg:vehicle/truck/horn", "attenuation_distance": 128, "stream": false}]},
   "vehicle.truck.horn_distant": {"subtitle": "subtitle.jeg.truck.horn_distant", "sounds": [{"name": "jeg:vehicle/truck/horn_distant", "attenuation_distance": 256, "stream": false}]},
-  "vehicle.truck.air_brake": {"subtitle": "subtitle.jeg.truck.air_brake", "sounds": [{"name": "jeg:vehicle/truck/air_brake", "attenuation_distance": 48, "stream": false}]},
+  "vehicle.truck.air_brake": {"subtitle": "subtitle.jeg.truck.air_brake", "sounds": [{"name": "jeg:vehicle/movement/brake", "attenuation_distance": 48, "stream": false}]},
   "vehicle.truck.ramp_clank": {"subtitle": "subtitle.jeg.truck.ramp_clank", "sounds": [{"name": "jeg:vehicle/truck/ramp_clank", "attenuation_distance": 48, "stream": false}]},
   "vehicle.plz05.fire": {
     "subtitle": "subtitle.jeg.vehicle.fire",
@@ -2220,46 +2360,46 @@
       }
     ]
   },
-  "vehicle.leopard2.fire": {
+  "vehicle.yx100.fire": {
     "subtitle": "subtitle.jeg.vehicle.fire",
     "sounds": [
       {
-        "name": "jeg:vehicle/leopard2/fire"
+        "name": "jeg:vehicle/yx100/fire"
       }
     ]
   },
-  "vehicle.leopard2.fire_distant": {
+  "vehicle.yx100.fire_distant": {
     "subtitle": "subtitle.jeg.vehicle.fire",
     "sounds": [
       {
-        "name": "jeg:vehicle/leopard2/fire_distant"
+        "name": "jeg:vehicle/yx100/fire_distant"
       },
       {
-        "name": "jeg:vehicle/leopard2/fire_very_far"
+        "name": "jeg:vehicle/yx100/fire_very_far"
       }
     ]
   },
-  "vehicle.leopard2.fire_interior": {
+  "vehicle.yx100.fire_interior": {
     "subtitle": "subtitle.jeg.vehicle.fire",
     "sounds": [
       {
-        "name": "jeg:vehicle/leopard2/fire_interior"
+        "name": "jeg:vehicle/yx100/fire_interior"
       }
     ]
   },
-  "vehicle.leopard2.load": {
-    "subtitle": "subtitle.jeg.leopard2.load",
+  "vehicle.yx100.load": {
+    "subtitle": "subtitle.jeg.yx100.load",
     "sounds": [
       {
-        "name": "jeg:vehicle/leopard2/load"
+        "name": "jeg:vehicle/yx100/load"
       }
     ]
   },
-  "vehicle.leopard2.engine": {
+  "vehicle.yx100.engine": {
     "subtitle": "subtitle.jeg.vehicle.engine",
     "sounds": [
       {
-        "name": "jeg:vehicle/leopard2/engine"
+        "name": "jeg:vehicle/yx100/engine"
       }
     ]
   },
@@ -2359,6 +2499,62 @@
       }
     ]
   },
+  "vehicle.gun.sentry.fire": {
+    "subtitle": "subtitle.jeg.vehicle.fire",
+    "sounds": [
+      {
+        "name": "jeg:vehicle/gun/sentry/fire"
+      },
+      {
+        "name": "jeg:vehicle/gun/sentry/fire",
+        "pitch": 0.95
+      },
+      {
+        "name": "jeg:vehicle/gun/sentry/fire",
+        "pitch": 1.05
+      }
+    ]
+  },
+  "vehicle.gun.sentry.fire_distant": {
+    "subtitle": "subtitle.jeg.vehicle.fire",
+    "sounds": [
+      {
+        "name": "jeg:vehicle/gun/sentry/fire_distant"
+      }
+    ]
+  },
+  "vehicle.gun.sentry.fire_interior": {
+    "subtitle": "subtitle.jeg.vehicle.fire",
+    "sounds": [
+      {
+        "name": "jeg:vehicle/gun/sentry/fire_interior"
+      }
+    ]
+  },
+  "vehicle.sentry.dry_fire": {
+    "subtitle": "subtitle.jeg.vehicle.sentry.dry_fire",
+    "sounds": [
+      {
+        "name": "jeg:vehicle/sentry/dry_fire"
+      }
+    ]
+  },
+  "vehicle.sentry.auto_on": {
+    "subtitle": "subtitle.jeg.vehicle.auto_defence.auto_on",
+    "sounds": [
+      {
+        "name": "jeg:vehicle/sentry/auto_on"
+      }
+    ]
+  },
+  "vehicle.sentry.auto_off": {
+    "subtitle": "subtitle.jeg.vehicle.auto_defence.auto_off",
+    "sounds": [
+      {
+        "name": "jeg:vehicle/sentry/auto_off"
+      }
+    ]
+  },
   "vehicle.bmp2.engine_idle": {
     "subtitle": "subtitle.jeg.vehicle.engine",
     "sounds": [
@@ -2372,6 +2568,14 @@
     "sounds": [
       {
         "name": "jeg:vehicle/bmp2/engine_load"
+      }
+    ]
+  },
+  "vehicle.bmp2.engine_cab_idle": {
+    "subtitle": "subtitle.jeg.vehicle.engine",
+    "sounds": [
+      {
+        "name": "jeg:vehicle/bmp2/engine_cab_idle"
       }
     ]
   },
@@ -2407,6 +2611,14 @@
       }
     ]
   },
+  "vehicle.lav150.engine_cab_idle": {
+    "subtitle": "subtitle.jeg.vehicle.engine",
+    "sounds": [
+      {
+        "name": "jeg:vehicle/lav150/engine_cab_idle"
+      }
+    ]
+  },
   "vehicle.lav150.engine_cab": {
     "subtitle": "subtitle.jeg.vehicle.engine",
     "sounds": [
@@ -2439,6 +2651,14 @@
       }
     ]
   },
+  "vehicle.plz05.engine_cab_idle": {
+    "subtitle": "subtitle.jeg.vehicle.engine",
+    "sounds": [
+      {
+        "name": "jeg:vehicle/plz05/engine_cab_idle"
+      }
+    ]
+  },
   "vehicle.plz05.engine_cab": {
     "subtitle": "subtitle.jeg.vehicle.engine",
     "sounds": [
@@ -2455,35 +2675,43 @@
       }
     ]
   },
-  "vehicle.leopard2.engine_idle": {
+  "vehicle.yx100.engine_idle": {
     "subtitle": "subtitle.jeg.vehicle.engine",
     "sounds": [
       {
-        "name": "jeg:vehicle/leopard2/engine_idle"
+        "name": "jeg:vehicle/yx100/engine_idle"
       }
     ]
   },
-  "vehicle.leopard2.engine_load": {
+  "vehicle.yx100.engine_load": {
     "subtitle": "subtitle.jeg.vehicle.engine",
     "sounds": [
       {
-        "name": "jeg:vehicle/leopard2/engine_load"
+        "name": "jeg:vehicle/yx100/engine_load"
       }
     ]
   },
-  "vehicle.leopard2.engine_cab": {
+  "vehicle.yx100.engine_cab_idle": {
     "subtitle": "subtitle.jeg.vehicle.engine",
     "sounds": [
       {
-        "name": "jeg:vehicle/leopard2/engine_cab"
+        "name": "jeg:vehicle/yx100/engine_cab_idle"
       }
     ]
   },
-  "vehicle.leopard2.engine_distant": {
+  "vehicle.yx100.engine_cab": {
     "subtitle": "subtitle.jeg.vehicle.engine",
     "sounds": [
       {
-        "name": "jeg:vehicle/leopard2/engine_distant"
+        "name": "jeg:vehicle/yx100/engine_cab"
+      }
+    ]
+  },
+  "vehicle.yx100.engine_distant": {
+    "subtitle": "subtitle.jeg.vehicle.engine",
+    "sounds": [
+      {
+        "name": "jeg:vehicle/yx100/engine_distant"
       }
     ]
   },
@@ -2494,5 +2722,117 @@
         "name": "jeg:vehicle/tracks/clank"
       }
     ]
+  },
+  "vehicle.bmp2.engine_start": {
+    "subtitle": "subtitle.jeg.vehicle.ground_engine_start",
+    "sounds": [{ "name": "jeg:vehicle/bmp2/engine_start", "stream": false }]
+  },
+  "vehicle.bmp2.engine_stop": {
+    "subtitle": "subtitle.jeg.vehicle.ground_engine_stop",
+    "sounds": [{ "name": "jeg:vehicle/bmp2/engine_stop", "stream": false }]
+  },
+  "vehicle.bmp2.engine_start_cab": {
+    "subtitle": "subtitle.jeg.vehicle.ground_engine_start",
+    "sounds": [{ "name": "jeg:vehicle/bmp2/engine_start_cab", "stream": false }]
+  },
+  "vehicle.bmp2.engine_stop_cab": {
+    "subtitle": "subtitle.jeg.vehicle.ground_engine_stop",
+    "sounds": [{ "name": "jeg:vehicle/bmp2/engine_stop_cab", "stream": false }]
+  },
+  "vehicle.lav150.engine_start": {
+    "subtitle": "subtitle.jeg.vehicle.ground_engine_start",
+    "sounds": [{ "name": "jeg:vehicle/lav150/engine_start", "stream": false }]
+  },
+  "vehicle.lav150.engine_stop": {
+    "subtitle": "subtitle.jeg.vehicle.ground_engine_stop",
+    "sounds": [{ "name": "jeg:vehicle/lav150/engine_stop", "stream": false }]
+  },
+  "vehicle.lav150.engine_start_cab": {
+    "subtitle": "subtitle.jeg.vehicle.ground_engine_start",
+    "sounds": [{ "name": "jeg:vehicle/lav150/engine_start_cab", "stream": false }]
+  },
+  "vehicle.lav150.engine_stop_cab": {
+    "subtitle": "subtitle.jeg.vehicle.ground_engine_stop",
+    "sounds": [{ "name": "jeg:vehicle/lav150/engine_stop_cab", "stream": false }]
+  },
+  "vehicle.plz05.engine_start": {
+    "subtitle": "subtitle.jeg.vehicle.ground_engine_start",
+    "sounds": [{ "name": "jeg:vehicle/plz05/engine_start", "stream": false }]
+  },
+  "vehicle.plz05.engine_stop": {
+    "subtitle": "subtitle.jeg.vehicle.ground_engine_stop",
+    "sounds": [{ "name": "jeg:vehicle/plz05/engine_stop", "stream": false }]
+  },
+  "vehicle.plz05.engine_start_cab": {
+    "subtitle": "subtitle.jeg.vehicle.ground_engine_start",
+    "sounds": [{ "name": "jeg:vehicle/plz05/engine_start_cab", "stream": false }]
+  },
+  "vehicle.plz05.engine_stop_cab": {
+    "subtitle": "subtitle.jeg.vehicle.ground_engine_stop",
+    "sounds": [{ "name": "jeg:vehicle/plz05/engine_stop_cab", "stream": false }]
+  },
+  "vehicle.yx100.engine_start": {
+    "subtitle": "subtitle.jeg.vehicle.ground_engine_start",
+    "sounds": [{ "name": "jeg:vehicle/yx100/engine_start", "stream": false }]
+  },
+  "vehicle.yx100.engine_stop": {
+    "subtitle": "subtitle.jeg.vehicle.ground_engine_stop",
+    "sounds": [{ "name": "jeg:vehicle/yx100/engine_stop", "stream": false }]
+  },
+  "vehicle.yx100.engine_start_cab": {
+    "subtitle": "subtitle.jeg.vehicle.ground_engine_start",
+    "sounds": [{ "name": "jeg:vehicle/yx100/engine_start_cab", "stream": false }]
+  },
+  "vehicle.yx100.engine_stop_cab": {
+    "subtitle": "subtitle.jeg.vehicle.ground_engine_stop",
+    "sounds": [{ "name": "jeg:vehicle/yx100/engine_stop_cab", "stream": false }]
+  },
+  "vehicle.speedboat.engine_start": {
+    "subtitle": "subtitle.jeg.vehicle.ground_engine_start",
+    "sounds": [{ "name": "jeg:vehicle/speedboat/engine_start", "stream": false }]
+  },
+  "vehicle.speedboat.engine_stop": {
+    "subtitle": "subtitle.jeg.vehicle.ground_engine_stop",
+    "sounds": [{ "name": "jeg:vehicle/speedboat/engine_stop", "stream": false }]
+  },
+  "vehicle.water.hull": {
+    "subtitle": "subtitle.jeg.vehicle.water_hull",
+    "sounds": [{ "name": "jeg:vehicle/water/hull", "stream": false }]
+  },
+  "vehicle.tyres.gravel": {
+    "subtitle": "subtitle.jeg.vehicle.tyres",
+    "sounds": [{ "name": "jeg:vehicle/tyres/gravel", "stream": false }]
+  },
+  "vehicle.movement.traverse": {
+    "subtitle": "subtitle.jeg.vehicle.movement.turret",
+    "sounds": [{ "name": "jeg:vehicle/movement/traverse", "stream": false }]
+  },
+  "vehicle.movement.elevation": {
+    "subtitle": "subtitle.jeg.vehicle.movement.turret",
+    "sounds": [{ "name": "jeg:vehicle/movement/elevation", "stream": false }]
+  },
+  "vehicle.movement.servo": {
+    "subtitle": "subtitle.jeg.vehicle.movement.turret",
+    "sounds": [{ "name": "jeg:vehicle/movement/servo", "stream": false }]
+  },
+  "vehicle.movement.handwheel": {
+    "subtitle": "subtitle.jeg.vehicle.movement.turret",
+    "sounds": [{ "name": "jeg:vehicle/movement/handwheel", "stream": false }]
+  },
+  "vehicle.movement.brake": {
+    "subtitle": "subtitle.jeg.vehicle.movement.brake",
+    "sounds": [{ "name": "jeg:vehicle/movement/brake", "stream": false }]
+  },
+  "vehicle.movement.brake_heavy": {
+    "subtitle": "subtitle.jeg.vehicle.movement.brake",
+    "sounds": [{ "name": "jeg:vehicle/movement/brake_heavy", "stream": false }]
+  },
+  "vehicle.movement.bump": {
+    "subtitle": "subtitle.jeg.vehicle.movement.bump",
+    "sounds": [{ "name": "jeg:vehicle/movement/bump", "stream": false }]
+  },
+  "vehicle.movement.splash": {
+    "subtitle": "subtitle.jeg.vehicle.movement.splash",
+    "sounds": [{ "name": "jeg:vehicle/movement/splash", "stream": false }]
   }
 }

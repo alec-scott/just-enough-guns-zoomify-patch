@@ -14,7 +14,7 @@ import ttv.migami.jeg.vehicle.util.ShellBallistics;
 /**
  * The Mk42 5"/54 gun mount (Superb Warfare's, see design/mk42/BRIEF.md): a fixed, enclosed gun that defends a base
  * against the ground and the air. The gunner looks and the mount slews after the view (40 deg/s train, 25 deg/s
- * elevation); it fires HE (proximity fuzed), AP, cluster or grapeshot from a 20-round loader drum, 40 a minute.
+ * elevation); it fires HE (proximity fuzed), AP, cluster or incendiary from a 20-round loader drum, 40 a minute.
  */
 public final class Mk42Entity extends ShellGunEntity {
     public static final String ID = "mk42";
@@ -33,12 +33,17 @@ public final class Mk42Entity extends ShellGunEntity {
     public static final ShellEntity.Warhead CM = new ShellEntity.Warhead(6.0F, 180.0F, 300.0F, 4.0F, 0.0D, 0,
             new ShellEntity.Dispense(18, 8.0D, 0.4D, 0.6D, 3, 7, BOMBLET, new ShellBallistics(15.0D, 0.06D, 100)));
     /**
-     * SBW's grapeshot: it breaks up at the muzzle into 36 pellets thrown on at 0.9-1.1 of its speed (spread 5), each
-     * carrying a 36th of its 1,000 damage. Pellets fly 200 ticks (SBW's) and only hurt what they strike.
+     * The incendiary shell, in grapeshot's place (the user, 2026-11-19: "change GS shells to incendiary shells which
+     * explode over a target leaving flames below it"; SBW's grapeshot was a canister of balls from the muzzle). Armed
+     * after 2 ticks (30 blocks), it bursts 7 blocks over where it would come down (at most 16 short of it on a shallow
+     * path): 40 within 4 blocks of the burst, and 28 burning fragments rain over 5 blocks round the spot, each 12 on what
+     * it strikes, which burns for 8 seconds, and setting the ground alight where it lands.
      */
-    public static final ShellEntity.Warhead PELLET = new ShellEntity.Warhead(0.0F, 0.0F, 1000.0F / 36.0F, 0.0F, 0.0D, 0);
-    public static final ShellEntity.Warhead GRAPESHOT = new ShellEntity.Warhead(0.0F, 0.0F, 0.0F, 0.0F, 0.0D, 0,
-            new ShellEntity.Dispense(36, 5.0D, 0.9D, 1.1D, 0, 0, PELLET, new ShellBallistics(15.0D, 0.06D, 200)));
+    public static final ShellEntity.Warhead FIRE_FRAGMENT = ShellEntity.Warhead.fireFragment(12.0F, 8);
+    /** The fragments fall under a little less gravity than a shell, so they are seen raining down. */
+    public static final ShellBallistics FRAGMENT_BALLISTICS = new ShellBallistics(1.0D, 0.04D, 80);
+    public static final ShellEntity.Warhead INCENDIARY = ShellEntity.Warhead.incendiaryShell(4.0F, 40.0F, 150.0F,
+            new ShellEntity.Incendiary(7.0D, 16.0D, 2, 28, 5.0D, FIRE_FRAGMENT, FRAGMENT_BALLISTICS));
     public static final Identifier AP_WEAPON = Reference.id("vehicle_mk42_ap");
     public static final Identifier HE_WEAPON = Reference.id("vehicle_mk42_he");
     public static final Identifier CM_WEAPON = Reference.id("vehicle_mk42_cm");
@@ -47,7 +52,7 @@ public final class Mk42Entity extends ShellGunEntity {
             new Shell(HE_WEAPON, HE, "hud.jeg.shell.he_proximity"),
             new Shell(AP_WEAPON, AP, "hud.jeg.shell.ap"),
             new Shell(CM_WEAPON, CM, "hud.jeg.shell.cluster"),
-            new Shell(GS_WEAPON, GRAPESHOT, "hud.jeg.shell.grapeshot"));
+            new Shell(GS_WEAPON, INCENDIARY, "hud.jeg.shell.incendiary"));
     /** The muzzle with the gun at rest, hull coordinates (design/mk42/rig.json muzzle_rest; the weapons' muzzle). */
     public static final Vec3 MUZZLE_REST = new Vec3(0.0D, 2.1601D, 6.9446D);
     /** The report's loudness on the aircraft distance curve: a 5-inch gun, above the mortar's 2.5. */

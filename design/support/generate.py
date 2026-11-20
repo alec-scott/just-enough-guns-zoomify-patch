@@ -44,8 +44,17 @@ MATERIALS = {
 }
 PAINT = ("olive", "olive_light", "olive_dark", "label")
 GLOWING = ("lamp", "amber", "tail", "console", "gauge", "led", "blackout")
-TILE = 32
-ATLAS = (256, 128)
+TILE = 32  # the material tiles, painted per face by the bake
+ATLAS = [256, 128]
+# The fleet's model and texture review (2026-11-19, the user: "was the FSV texture detailing and model review also
+# considered?"): every face its own texels (refit_lib.bake_unique), each laid with its material's tile as before (the
+# diamond plate, hazard stripes, gauges and the FSV-6 plate kept), then the detail pass: panel seams, worn edges, bolt
+# heads, grime streaks, dust on the roof, mud on the wheels and the lower body. Lamps, glass, mirrors and screens are
+# kept as laid. 3 texels a model pixel keeps the atlas near 2048 square.
+TEXELS = 3
+STRETCHED = ("label", "console", "gauge", "hazard", "mirror")
+KEPT = ("glass", "mirror", "lamp", "amber", "tail", "console", "gauge", "led", "blackout")
+DETAIL = dict(upscale=1, mud_height=14.0, mud=0.55, wear=0.9, streaks=0.8)
 BONES: list[dict] = []
 BY_NAME: dict[str, dict] = {}
 
@@ -440,7 +449,8 @@ def create_model():
         # The screen is dark glass: SupportCockpitLayer draws the live display on it. Plain "seal", not "gauge": the
         # atlas paints a dial on "gauge" faces, and the live display (additive) let it show through.
         box("body", f"{name} screen", [cx - 5.8, FLOOR_Y + 19.5, INTERIOR_FRONT + 1.4], [cx + 5.8, FLOOR_Y + 25.5, INTERIOR_FRONT + 1.55], "seal")
-        box("body", f"{name} label", [cx - 4.5, FLOOR_Y + 26, INTERIOR_FRONT + 1.4], [cx + 4.5, FLOOR_Y + 27, INTERIOR_FRONT + 1.5], "label")
+        # (No name plate over the screen: the label tile stretched onto a 9 x 1 px plate came out as a blur, and the
+        # screens' title bars name them, 2026-11-19.)
     for x in (-12.0, -8.0, -4.0):
         box("body", "console gauge", [x - 1.4, FLOOR_Y + 15.2, INTERIOR_FRONT + 1.4], [x + 1.4, FLOOR_Y + 18.4, INTERIOR_FRONT + 1.6], "seal")
     # The beacon terminal: a row of four level lamps under its screen and a cyan beam window.
@@ -500,8 +510,10 @@ def create_model():
         name = "left" if side > 0 else "right"
         slide = bone("slide_" + name, "body", [0, FLOOR_Y, 16])
         # Underside at the floor plate's (15.4), above the tyres in every slide position (it was 14.2, through them).
-        sbox(slide, "slide floor", side, 0, BODY_HALF, FLOOR_Y - .6, FLOOR_Y + .4, INTERIOR_FRONT, INTERIOR_REAR, "frame")
-        sbox(slide, "slide floor plate", side, 0, 16, FLOOR_Y + .4, FLOOR_Y + .6, INTERIOR_FRONT, INTERIOR_REAR, "floor")
+        # The plate's top sits just under the block grid: the bunk's real bed stands on the cell below it, and a plate up
+        # through the cell hid the bed's legs and flickered against them (the user's review, 2026-11-18).
+        sbox(slide, "slide floor", side, 0, BODY_HALF, FLOOR_Y - .6, FLOOR_Y - .25, INTERIOR_FRONT, INTERIOR_REAR, "frame")
+        sbox(slide, "slide floor plate", side, 0, 16, FLOOR_Y - .25, FLOOR_Y - .05, INTERIOR_FRONT, INTERIOR_REAR, "floor")
         # The outer wall and its lining, built round three window openings you can see through from either side.
         edges = [INTERIOR_FRONT]
         for zc in WINDOWS_Z:
@@ -516,8 +528,10 @@ def create_model():
             sbox(slide, "wall lining", side, 15.7, 16, WINDOW_Y0, WINDOW_Y1, z0, z1, "interior")
         sbox(slide, "slide roof", side, 0, BODY_HALF, CEILING_Y - 2, CEILING_Y, INTERIOR_FRONT, INTERIOR_REAR, "olive_dark")
         sbox(slide, "slide ceiling", side, 0, 16, CEILING_Y - 2.3, CEILING_Y - 2, INTERIOR_FRONT, INTERIOR_REAR, "interior")
-        for z0, z1 in ((INTERIOR_FRONT - .4, INTERIOR_FRONT + 1.5), (INTERIOR_REAR - 1.5, INTERIOR_REAR + .4)):
-            sbox(slide, "end wall", side, 0, BODY_HALF, FLOOR_Y + .6, CEILING_Y - 2, z0, z1, "olive_dark")
+        # End walls stand just outside the cells they close: 1.5 px into the first cell, the bed's head ran into the
+        # front one and flickered (the user's review, 2026-11-18; the guide's "walls stand proud of the block cells").
+        for z0, z1 in ((INTERIOR_FRONT - 1.9, INTERIOR_FRONT - .05), (INTERIOR_REAR + .05, INTERIOR_REAR + 1.9)):
+            sbox(slide, "end wall", side, 0, BODY_HALF, FLOOR_Y - .25, CEILING_Y - 2, z0, z1, "olive_dark")
         sbox(slide, "seal strip", side, BODY_HALF, BODY_HALF + .3, FLOOR_Y + .4, CEILING_Y, INTERIOR_FRONT - .3, INTERIOR_FRONT + .5, "seal")
         sbox(slide, "seal strip", side, BODY_HALF, BODY_HALF + .3, FLOOR_Y + .4, CEILING_Y, INTERIOR_REAR - .5, INTERIOR_REAR + .3, "seal")
         sbox(slide, "drip rail", side, BODY_HALF, BODY_HALF + .6, CEILING_Y - .6, CEILING_Y, INTERIOR_FRONT, INTERIOR_REAR, "olive_dark")
@@ -1160,30 +1174,62 @@ def make_icon(path):
     icon.save(path)
 
 
+def bake():
+    """Every face its own texels laid with its material's tile (stretched for the plates and dials, repeated for the
+    rest, as the tile atlas showed them), then the weathering pass; lamps, glass and screens put back as laid."""
+    import sys
+    sys.path.insert(0, str(ROOT / "design/superbwarfare-port"))
+    sys.path.insert(0, str(ROOT / "design/superbwarfare-port/triage"))
+    sys.path.insert(0, str(ROOT / "design/ground-vehicles"))
+    import numpy as np
+    import refit_lib as L
+    rng = random.Random(6061)
+    tiles = {name: paint_tile(name, rgba, rng) for name, rgba in MATERIALS.items()}
+    repeated = {name: np.asarray(tile.crop((1, 1, 31, 31)).resize((30 * TEXELS, 30 * TEXELS), Image.NEAREST)).astype(int)
+                for name, tile in tiles.items()}
+
+    def fill(item, w, h):
+        name = item["material"]
+        if name in STRETCHED:
+            source = tiles[name].crop((1, 1, 31, 15 if name == "label" else 31))
+            return np.asarray(source.resize((w + 2, h + 2), Image.NEAREST)).astype(int)
+        block = repeated[name]
+        reps = ((h + 2) // block.shape[0] + 1, (w + 2) // block.shape[1] + 1, 1)
+        return np.tile(block, reps)[:h + 2, :w + 2]
+
+    uv, faces, base = L.bake_unique(BONES, MATERIALS, TEXELS, fill=fill)
+    ATLAS[:] = [int(round(uv[0])), int(round(uv[1]))]
+    return L, faces, base
+
+
 def main():
     create_model()
     separate_finishes()
     print(f"Biased {resolve_zfighting()} coplanar faces against z-fighting.")
-    atlas = make_texture()
+    L, faces, base = bake()
     texture_path = ASSETS / "textures/entity/vehicle/truck.png"
-    atlas.save(texture_path)
-    glow = Image.new("RGBA", ATLAS)
-    for name in GLOWING:
-        index = list(MATERIALS).index(name)
-        x, y = index % 8 * TILE, index // 8 * TILE
-        tile = atlas.crop((x, y, x + TILE, y + TILE))
-        if name == "tail":
-            # Tail lamps glow dimly as tail lights; the brake lights (AircraftLights BRAKE) brighten them when braking.
-            tile = Image.eval(tile, lambda v: v).point(lambda v: int(v * .45))
-            tile.putalpha(255)
-        glow.paste(tile, (x, y))
-    glow.save(texture_path.with_name("truck_glow.png"))
-    url = "data:image/png;base64," + base64.b64encode(texture_path.read_bytes()).decode()
     geometry = {"format_version": "1.12.0", "minecraft:geometry": [{
         "description": {"identifier": "geometry.jeg.truck", "texture_width": ATLAS[0], "texture_height": ATLAS[1],
                         "visible_bounds_width": 10, "visible_bounds_height": 7, "visible_bounds_offset": [0, 2, 0]},
         "bones": [{k: [{ck: cv for ck, cv in c.items() if not ck.startswith("_")} for c in v] if k == "cubes" else v
                    for k, v in b.items()} for b in BONES]}]}
+    import detail_texture as D
+    atlas, _, _ = D.detail_image(native_geometry(geometry), base, DETAIL)
+    L.paste_faces(atlas, base, faces, KEPT)
+    atlas.save(texture_path)
+    # The glow layer: the lamps, screens and LEDs as laid; tail lamps glow dimly as tail lights (the brake lights,
+    # AircraftLights BRAKE, brighten them when braking).
+    glow = Image.new("RGBA", base.size, (0, 0, 0, 0))
+    for item in faces:
+        if item["material"] in GLOWING:
+            x0, y0, x1, y1 = item["rect"]
+            patch = base.crop((x0 - 1, y0 - 1, x1 + 1, y1 + 1))
+            if item["material"] == "tail":
+                patch = patch.point(lambda v: int(v * .45))
+                patch.putalpha(255)
+            glow.paste(patch, (x0 - 1, y0 - 1))
+    glow.save(texture_path.with_name("truck_glow.png"))
+    url = "data:image/png;base64," + base64.b64encode(texture_path.read_bytes()).decode()
     animations = make_animations()
     project = make_bbmodel(url, animations)
     count = validate(animations, project)

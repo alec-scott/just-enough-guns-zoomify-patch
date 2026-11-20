@@ -20,6 +20,8 @@ import ttv.migami.jeg.vehicle.projectile.VehicleDecoyEntity;
  */
 public final class VehicleDecoyRenderer extends EntityRenderer<VehicleDecoyEntity, VehicleDecoyRenderer.State> {
     private static final Identifier GLOW = Identifier.fromNamespaceAndPath("jeg", "textures/effect/flare_glow.png");
+    /** Under a shader pack: the premultiplied halo (VehicleLightsLayer), or the pack shows the glow as a hard disc. */
+    private static final Identifier GLOW_SOFT = Identifier.fromNamespaceAndPath("jeg", "textures/effect/light_glow_soft.png");
     private static final int FULL_BRIGHT = 0x00F000F0;
 
     public VehicleDecoyRenderer(EntityRendererProvider.Context context) {
@@ -40,7 +42,8 @@ public final class VehicleDecoyRenderer extends EntityRenderer<VehicleDecoyEntit
         poseStack.pushPose();
         poseStack.translate(0.0D, state.boundingBoxHeight * 0.5D, 0.0D);
         poseStack.mulPose(camera.orientation);
-        collector.submitCustomGeometry(poseStack, RenderTypes.eyes(GLOW), (pose, buffer) -> {
+        boolean shaders = ttv.migami.jeg.client.compat.ShaderPacks.inUse();
+        collector.submitCustomGeometry(poseStack, shaders ? RenderTypes.entityTranslucentEmissive(GLOW_SOFT) : RenderTypes.eyes(GLOW), (pose, buffer) -> {
             // The halo: a wide warm glow lighting the air around it.
             quad(pose, buffer, 4.2F * size, 4.2F * size, 255, 205, 140, glow * 0.6F);
             // The glare streak, as a camera sees a light this bright.

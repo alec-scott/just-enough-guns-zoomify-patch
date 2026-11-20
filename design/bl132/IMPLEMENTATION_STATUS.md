@@ -33,10 +33,19 @@ Brief: [BRIEF.md](BRIEF.md).
 
 Warhead behaviour (damage, proximity, cluster, grapeshot, danger close) is shared with the Mk42 and tested there.
 
+## Finalisation (2026-11-18, design/READINESS.md)
+
+- `Bl132ClientGameTest` passes with `-PwithPack` after the fleet-wide changes of 2026-11-17/18 (the new HUD, `"mass"` 40 t as
+  tow load, real-sound and wreck work on other guns).
+- Played (mcpfabric, pack client, midnight): from the gunner's seat the panel (shell and fuze, elevation, bearing, range), the twin barrels and the scale read clearly in the dark.
+- Wrecks as every gun does (cooks off, burns, breaks apart; `GroundWreckClientGameTest` runs the Mk42 for the shared
+  artillery path). The handwheels are heard while it is laid (`VehicleFeel`).
+- Its sounds are Superb Warfare's recordings, used with the SBW team's permission; they are real gun recordings and
+  need only listening.
+
 ## Not covered yet
 
 - **Listening** to the SBW recordings.
 - The night view and F5 from the side.
 - Firing at real enemy vehicles and aircraft.
 - The dedicated server, multiplayer, claim mods with the shells' block damage.
-- No sandbox world yet.

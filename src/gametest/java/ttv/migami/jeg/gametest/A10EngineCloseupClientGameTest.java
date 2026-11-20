@@ -19,7 +19,8 @@ import ttv.migami.jeg.vehicle.entity.base.VehicleInput;
 /**
  * A close look at the A-10's engines. A parked jet, held in place, is run from idle to full power by a husk at the
  * controls, while the player stands behind it looking into the exhausts. Screenshots: idle, full power (two frames a few
- * ticks apart, for the fan blur), side on (the glow fading), from further back, and at night. Fails unless the fans reach
+ * ticks apart, for the fan blur), side on (the glow fading), from further back, close in front of each intake, and at
+ * night. Fails unless the fans reach
  * blurring speed at full power.
  */
 public class A10EngineCloseupClientGameTest implements FabricClientGameTest {
@@ -50,6 +51,8 @@ public class A10EngineCloseupClientGameTest implements FabricClientGameTest {
                 pilot.setSilent(true);
                 pilot.snapTo(jet.getX(), jet.getY(), jet.getZ(), 0.0F, 0.0F);
                 level.addFreshEntity(pilot);
+                // Since yftm.22 only a player or tagged crew may drive or man a gun.
+                pilot.addTag(ttv.migami.jeg.vehicle.ai.EnemyVehicleController.ENEMY_VEHICLE_CREW_TAG);
                 pilot.startRiding(jet, true, true);
                 return jet.getUUID().toString();
             });
@@ -61,6 +64,9 @@ public class A10EngineCloseupClientGameTest implements FabricClientGameTest {
             // cowling, lip and tail cone, not a hole into the engine (they were never modelled until design/a10/nozzle.py).
             this.lookAt(context, server, "^ ^2.6 ^-13", "^ ^3.2 ^");
             context.takeScreenshot("a10_engines_idle_rear");
+            // The fan at idle, turning slowly enough to see its blades (no blur).
+            this.lookAt(context, server, "^2.2 ^3.3 ^0.6", "^1.6 ^2.4 ^-2.5");
+            context.takeScreenshot("a10_engines_idle_intake_close");
 
             this.hold(context, server, jetId, true, 160);
             float spool = context.computeOnClient(mc -> nearestJet(mc).jetSpool());
@@ -81,11 +87,27 @@ public class A10EngineCloseupClientGameTest implements FabricClientGameTest {
             context.takeScreenshot("a10_engines_full_rear_quarter_b");
             this.lookIntoExhausts(context, server, "^ ^6.5 ^-24");
             context.takeScreenshot("a10_engines_full_chase");
+            // Close behind each nozzle, as the user saw it (2026-11-19: the glow gone, a black disc and the outline of a
+            // tilted square round it): the nozzle must be filled with orange.
+            this.lookAt(context, server, "^-1.4 ^3.6 ^-7.2", "^-1.65 ^3.35 ^-4");
+            context.takeScreenshot("a10_engines_full_rear_close_right");
+            this.lookAt(context, server, "^1.4 ^3.6 ^-7.2", "^1.65 ^3.35 ^-4");
+            context.takeScreenshot("a10_engines_full_rear_close_left");
             // The intake fan, from in front of the left engine: a blurred disc, not blades turning backwards.
             this.lookAt(context, server, "^4 ^3.6 ^7", "^1.65 ^3.2 ^2.2");
             context.takeScreenshot("a10_engines_full_intake_a");
             this.hold(context, server, jetId, true, 2);
             context.takeScreenshot("a10_engines_full_intake_b");
+            // Close in front of each intake, where the user stood (2026-11-19: the fan disc's square rim and corners
+            // stood out of the nacelle, turning with it, and the intake's lip turned too): only the round fan turns,
+            // inside a still lip.
+            this.lookAt(context, server, "^2.2 ^3.3 ^0.6", "^1.6 ^2.4 ^-2.5");
+            context.takeScreenshot("a10_engines_full_intake_close_left");
+            this.hold(context, server, jetId, true, 1);
+            this.lookAt(context, server, "^2.2 ^3.3 ^0.6", "^1.6 ^2.4 ^-2.5");
+            context.takeScreenshot("a10_engines_full_intake_close_left_b");
+            this.lookAt(context, server, "^-2 ^2.6 ^0.4", "^-1.6 ^2.4 ^-2.5");
+            context.takeScreenshot("a10_engines_full_intake_close_right");
             server.runCommand("time set midnight");
             this.hold(context, server, jetId, true, 5);
             this.lookIntoExhausts(context, server, "^-2.5 ^2.2 ^-9.5");

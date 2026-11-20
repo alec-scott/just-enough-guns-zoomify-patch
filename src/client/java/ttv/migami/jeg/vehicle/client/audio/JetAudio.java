@@ -38,7 +38,15 @@ public final class JetAudio {
     /** Jets whose engines a listener has heard start (cleared once they have stopped again). */
     private static final java.util.Set<Integer> STARTED = new java.util.HashSet<>();
     private static final Map<Integer, Layer> ENGINES = new HashMap<>();
+    /**
+     * A propeller aircraft's low-power engine (its own "engine_idle"): the real idle of a light aircraft's engine, heard
+     * taxiing and on the landing approach, crossfading into the full-power loop as the throttle comes up, so take-off,
+     * cruise and landing sound different (the bush plane, the user's review, 2026-11-18).
+     */
+    private static final Map<Integer, Layer> IDLES = new HashMap<>();
     private static final Map<Integer, Layer> COCKPITS = new HashMap<>();
+    /** A propeller aircraft's rush of air, as a share of the A-10's. */
+    static final float PROP_AIRFLOW_SHARE = 0.15F;
     private static final Map<Integer, Layer> ROLLS = new HashMap<>();
     /** Outside the jet: its gun as heard from here, a moment after it fired. */
     private static final Map<Integer, Layer> GUNS = new HashMap<>();
@@ -108,6 +116,7 @@ public final class JetAudio {
             return;
         }
         prune(minecraft, ENGINES);
+        prune(minecraft, IDLES);
         prune(minecraft, COCKPITS);
         prune(minecraft, ROLLS);
         prune(minecraft, GUNS);
@@ -144,6 +153,10 @@ public final class JetAudio {
             // Aboard, every layer is the cockpit version: the same sound muffled through the airframe.
             ensure(minecraft, ENGINES, jet, aboard(jet) ? VehicleSoundHelper.jetCockpitSound(jet, "engine") : VehicleSoundHelper.engineSound(jet),
                     JetAudio::engineRunning, Kind.ENGINE);
+            if (hasIdle(jet)) {
+                ensure(minecraft, IDLES, jet, aboard(jet) ? VehicleSoundHelper.jetOwnSound(jet, "engine_idle_cockpit")
+                        : VehicleSoundHelper.jetOwnSound(jet, "engine_idle"), JetAudio::engineRunning, Kind.IDLE_ENGINE);
+            }
             if (!aboard(jet)) {
                 ensure(minecraft, DISTANT_ENGINES, jet, AircraftSoundRange.distantSound(jet.vehicleDataId().getPath(), "engine"),
                         JetAudio::engineRunning, Kind.DISTANT_ENGINE);
@@ -166,7 +179,8 @@ public final class JetAudio {
         }
         boolean pullUp = riding != null && riding.jetPullUpWarning();
         if (pullUp && (pullUpWarning == null || pullUpWarning.isStopped() || pullUpWarning.jet != riding)) {
-            SoundEvent sound = VehicleSoundHelper.jetSound(riding, "pull_up");
+            // A spoken warning is the A-10's own: a bush plane has none.
+            SoundEvent sound = VehicleSoundHelper.jetOwnSound(riding, "pull_up");
             if (sound != null) {
                 pullUpWarning = new Layer(riding, sound, Kind.STALL, VehicleEntity::jetPullUpWarning);
                 minecraft.getSoundManager().play(pullUpWarning);
@@ -266,7 +280,7 @@ public final class JetAudio {
     }
 
     public static void clear(Minecraft minecraft) {
-        for (Map<Integer, Layer> layers : java.util.List.of(ENGINES, COCKPITS, ROLLS, GUNS, DISTANT_ENGINES, DISTANT_GUNS)) {
+        for (Map<Integer, Layer> layers : java.util.List.of(ENGINES, IDLES, COCKPITS, ROLLS, GUNS, DISTANT_ENGINES, DISTANT_GUNS)) {
             layers.values().forEach(layer -> minecraft.getSoundManager().stop(layer));
             layers.clear();
         }
@@ -360,6 +374,16 @@ public final class JetAudio {
         });
     }
 
+    /** Whether this aircraft has a low-power engine recording of its own (a propeller aircraft's idle). */
+    private static boolean hasIdle(VehicleEntity jet) {
+        return VehicleSoundHelper.jetOwnSound(jet, "engine_idle") != null;
+    }
+
+    /** How far the engine is from idle (0) to full power (1). */
+    private static float power(VehicleEntity jet) {
+        return Mth.clamp(jet.jetSpool(), 0.0F, 1.0F);
+    }
+
     private static void ensure(Minecraft minecraft, Map<Integer, Layer> layers, VehicleEntity jet, SoundEvent sound,
                                Predicate<VehicleEntity> active, Kind kind) {
         if (sound == null || layers.containsKey(jet.getId()) || !active.test(jet)) {
@@ -371,7 +395,7 @@ public final class JetAudio {
     }
 
     private enum Kind {
-        ENGINE, COCKPIT, ROLL, STALL, GUN, DISTANT_ENGINE, DISTANT_GUN;
+        ENGINE, IDLE_ENGINE, COCKPIT, ROLL, STALL, GUN, DISTANT_ENGINE, DISTANT_GUN;
 
         boolean gun() {
             return this == GUN || this == DISTANT_GUN;
@@ -391,7 +415,7 @@ public final class JetAudio {
             this.active = active;
             this.looping = true;
             this.delay = 0;
-            this.relative = kind == Kind.STALL || kind == Kind.COCKPIT || (kind == Kind.ENGINE || kind == Kind.ROLL) && aboard(jet);
+            this.relative = kind == Kind.STALL || kind == Kind.COCKPIT || (kind == Kind.ENGINE || kind == Kind.IDLE_ENGINE || kind == Kind.ROLL) && aboard(jet);
             // The engines and gun outside set their own fade with distance (AircraftSoundRange); the tyres fade as usual.
             this.attenuation = this.relative || kind != Kind.ROLL ? Attenuation.NONE : Attenuation.LINEAR;
             // SoundEngine discards a sound that opens silent; start barely audible and fade in.
@@ -441,6 +465,16 @@ public final class JetAudio {
                     target = this.relative ? loudness * 0.42F
                             : AircraftSoundRange.volume(distance, loudness) * AircraftSoundRange.nearShare(distance);
                     pitch = VehicleSoundHelper.aircraftEnginePitch(this.jet);
+                    if (hasIdle(this.jet)) {
+                        // With a real idle under it, the power loop comes in only as the throttle opens.
+                        target *= Mth.sin(power(this.jet) * Mth.HALF_PI);
+                    }
+                }
+                case IDLE_ENGINE -> {
+                    target = (this.relative ? loudness * 0.42F
+                            : AircraftSoundRange.volume(distance, loudness) * AircraftSoundRange.nearShare(distance))
+                            * Mth.cos(power(this.jet) * Mth.HALF_PI);
+                    pitch = 0.92F + 0.3F * power(this.jet);
                 }
                 case DISTANT_ENGINE -> {
                     target = AircraftSoundRange.volume(distance, loudness) * AircraftSoundRange.distantShare(distance);
@@ -452,6 +486,13 @@ public final class JetAudio {
                     float bank = Mth.clamp((Math.abs(Mth.wrapDegrees(this.jet.roll())) - 30.0F) / 50.0F, 0.0F, 1.0F);
                     target = 0.15F + 0.75F * airspeed * airspeed + 0.35F * bank * airspeed;
                     pitch = 0.85F + 0.25F * airspeed;
+                    if (hasIdle(this.jet)) {
+                        // A propeller aircraft borrows the A-10's canopy roar: at a fraction of it, and deeper, as a slow
+                        // plane's air is under its engine (the bush plane; the user's review, 2026-11-19: "reduce the
+                        // wind sound on the small plane dramatically").
+                        target *= PROP_AIRFLOW_SHARE;
+                        pitch *= 0.85F;
+                    }
                 }
                 case ROLL -> {
                     float rolling = (float) Mth.clamp(this.jet.getDeltaMovement().horizontalDistance() / (0.6D * this.jet.jetTopSpeed()), 0.0D, 1.0D);

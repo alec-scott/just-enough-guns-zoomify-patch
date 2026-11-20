@@ -492,16 +492,65 @@ public final class BulldozerTerrainWork {
         return slot >= pavingStart(dozer) && slot < dozer.vehicleContainerSlots();
     }
 
-    /** The bay slot the ripper draws from now: the first holding a block it can lay, or -1. */
+    /**
+     * The bay slot the ripper draws from now, or -1: the block it laid last while the bay has any (so a road stays one
+     * material however the bay is loaded), else the first block it can lay.
+     */
     public static int pavingSource(BulldozerEntity dozer) {
+        var current = dozer.ripperBlock();
+        int first = -1;
         for (int i = pavingStart(dozer); i < dozer.vehicleContainerSlots(); i++) {
             ItemStack stack = dozer.vehicleInventory().getItem(i);
-            if (ttv.migami.jeg.vehicle.menu.VehicleMenu.isLayableBlock(stack)
-                    && !((net.minecraft.world.item.BlockItem) stack.getItem()).getBlock().defaultBlockState().is(DENIED)) {
-                return i;
+            if (!layable(stack)) continue;
+            if (current == null || stack.is(current)) return i;
+            if (first < 0) first = i;
+        }
+        return first;
+    }
+
+    private static boolean layable(ItemStack stack) {
+        return ttv.migami.jeg.vehicle.menu.VehicleMenu.isLayableBlock(stack)
+                && !((net.minecraft.world.item.BlockItem) stack.getItem()).getBlock().defaultBlockState().is(DENIED);
+    }
+
+    /**
+     * When the bay has run out of blocks, it takes another stack of the block the ripper was laying from the operator's
+     * inventory, so a long road keeps going without stopping to reload. (While the bay holds any block it lays that, so
+     * loading a different block changes the road's material.) Returns how many it took.
+     */
+    static int restock(BulldozerEntity dozer, ServerPlayer player) {
+        var block = dozer.ripperBlock();
+        if (block == null || pavingSource(dozer) >= 0) return 0;
+        var hold = dozer.vehicleInventory();
+        int start = pavingStart(dozer), end = dozer.vehicleContainerSlots();
+        var pack = player.getInventory().getNonEquipmentItems();
+        int moved = 0, max = new ItemStack(block).getMaxStackSize();
+        for (int k = 0; k < pack.size() && moved < max; k++) {
+            ItemStack source = pack.get(k);
+            if (!source.is(block) || !layable(source)) continue;
+            for (int i = start; i < end && moved < max && !source.isEmpty(); i++) {
+                ItemStack slot = hold.getItem(i);
+                if (slot.isEmpty()) {
+                    int n = Math.min(source.getCount(), max - moved);
+                    hold.setItem(i, source.split(n));
+                    moved += n;
+                } else if (ItemStack.isSameItemSameComponents(slot, source) && slot.getCount() < slot.getMaxStackSize()) {
+                    int n = Math.min(Math.min(source.getCount(), max - moved), slot.getMaxStackSize() - slot.getCount());
+                    slot.grow(n);
+                    source.shrink(n);
+                    moved += n;
+                }
             }
         }
-        return -1;
+        if (moved > 0) {
+            hold.setChanged();
+            player.getInventory().setChanged();
+            player.sendSystemMessage(net.minecraft.network.chat.Component.translatable("message.jeg.dozer.ripper_restocked",
+                    moved, new ItemStack(block).getHoverName()), true);
+            dozer.level().playSound(null, dozer.getX(), dozer.getY() + 1, dozer.getZ(), net.minecraft.sounds.SoundEvents.ITEM_PICKUP,
+                    SoundSource.PLAYERS, .5F, .7F);
+        }
+        return moved;
     }
 
     /** The block the ripper lays now, or null when the bay holds nothing it can lay. */
@@ -531,6 +580,7 @@ public final class BulldozerTerrainWork {
      */
     public int pave(BulldozerEntity dozer) {
         if (!(dozer.level() instanceof ServerLevel level) || !(dozer.getControllingPassenger() instanceof ServerPlayer player)) return 0;
+        restock(dozer, player);
         BlockState paving = pavingBlock(dozer);
         if (paving == null) return PAVE_NONE;
         Vec3 f = BulldozerRig.forward(dozer.getYRot());
@@ -551,6 +601,7 @@ public final class BulldozerTerrainWork {
                 if (!level.hasChunkAt(pos)) continue;
                 BlockState ground = level.getBlockState(pos);
                 if (ground.equals(paving)) continue;
+                restock(dozer, player);
                 int source = pavingSource(dozer);
                 if (source < 0) return laid == 0 ? PAVE_NONE : laid;
                 BlockState next = pavingBlock(dozer);
@@ -573,6 +624,7 @@ public final class BulldozerTerrainWork {
                     level.playSound(null, pos, sound.getPlaceSound(), SoundSource.BLOCKS, (sound.getVolume() + 1) / 2, sound.getPitch() * .8F);
                     level.sendParticles(new BlockParticleOption(ParticleTypes.BLOCK, paving), pos.getX() + .5, pos.getY() + 1.05, pos.getZ() + .5, 6, .4, .05, .4, .05);
                 }
+                dozer.setRipperBlock(material.getItem());
                 material.shrink(1);
                 hold.setChanged();
                 dozer.consumeEnergy(20);

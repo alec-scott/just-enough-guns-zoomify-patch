@@ -65,7 +65,7 @@ public final class VehicleCameraHandler {
                 && player.getVehicle() == vehicle
                 && Minecraft.getInstance().options.getCameraType().isMirrored()
                 && (vehicle.vehicleData().defaults().vehicleType() == ttv.migami.jeg.vehicle.data.subdata.VehicleType.HELICOPTER
-                        || vehicle.isJet())
+                        || vehicle.isJet() || vehicle.hasHullCamera())
                 && !isFreeLookActive(vehicle);
     }
 

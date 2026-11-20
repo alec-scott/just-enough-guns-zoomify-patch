@@ -28,24 +28,38 @@ import ttv.migami.jeg.vehicle.util.GroundVehicleSounds;
  */
 public final class GroundVehicleAudio {
     private static final Map<Integer, Group> GROUPS = new HashMap<>();
-    private static final String[] LOOPS = {"engine_idle", "engine_load", "engine_cab", "engine_distant", "tracks"};
+    private static final Map<Integer, Boolean> LAST_RUNNING = new HashMap<>();
+    private static final String[] LOOPS = {"engine_idle", "engine_load", "engine_cab", "engine_cab_idle", "engine_distant", "tracks", "tyres", "hull"};
     private static final double SOUND_SPEED = 343.0D / 20.0D;
     private static final int HISTORY = 70;
     private static final float TRACK_LOUDNESS = 0.9F;
+    private static final float TYRE_LOUDNESS = 0.7F;
+    /** Water rushing and slapping along a hull making way: a boat on the plane, an amphibious hull swimming. */
+    private static final float HULL_LOUDNESS = 0.8F;
     private static final int WIND_UP_TICKS = 24;
 
     private GroundVehicleAudio() {}
 
     /** The vehicle's sound-making state one tick, kept so listeners further off hear it as it was. */
-    private record State(Vec3 position, Vec3 motion, float rpm, float track, float power) {}
+    private record State(Vec3 position, Vec3 motion, float rpm, float track, float power, float water) {}
 
     private static final class Group {
         final VehicleEntity entity;
         final GroundVehicleSounds profile;
         final Map<String, Layer> layers = new HashMap<>();
         final ArrayDeque<State> history = new ArrayDeque<>();
+        final java.util.List<OneShot> shots = new java.util.ArrayList<>();
         Vec3 lastPosition;
-        float lastTrack, rpm, track, power;
+        float lastTrack, rpm, track, power, water;
+        int sinceStart;
+
+        void shot(Minecraft mc, String kind) {
+            // A crew in first person in a closed hull hears the muffled version, as they hear the cab loop.
+            boolean cab = this.profile.cab() && firstPersonAboard(this.entity);
+            OneShot sound = new OneShot(this, kind, cab);
+            this.shots.add(sound);
+            mc.getSoundManager().play(sound);
+        }
 
         Group(VehicleEntity entity, GroundVehicleSounds profile) {
             this.entity = entity;
@@ -67,6 +81,11 @@ public final class GroundVehicleAudio {
                 mc.getSoundManager().stop(layer);
             }
             this.layers.clear();
+            for (OneShot shot : this.shots) {
+                shot.halt();
+                mc.getSoundManager().stop(shot);
+            }
+            this.shots.clear();
         }
     }
 
@@ -87,34 +106,60 @@ public final class GroundVehicleAudio {
                 group = null;
             }
             boolean running = vehicle.groundEngineRunning();
+            // Whether the engine was running when this client last looked: a start or stop is heard only when it is seen
+            // to happen, never by a player arriving at a vehicle already running.
+            Boolean before = LAST_RUNNING.put(vehicle.getId(), running);
+            boolean started = before != null && !before && running;
+            boolean stopped = before != null && before && !running;
             if (group == null) {
                 if (!running) continue;
                 group = new Group(vehicle, profile);
+                group.sinceStart = started ? 0 : Integer.MAX_VALUE / 2;
                 GROUPS.put(vehicle.getId(), group);
+            } else if (started) {
+                group.sinceStart = 0;
             }
             seen.add(vehicle.getId());
+            if (profile.hasStart()) {
+                if (started) group.shot(mc, "engine_start");
+                if (stopped) group.shot(mc, "engine_stop");
+            }
+            group.sinceStart++;
+            group.shots.removeIf(OneShot::isStopped);
             // Engine speed from how fast the hull moves (any client sees that, driver or not), eased as an engine's is.
-            double maxSpeed = Math.max(0.05D, vehicle.vehicleData().defaults().engine().maxForwardSpeed());
+            double maxSpeed = Math.max(0.05D, topSpeed(vehicle.vehicleData().defaults().engine()));
             double moved = vehicle.position().subtract(group.lastPosition).horizontalDistance();
             group.lastPosition = vehicle.position();
             float target = running ? 0.15F + 0.85F * (float) Mth.clamp(moved / maxSpeed, 0.0D, 1.0D) : 0.0F;
             group.rpm = Mth.lerp(0.12F, group.rpm, target);
             float travel = vehicle.trackTravel(true, 1.0F);
-            float trackRate = Math.abs(travel - group.lastTrack) / (float) (maxSpeed * 16.0D);
+            // Tracks by how fast they run; tyres (a wheeled hull) by how fast the hull rolls over the ground.
+            float trackRate = profile.tracked() ? Math.abs(travel - group.lastTrack) / (float) (maxSpeed * 16.0D)
+                    : vehicle.onGround() ? (float) (moved / maxSpeed) : 0.0F;
             group.lastTrack = travel;
             group.track = Mth.lerp(0.3F, group.track, Mth.clamp(trackRate, 0.0F, 1.0F));
-            group.power = Mth.clamp(group.power + (running ? 1.0F : -1.5F) / WIND_UP_TICKS, 0.0F, 1.0F);
-            group.history.addFirst(new State(vehicle.position(), vehicle.getDeltaMovement(), group.rpm, group.track, group.power));
+            // Way through the water, against the hull's own top speed there (a swimming land hull's is its swim speed).
+            double waterTop = vehicle.vehicleData().amphibious().swims() ? vehicle.vehicleData().amphibious().maxSpeed() : maxSpeed;
+            boolean wet = vehicle.isInWater() || vehicle.level().getFluidState(net.minecraft.core.BlockPos.containing(
+                    vehicle.getX(), vehicle.getY() - 0.6D, vehicle.getZ())).is(net.minecraft.tags.FluidTags.WATER);
+            float waterRate = wet ? (float) (moved / Math.max(0.03D, waterTop)) : 0.0F;
+            group.water = Mth.lerp(0.2F, group.water, Mth.clamp(waterRate, 0.0F, 1.0F));
+            // With a real start, the loops wind up only once the engine has caught in the recording.
+            boolean caught = !profile.hasStart() || group.sinceStart >= profile.startCatchTicks();
+            group.power = Mth.clamp(group.power + (running && caught ? 1.0F : running ? 0.0F : -1.5F) / WIND_UP_TICKS, 0.0F, 1.0F);
+            group.history.addFirst(new State(vehicle.position(), vehicle.getDeltaMovement(), group.rpm, group.track, group.power, group.water));
             while (group.history.size() > HISTORY) group.history.removeLast();
             if (group.layers.isEmpty() && group.power > 0.0F) {
                 for (String name : LOOPS) {
-                    if (name.equals("tracks") && !profile.tracked() || name.equals("engine_cab") && !profile.cab()) continue;
+                    if (name.equals("tracks") && !profile.tracked() || name.startsWith("engine_cab") && !profile.cab()) continue;
+                    if (name.equals("tyres") && (profile.tracked() || vehicle.vehicleData().wheels() == null)) continue;
+                    if (name.equals("hull") && !takesWater(vehicle)) continue;
                     Layer sound = new Layer(group, name);
                     group.layers.put(name, sound);
                     mc.getSoundManager().play(sound);
                 }
             }
-            if (group.power <= 0.0F && !running && !group.layers.isEmpty() && group.history.size() >= HISTORY) {
+            if (group.power <= 0.0F && !running && !group.layers.isEmpty() && group.history.size() >= HISTORY && group.shots.isEmpty()) {
                 // Wound down and heard everywhere it will be: stop the buffers until a driver comes back.
                 group.stop(mc);
             }
@@ -128,11 +173,32 @@ public final class GroundVehicleAudio {
                 it.remove();
             }
         }
+        LAST_RUNNING.keySet().removeIf(id -> {
+            var entity = mc.level.getEntity(id);
+            return entity == null || entity.isRemoved();
+        });
+    }
+
+    /**
+     * The speed a land vehicle settles at flat out (blocks a tick): each tick adds 0.15 x max_forward_speed and ground
+     * friction keeps f of it, so it levels off at 0.15 x max x f / (1 - f), under the cap. Engine speed is measured
+     * against this, so flat out is full load.
+     */
+    static double topSpeed(ttv.migami.jeg.vehicle.data.subdata.EngineInfo engine) {
+        double f = Mth.clamp(engine.friction(), 0.0D, 0.99D);
+        return Math.min(engine.maxForwardSpeed(), 0.15D * engine.maxForwardSpeed() * f / (1.0D - f));
     }
 
     public static void clear(Minecraft mc) {
         GROUPS.values().forEach(g -> g.stop(mc));
         GROUPS.clear();
+        LAST_RUNNING.clear();
+    }
+
+    /** For game tests: the one-shots (engine_start, engine_stop) a vehicle is playing now, by name. */
+    public static java.util.List<String> shots(int entityId) {
+        Group g = GROUPS.get(entityId);
+        return g == null ? java.util.List.of() : g.shots.stream().filter(s -> !s.isStopped()).map(s -> s.kind).toList();
     }
 
     /** For game tests: a vehicle's playing loops by name, and one's volume. */
@@ -162,9 +228,76 @@ public final class GroundVehicleAudio {
         return Minecraft.getInstance().gameRenderer.getMainCamera().position().distanceToSqr(entity.position());
     }
 
+    /** A hull that makes way through water: a boat, or a land vehicle that swims. */
+    private static boolean takesWater(VehicleEntity vehicle) {
+        return vehicle.vehicleData().defaults().vehicleType() == ttv.migami.jeg.vehicle.data.subdata.VehicleType.BOAT
+                || vehicle.vehicleData().amphibious().swims();
+    }
+
     private static SoundEvent sound(VehicleEntity vehicle, String kind) {
-        String id = kind.equals("tracks") ? "vehicle.tracks.clank" : "vehicle." + vehicle.vehicleDataId().getPath() + "." + kind;
+        String id = kind.equals("tracks") ? "vehicle.tracks.clank" : kind.equals("tyres") ? "vehicle.tyres.gravel"
+                : kind.equals("hull") ? "vehicle.water.hull"
+                : "vehicle." + vehicle.vehicleDataId().getPath() + "." + kind;
         return ModSounds.ALL.get(Reference.id(id)).get();
+    }
+
+    /**
+     * A real engine start or stop: heard as the loops are (on the camera for the crew in first person, muffled in a closed
+     * hull; outside, on the shared distance curve, arriving a tick per 17 blocks), following the vehicle as it plays.
+     */
+    private static final class OneShot extends AbstractTickableSoundInstance implements DynamicRelativeSound {
+        final Group group;
+        final String kind;
+        final boolean cab;
+
+        OneShot(Group group, String kind, boolean cab) {
+            super(sound(group.entity, cab ? kind + "_cab" : kind), SoundSource.AMBIENT, SoundInstance.createUnseededRandom());
+            this.group = group;
+            this.kind = kind;
+            this.cab = cab;
+            this.looping = false;
+            this.attenuation = Attenuation.NONE;
+            boolean inside = aboard(group.entity);
+            this.delay = inside ? 0 : Mth.clamp((int) Math.round(Math.sqrt(distanceSq(group.entity)) / SOUND_SPEED), 0, HISTORY);
+            this.volume = this.target();
+            this.follow();
+        }
+
+        void halt() {
+            this.stop();
+        }
+
+        @Override
+        public boolean canStartSilent() {
+            return true;
+        }
+
+        private float target() {
+            VehicleEntity v = this.group.entity;
+            if (aboard(v)) {
+                return this.cab ? 0.75F : 0.65F;
+            }
+            return Math.max(0.001F, AircraftSoundRange.volume(Math.sqrt(distanceSq(v)), this.group.profile.idleLoudness() * 1.15F));
+        }
+
+        private void follow() {
+            boolean onCamera = firstPersonAboard(this.group.entity);
+            this.relative = onCamera;
+            Vec3 at = onCamera ? Vec3.ZERO : this.group.entity.position().add(0.0D, 1.6D, 0.0D);
+            this.x = at.x;
+            this.y = at.y;
+            this.z = at.z;
+        }
+
+        @Override
+        public void tick() {
+            if (this.group.entity.isRemoved()) {
+                this.stop();
+                return;
+            }
+            this.volume = this.target();
+            this.follow();
+        }
     }
 
     private static final class Layer extends AbstractTickableSoundInstance implements DynamicRelativeSound {
@@ -215,9 +348,16 @@ public final class GroundVehicleAudio {
             float target = switch (this.kind) {
                 case "engine_idle" -> cabView ? 0.0F : level(inside, 0.55F, loudness, distance) * Mth.cos(swing) * near;
                 case "engine_load" -> cabView ? 0.0F : level(inside, 0.65F, loudness, distance) * Mth.sin(swing) * near;
-                case "engine_cab" -> cabView ? 0.35F + 0.4F * throttle : 0.0F;
+                // In the cab: the real idle at rest, crossfading into the working engine as the hull pulls (the idle
+                // was the driving take slowed, so a hull at rest sounded on the move: the user's review, 2026-11-18).
+                case "engine_cab_idle" -> cabView ? 0.42F * Mth.cos(swing) : 0.0F;
+                case "engine_cab" -> cabView ? (0.35F + 0.4F * throttle) * Mth.sin(swing) : 0.0F;
                 case "engine_distant" -> inside ? 0.0F : AircraftSoundRange.volume(distance, loudness) * far;
                 case "tracks" -> level(inside, cabView ? 0.18F : 0.3F, TRACK_LOUDNESS, distance) * s.track() * near;
+                // Tyres on gravel: quieter than a track run, muffled in the cab by the hull, rising with speed.
+                case "tyres" -> level(inside, cabView ? 0.12F : 0.26F, TYRE_LOUDNESS, distance) * Math.min(1.0F, s.track() * 1.3F) * near;
+                // The hull through water: loudest on the plane; under a closed hull, muffled.
+                case "hull" -> level(inside, cabView ? 0.14F : 0.32F, HULL_LOUDNESS, distance) * Math.min(1.0F, s.water() * 1.2F) * near;
                 default -> 0.0F;
             };
             target *= s.power();
@@ -234,8 +374,11 @@ public final class GroundVehicleAudio {
                 case "engine_idle" -> wind * (0.92F + rpm * 0.3F);
                 case "engine_load" -> wind * (0.82F + rpm * 0.24F);
                 case "engine_cab" -> wind * (0.86F + rpm * 0.26F);
+                case "engine_cab_idle" -> wind * (0.95F + rpm * 0.2F);
                 case "engine_distant" -> wind * (0.9F + rpm * 0.18F);
                 case "tracks" -> 0.8F + s.track() * 0.4F;
+                case "tyres" -> 0.85F + s.track() * 0.3F;
+                case "hull" -> 0.8F + s.water() * 0.35F;
                 default -> 1.0F;
             };
         }

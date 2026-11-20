@@ -13,7 +13,7 @@ Status: **being built, 2026-11-17.** Model refit: [refit.py](refit.py), [rig.jso
 - **A self-propelled howitzer whose fire control lays the gun.** With a fire mission set, the gunner engages the fire
   control and the turret slews and elevates itself onto the solution; the gunner picks the charge and arc and fires.
   The gun also fires direct, laid by the gunner's view, for close defence.
-- **It fires the Mk42's 5-inch shells** (HE with proximity fuze, AP, cluster, grapeshot), as SBW's PLZ-05 does.
+- **It fires the Mk42's 5-inch shells** (HE with proximity fuze, AP, cluster, grapeshot; grapeshot became the incendiary on 2026-11-19), as SBW's PLZ-05 does.
   No new rounds.
 - **About 6 km with the top charge**, three charges.
 - **Roof: a 12.7 mm machine gun and a rider.** One roof seat mans the gun on the commander's hatch; the other is a

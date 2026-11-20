@@ -1,6 +1,7 @@
 {
   "entity_type": "jeg:waveforce_tower",
   "vehicle_type": "artillery",
+  "mass": 2.0,
   "max_health": 145.0,
   "auto_repair_per_tick": 0.009,
   "auto_repair_cooldown_ticks": 190,

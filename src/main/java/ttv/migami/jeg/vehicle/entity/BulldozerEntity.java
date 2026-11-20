@@ -23,6 +23,10 @@ import ttv.migami.jeg.vehicle.util.BulldozerRig;
  * BD-40 crawler dozer. It drives with the same steered-track model as the other land vehicles (W/S throttle,
  * A/D steer or pivot, Ctrl brake); Space raises and Shift lowers the blade, G toggles the grade lock. A lowered
  * blade clears whatever it is pushed into, and the material it has not cleared yet holds the machine back.
+ * <p>
+ * Lane lock (the weapon-switch key, X) holds the machine square to the block grid for straight cuts and paved roads: it drives
+ * dead along a compass heading, centred on a block edge so the 4-block blade and ripper lane fill whole columns, and
+ * A/D turn it a quarter turn per tap.
  */
 public final class BulldozerEntity extends VehicleEntity {
     private static final EntityDataAccessor<Float> LIFT = SynchedEntityData.defineId(BulldozerEntity.class, EntityDataSerializers.FLOAT);
@@ -42,6 +46,14 @@ public final class BulldozerEntity extends VehicleEntity {
     /** The block the ripper is laying and how many are left in the bay, for the operator's panel. */
     private static final EntityDataAccessor<net.minecraft.world.item.ItemStack> PAVING = SynchedEntityData.defineId(BulldozerEntity.class, EntityDataSerializers.ITEM_STACK);
     private static final EntityDataAccessor<Integer> PAVING_COUNT = SynchedEntityData.defineId(BulldozerEntity.class, EntityDataSerializers.INT);
+    /** Lane lock: on, the heading it holds (a multiple of 90 degrees) and the lane's centre line (NaN while turning). */
+    private static final EntityDataAccessor<Boolean> LANE = SynchedEntityData.defineId(BulldozerEntity.class, EntityDataSerializers.BOOLEAN);
+    private static final EntityDataAccessor<Float> LANE_YAW = SynchedEntityData.defineId(BulldozerEntity.class, EntityDataSerializers.FLOAT);
+    private static final EntityDataAccessor<Float> LANE_LINE = SynchedEntityData.defineId(BulldozerEntity.class, EntityDataSerializers.FLOAT);
+    /** Lane lock's quarter turns, degrees per tick (the free pivot is about 6). */
+    private static final float LANE_TURN_RATE = 4.5F;
+    /** Sideways correction towards the lane line: this share of the offset per tick, at most this share of the travel speed. */
+    private static final double LANE_PULL = .3, LANE_PULL_MAX = .3;
     /** Forward speed while the blade has more in its bite than it can clear in a tick, blocks per tick. */
     private static final double BUSY_CRAWL = .045;
     /** Ripper link travel per tick, degrees. */
@@ -54,12 +66,23 @@ public final class BulldozerEntity extends VehicleEntity {
     private static final float LIFT_RATE = 1.2F;
     private final BulldozerTerrainWork work = new BulldozerTerrainWork();
     private int parkedTicks;
-    private boolean gradePressed, ripperPressed;
+    private boolean gradePressed, ripperPressed, lanePressed;
+    /** The A/D direction held last tick, so a held key turns the lane lock once. */
+    private int laneSteer;
+    /** The heading at the start of this tick, before the shared track model steered. */
+    private float laneYawStart;
+    /** The block the ripper laid last: it keeps to that block, restocking it from the operator's inventory. */
+    private net.minecraft.world.item.Item ripperBlock;
     /** Ticks the working status is held over the empty ticks between bites of a steady cut. */
     private static final int WORK_HOLD_TICKS = 12;
     private int lastWorkTick = -1000, lastWorkStatus = BulldozerTerrainWork.WORKING;
+    /**
+     * Top travel speed, blocks per tick: 6 m/s (the user's figure, 2026-11-17; it was 3.4 m/s). The engine's
+     * "max_forward_speed" is set so the track model reaches it on flat ground; this caps it there.
+     */
+    private static final double TRAVEL_CAP = .3;
     /** Forward speed limit while pushing material, eased so the machine never jerks between bites. */
-    private double pushCap = .26;
+    private double pushCap = TRAVEL_CAP;
     private float ripperO, ripperShown;
     // Client-side presentation state.
     private float liftO, liftShown;
@@ -91,6 +114,9 @@ public final class BulldozerEntity extends VehicleEntity {
         builder.define(HORN, false);
         builder.define(PAVING, net.minecraft.world.item.ItemStack.EMPTY);
         builder.define(PAVING_COUNT, 0);
+        builder.define(LANE, false);
+        builder.define(LANE_YAW, 0F);
+        builder.define(LANE_LINE, Float.NaN);
     }
 
     public float bladeLift() { return this.entityData.get(LIFT); }
@@ -129,6 +155,31 @@ public final class BulldozerEntity extends VehicleEntity {
     /** The ripper's paving bay (the hold's last row), marked in the hold's menu and taking full blocks only. */
     @Override public int toolSlotStart() { return BulldozerTerrainWork.pavingStart(this); }
     @Override public int toolSlotCount() { return BulldozerTerrainWork.PAVING_SLOTS; }
+    /** The block the ripper keeps laying (and restocks), or null before it has laid one. */
+    public net.minecraft.world.item.Item ripperBlock() { return this.ripperBlock; }
+    public void setRipperBlock(net.minecraft.world.item.Item item) { this.ripperBlock = item; }
+
+    /** Lane lock is on: the machine holds a compass heading on a block-aligned line. */
+    public boolean laneLock() { return this.entityData.get(LANE); }
+    /** The heading lane lock holds or is turning to, degrees (a multiple of 90). */
+    public float laneYaw() { return this.entityData.get(LANE_YAW); }
+    /** Lane lock is turning to a new heading (a tapped A/D). */
+    public boolean laneTurning() { return this.laneLock() && Math.abs(Mth.wrapDegrees(this.laneYaw() - this.getYRot())) > .01F; }
+
+    private void setLaneLock(boolean on) {
+        this.entityData.set(LANE, on);
+        this.entityData.set(LANE_YAW, Mth.wrapDegrees(Math.round(this.getYRot() / 90F) * 90F));
+        this.entityData.set(LANE_LINE, Float.NaN);
+    }
+
+    /** The lane's centre line: the block edge nearest the machine's centre, across its heading. */
+    private float laneLine() {
+        return Math.round(alongZ(this.laneYaw()) ? this.getX() : this.getZ());
+    }
+
+    private static boolean alongZ(float yaw) {
+        return Math.abs(Mth.cos(yaw * Mth.DEG_TO_RAD)) > .5F;
+    }
 
     /** Shots meet the fitted hull boxes (blade, arms, tracks, engine, canopy, tanks, ripper), not the empty space round them. */
     @Override public boolean preciseHitbox() { return true; }
@@ -184,6 +235,7 @@ public final class BulldozerEntity extends VehicleEntity {
     @Override protected boolean tickSpecialLandMovement(boolean server) {
         var input = this.landInput();
         Entity driver = this.getControllingPassenger();
+        this.laneYawStart = this.getYRot();
         if (server) {
             this.parkedTicks = driver != null ? 0 : this.parkedTicks + 1;
             boolean power = this.vehicleEnergy() > 0 && !this.isWrecked() && (driver != null || this.powered() && this.parkedTicks < SHUTDOWN_TICKS);
@@ -193,6 +245,20 @@ public final class BulldozerEntity extends VehicleEntity {
             boolean grade = driver != null && input.deployDecoy();
             if (grade && !this.gradePressed) this.entityData.set(GRADE, !this.gradeAssist());
             this.gradePressed = grade;
+            // The lane lock is the weapon-switch key (X): the dozer has no weapons.
+            boolean lane = driver != null && input.switchWeapon();
+            if (lane && !this.lanePressed) this.setLaneLock(!this.laneLock());
+            this.lanePressed = lane;
+            int held = driver != null && this.engineRunning() ? (input.right() ? 1 : 0) - (input.left() ? 1 : 0) : 0;
+            if (this.laneLock()) {
+                // A tap of A/D is a quarter turn (holding it does not repeat); the lane line is set once it is square again.
+                if (held != 0 && held != this.laneSteer) {
+                    this.entityData.set(LANE_YAW, Mth.wrapDegrees(this.laneYaw() + 90F * held));
+                    this.entityData.set(LANE_LINE, Float.NaN);
+                }
+                if (Float.isNaN(this.entityData.get(LANE_LINE)) && !this.laneTurning()) this.entityData.set(LANE_LINE, this.laneLine());
+            }
+            this.laneSteer = held;
             float lift = this.bladeLift();
             float floor = this.gradeAssist() ? 0 : BulldozerRig.LIFT_MIN;
             if (driver != null && this.engineRunning()) lift += input.verticalAxis() * LIFT_RATE;
@@ -214,6 +280,7 @@ public final class BulldozerEntity extends VehicleEntity {
             int status = this.work.tick(this, pushing);
             // Steering inside a cut: a lowered blade cuts the walls the turn swings into; otherwise say why it won't turn.
             int steer = (input.right() ? 1 : 0) - (input.left() ? 1 : 0);
+            if (this.laneLock()) steer = this.laneTurning() ? (int) Math.signum(Mth.wrapDegrees(this.laneYaw() - this.getYRot())) : 0;
             if (driver != null && this.engineRunning() && steer != 0) {
                 int turn = this.work.clearTurn(this, input.forwardAxis() < 0 ? -steer : steer);
                 if (turn == BulldozerTerrainWork.WORKING) {
@@ -255,7 +322,7 @@ public final class BulldozerEntity extends VehicleEntity {
         // so it bulldozes steadily instead of stopping and starting at each bite. (Against something it cannot cut it
         // stops; the blade's collision box stops it too if it ever reaches uncut ground.)
         boolean busy = this.workStatus() == BulldozerTerrainWork.BUSY;
-        double capTarget = busy ? BUSY_CRAWL : Mth.lerp(Mth.clamp(this.load(), 0, 1), .26, BUSY_CRAWL * 1.6);
+        double capTarget = busy ? BUSY_CRAWL : Mth.lerp(Mth.clamp(this.load(), 0, 1), TRAVEL_CAP, BUSY_CRAWL * 1.6);
         this.pushCap += (capTarget - this.pushCap) * (capTarget < this.pushCap ? .35 : .12);
         if (along > 0) {
             double keep = this.bladeHolding() && !busy ? 0 : Math.min(along, this.pushCap);
@@ -266,7 +333,29 @@ public final class BulldozerEntity extends VehicleEntity {
             double scale = velocity.horizontalDistanceSqr() < 1.0E-4 ? 0 : .55;
             velocity = new Vec3(velocity.x * scale, velocity.y, velocity.z * scale);
         }
+        if (this.laneLock() && this.engineRunning()) velocity = this.holdLane(velocity);
         super.moveGroundVehicle(velocity);
+    }
+
+    /**
+     * Lane lock: undoes the track model's steering this tick, turns towards the locked heading instead, and drives
+     * only along it, easing sideways onto the lane line while it moves (tracks cannot slide a parked machine).
+     */
+    private Vec3 holdLane(Vec3 velocity) {
+        float target = this.laneYaw();
+        float diff = Mth.wrapDegrees(target - this.laneYawStart);
+        float next = Math.abs(diff) <= LANE_TURN_RATE ? target : this.laneYawStart + Math.signum(diff) * LANE_TURN_RATE;
+        if (this.getYRot() != next && !this.setVehicleYawIfUnblocked(next)) this.setVehicleYawIfUnblocked(this.laneYawStart);
+        Vec3 f = BulldozerRig.forward(this.getYRot());
+        double along = velocity.x * f.x + velocity.z * f.z;
+        Vec3 out = new Vec3(f.x * along, velocity.y, f.z * along);
+        float line = this.entityData.get(LANE_LINE);
+        if (Float.isNaN(line) || this.laneTurning()) return out;
+        boolean z = alongZ(target);
+        double offset = line - (z ? this.getX() : this.getZ());
+        double limit = Math.abs(along) * LANE_PULL_MAX;
+        double fix = Mth.clamp(offset * LANE_PULL, -limit, limit);
+        return z ? out.add(fix, 0, 0) : out.add(0, 0, fix);
     }
 
     private void tickPresentation() {
@@ -308,11 +397,11 @@ public final class BulldozerEntity extends VehicleEntity {
         float rising = this.rpm - this.rpmO;
         if (this.powerAge() < START_TICKS && this.powerAge() > 10 && this.tickCount % 2 == 0) {
             // Cranking: dark puffs until the engine catches.
-            this.level().addParticle(ParticleTypes.LARGE_SMOKE, stack.x, stack.y, stack.z, 0, .08, 0);
+            ttv.migami.jeg.vehicle.effect.SmokeFx.emit(this.level(), stack, new Vec3(0, .08, 0), ttv.migami.jeg.vehicle.effect.SmokeFx.DARK, 0.45F);
         } else if (rising > .012F || this.load() > .6F && this.tickCount % 2 == 0) {
-            this.level().addParticle(ParticleTypes.LARGE_SMOKE, stack.x, stack.y, stack.z, (this.random.nextFloat() - .5F) * .02, .1 + this.rpm * .06, (this.random.nextFloat() - .5F) * .02);
+            ttv.migami.jeg.vehicle.effect.SmokeFx.emit(this.level(), stack, new Vec3((this.random.nextFloat() - .5F) * .02, .1 + this.rpm * .06, (this.random.nextFloat() - .5F) * .02), ttv.migami.jeg.vehicle.effect.SmokeFx.DARK, 0.4F);
         } else if (this.tickCount % Math.max(2, 7 - Math.round(this.rpm * 5)) == 0) {
-            this.level().addParticle(ParticleTypes.SMOKE, stack.x, stack.y, stack.z, 0, .05 + this.rpm * .05, 0);
+            ttv.migami.jeg.vehicle.effect.SmokeFx.emit(this.level(), stack, new Vec3(0, .05 + this.rpm * .05, 0), ttv.migami.jeg.vehicle.effect.SmokeFx.GREY, 0.3F);
         }
         if (speed > .04 && this.onGround()) {
             // Soil kicked up behind the tracks.
@@ -335,6 +424,9 @@ public final class BulldozerEntity extends VehicleEntity {
         out.putInt("CutFloor", this.cutFloor());
         out.putBoolean("RipperDown", this.ripperDown());
         out.putFloat("Ripper", this.entityData.get(RIPPER));
+        out.putBoolean("LaneLock", this.laneLock());
+        out.putFloat("LaneYaw", this.laneYaw());
+        if (this.ripperBlock != null) out.putString("RipperBlock", net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(this.ripperBlock).toString());
     }
 
     @Override protected void readAdditionalSaveData(ValueInput in) {
@@ -346,5 +438,10 @@ public final class BulldozerEntity extends VehicleEntity {
         this.entityData.set(RIPPER, Mth.clamp(in.getFloatOr("Ripper", 0), 0, BulldozerRig.RIPPER_MAX));
         this.ripperO = this.entityData.get(RIPPER);
         this.liftO = this.bladeLift();
+        this.entityData.set(LANE, in.getBooleanOr("LaneLock", false));
+        this.entityData.set(LANE_YAW, in.getFloatOr("LaneYaw", 0F));
+        this.entityData.set(LANE_LINE, Float.NaN);
+        var block = net.minecraft.resources.Identifier.tryParse(in.getStringOr("RipperBlock", ""));
+        this.ripperBlock = block == null ? null : net.minecraft.core.registries.BuiltInRegistries.ITEM.getOptional(block).orElse(null);
     }
 }

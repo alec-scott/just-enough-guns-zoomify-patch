@@ -27,10 +27,13 @@ public final class Bl132Entity extends ShellGunEntity {
     public static final ShellEntity.Warhead BOMBLET = new ShellEntity.Warhead(3.5F, 220.0F * 5.0F / 18.0F, 360.0F * 6.0F / 18.0F, 1.5F, 0.0D, 0);
     public static final ShellEntity.Warhead CM = new ShellEntity.Warhead(7.0F, 220.0F, 360.0F, 4.0F, 0.0D, 0,
             new ShellEntity.Dispense(18, 8.0D, 0.4D, 0.6D, 3, 7, BOMBLET, new ShellBallistics(15.0D, 0.06D, 100)));
-    /** SBW's grapeshot: 36 pellets sharing 1,100 damage. */
-    public static final ShellEntity.Warhead PELLET = new ShellEntity.Warhead(0.0F, 0.0F, 1100.0F / 36.0F, 0.0F, 0.0D, 0);
-    public static final ShellEntity.Warhead GRAPESHOT = new ShellEntity.Warhead(0.0F, 0.0F, 0.0F, 0.0F, 0.0D, 0,
-            new ShellEntity.Dispense(36, 5.0D, 0.9D, 1.1D, 0, 0, PELLET, new ShellBallistics(15.0D, 0.06D, 200)));
+    /**
+     * The incendiary, in grapeshot's place as the Mk42's (2026-11-19), larger for the 130 mm: it bursts 8 blocks over
+     * where it would come down, 50 within 4.5, and 36 fragments of 14 rain over 6 blocks round the spot.
+     */
+    public static final ShellEntity.Warhead FIRE_FRAGMENT = ShellEntity.Warhead.fireFragment(14.0F, 8);
+    public static final ShellEntity.Warhead INCENDIARY = ShellEntity.Warhead.incendiaryShell(4.5F, 50.0F, 170.0F,
+            new ShellEntity.Incendiary(8.0D, 16.0D, 2, 36, 6.0D, FIRE_FRAGMENT, Mk42Entity.FRAGMENT_BALLISTICS));
     public static final Identifier HE_WEAPON = Reference.id("vehicle_bl132_he");
     public static final Identifier AP_WEAPON = Reference.id("vehicle_bl132_ap");
     public static final Identifier CM_WEAPON = Reference.id("vehicle_bl132_cm");
@@ -39,7 +42,7 @@ public final class Bl132Entity extends ShellGunEntity {
             new Shell(HE_WEAPON, HE, "hud.jeg.shell.he_proximity"),
             new Shell(AP_WEAPON, AP, "hud.jeg.shell.ap"),
             new Shell(CM_WEAPON, CM, "hud.jeg.shell.cluster"),
-            new Shell(GS_WEAPON, GRAPESHOT, "hud.jeg.shell.grapeshot"));
+            new Shell(GS_WEAPON, INCENDIARY, "hud.jeg.shell.incendiary"));
     /** Muzzles in SBW's firing order, lower pair then upper, alternating sides (design/bl132/rig.json). */
     public static final List<Vec3> MUZZLES = List.of(
             new Vec3(1.2469D, 2.0812D, 7.1437D), new Vec3(-1.2469D, 2.0812D, 7.1437D),

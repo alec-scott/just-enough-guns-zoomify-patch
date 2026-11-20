@@ -218,9 +218,16 @@ public class Mi28GunnerAimClientGameTest implements FabricClientGameTest {
                 throw new AssertionError("The MI-28 camera must point along the model's barrel");
             }
             if (zoom) {
-                Vec3 offset = camera.subtract(tip);
-                if (offset.cross(bore).length() > 0.002D || offset.dot(bore) < 0.01D || offset.dot(bore) > 0.1D) {
-                    throw new AssertionError("The zoom camera must sit on the bore, clear of the muzzle: " + offset);
+                // The sight sits above the gun and behind its muzzle, boresighted: the rounds and the flash rise into
+                // the crosshair from the gun at the bottom of the view rather than leaving from the eye (R13).
+                Vec3 toTip = tip.subtract(camera);
+                double ahead = toTip.dot(bore);
+                Vec3 across = toTip.subtract(bore.scale(ahead));
+                double below = Math.toDegrees(Math.atan2(across.length(), ahead));
+                Vec3 right = new Vec3(-bore.z, 0.0D, bore.x).normalize();
+                if (ahead < 1.0D || ahead > 2.5D || Math.abs(toTip.dot(right)) > 0.12D || below < 6.0D || below > 11.0D) {
+                    throw new AssertionError("The zoom sight must sit above the gun, behind its muzzle, with the muzzle low in"
+                            + " the view: ahead=" + ahead + " below=" + below + "deg");
                 }
             } else {
                 Vec3 right = new Vec3(-bore.z, 0.0D, bore.x).normalize();

@@ -136,7 +136,7 @@ public class BulldozerClientGameTest implements FabricClientGameTest {
                         + server.computeOnServer(s -> dozer(s).position() + " top speed so far"));
                 check(server.computeOnServer(s -> s.overworld().getBlockState(new BlockPos(0, -57, 9)).is(Blocks.OAK_LEAVES)), "the machine hit the canopy");
                 LOG.info("[bulldozer] free-travel speed {} blocks/tick ({} km/h)", top, Math.round(top * 72));
-                check(top > .16 && top < .3, "travel speed out of range: " + top);
+                check(top > .27 && top < .32, "travel speed out of range (6 m/s wanted): " + top);
 
                 // ---- A mixed bank: soil, stone and deepslate, then a six-high bank and a separate overhang above it.
                 this.reset(context, server);

@@ -21,7 +21,6 @@ import ttv.migami.jeg.entity.monster.phantom.PhantomGunner;
 import ttv.migami.jeg.entity.monster.phantom.PhantomGunnerMinion;
 import ttv.migami.jeg.faction.raid.RaidEntity;
 import ttv.migami.jeg.vehicle.entity.ConfiguredVehicleEntity;
-import ttv.migami.jeg.vehicle.entity.LightCombatVehicleEntity;
 import ttv.migami.jeg.vehicle.entity.TestAircraftEntity;
 import ttv.migami.jeg.vehicle.entity.TestArtilleryEntity;
 import ttv.migami.jeg.vehicle.entity.TestBoatEntity;
@@ -189,9 +188,15 @@ public final class ModEntities {
                     .build(entityKey("test_wheel_vehicle"))
     );
 
-    public static final DeferredHolder<EntityType<?>, EntityType<LightCombatVehicleEntity>> LIGHT_COMBAT_VEHICLE = REGISTER.register(
+    /**
+     * Retired 2026-11-17 (fleet plan section 9: a placeholder from before the port, its job done by the LAV-150): kept
+     * registered for one release so a saved one turns into a chest of its hold (RetiredVehicleEntity). Remove the type
+     * in the release after.
+     */
+    public static final DeferredHolder<EntityType<?>, EntityType<ttv.migami.jeg.vehicle.entity.RetiredVehicleEntity>> LIGHT_COMBAT_VEHICLE = REGISTER.register(
             "light_combat_vehicle",
-            () -> EntityType.Builder.<LightCombatVehicleEntity>of(LightCombatVehicleEntity::new, MobCategory.MISC)
+            () -> EntityType.Builder.<ttv.migami.jeg.vehicle.entity.RetiredVehicleEntity>of(
+                            (type, level) -> new ttv.migami.jeg.vehicle.entity.RetiredVehicleEntity(type, level, Reference.id("light_combat_vehicle")), MobCategory.MISC)
                     .sized(1.8F, 1.35F)
                     .clientTrackingRange(14)
                     .updateInterval(1)
@@ -242,14 +247,32 @@ public final class ModEntities {
             () -> EntityType.Builder.<ttv.migami.jeg.vehicle.entity.BulldozerEntity>of(ttv.migami.jeg.vehicle.entity.BulldozerEntity::new, MobCategory.MISC)
                     .sized(2.9F, 3.2F).clientTrackingRange(14).updateInterval(1).build(entityKey("bulldozer")));
     public static final DeferredHolder<EntityType<?>, EntityType<ConfiguredVehicleEntity>> LAV150 = configuredVehicle("lav150", 2.6F, 2.6F);
-    public static final DeferredHolder<EntityType<?>, EntityType<ConfiguredVehicleEntity>> SPEEDBOAT = configuredVehicle("speedboat", 3.0F, 2.0F);
+    /** The speedboat (design/speedboat/rig.json): planing hull, bow gun with its gunner. */
+    public static final DeferredHolder<EntityType<?>, EntityType<ttv.migami.jeg.vehicle.entity.SpeedboatEntity>> SPEEDBOAT = REGISTER.register("speedboat",
+            () -> EntityType.Builder.<ttv.migami.jeg.vehicle.entity.SpeedboatEntity>of(ttv.migami.jeg.vehicle.entity.SpeedboatEntity::new, MobCategory.MISC)
+                    .sized(3.0F, 2.0F).clientTrackingRange(16).updateInterval(1).build(entityKey("speedboat")));
     public static final DeferredHolder<EntityType<?>, EntityType<ConfiguredVehicleEntity>> AH6 = configuredVehicle("ah6", 2.4F, 2.9F);
     public static final DeferredHolder<EntityType<?>, EntityType<ConfiguredVehicleEntity>> A10 = configuredVehicle("a10", 3.2F, 3.4F);
     public static final DeferredHolder<EntityType<?>, EntityType<ConfiguredVehicleEntity>> BMP2 = configuredVehicle("bmp2", 3.4F, 2.4F);
     public static final DeferredHolder<EntityType<?>, EntityType<ConfiguredVehicleEntity>> MI28 = configuredVehicle("mi28", 3.0F, 4.5F);
-    public static final DeferredHolder<EntityType<?>, EntityType<ConfiguredVehicleEntity>> TOM6 = configuredVehicle("tom6", 2.2F, 1.5F);
-    public static final DeferredHolder<EntityType<?>, EntityType<ConfiguredVehicleEntity>> LASER_TOWER = configuredVehicle("laser_tower", 1.0F, 1.9F);
-    public static final DeferredHolder<EntityType<?>, EntityType<ConfiguredVehicleEntity>> HPJ11 = configuredVehicle("hpj11", 1.5F, 1.8F);
+    public static final DeferredHolder<EntityType<?>, EntityType<ConfiguredVehicleEntity>> TOM6 = configuredVehicle("tom6", 3.0F, 2.4F);
+    /**
+     * Retired 2026-11-17 (replaced by the sentry, fleet plan section 6): kept registered for one release so a saved tower
+     * turns into a chest of its hold (RetiredVehicleEntity). Remove the type in the release after.
+     */
+    public static final DeferredHolder<EntityType<?>, EntityType<ttv.migami.jeg.vehicle.entity.RetiredVehicleEntity>> LASER_TOWER = REGISTER.register(
+            "laser_tower",
+            () -> EntityType.Builder.<ttv.migami.jeg.vehicle.entity.RetiredVehicleEntity>of(
+                            (type, level) -> new ttv.migami.jeg.vehicle.entity.RetiredVehicleEntity(type, level, Reference.id("laser_tower")), MobCategory.MISC)
+                    .sized(1.0F, 1.9F).clientTrackingRange(14).updateInterval(1).build(entityKey("laser_tower")));
+    /** The perimeter sentry (design/sentry/rig.json): a remote weapon station on a tripod, manual or automatic. */
+    public static final DeferredHolder<EntityType<?>, EntityType<ttv.migami.jeg.vehicle.entity.SentryEntity>> SENTRY = REGISTER.register("sentry",
+            () -> EntityType.Builder.<ttv.migami.jeg.vehicle.entity.SentryEntity>of(ttv.migami.jeg.vehicle.entity.SentryEntity::new, MobCategory.MISC)
+                    .sized(1.4F, 2.1F).clientTrackingRange(14).updateInterval(1).build(entityKey("sentry")));
+    /** The HPJ-11 close-in weapon system (design/hpj11/rig.json): base air and missile defence, manual or automatic. */
+    public static final DeferredHolder<EntityType<?>, EntityType<ttv.migami.jeg.vehicle.entity.Hpj11Entity>> HPJ11 = REGISTER.register("hpj11",
+            () -> EntityType.Builder.<ttv.migami.jeg.vehicle.entity.Hpj11Entity>of(ttv.migami.jeg.vehicle.entity.Hpj11Entity::new, MobCategory.MISC)
+                    .sized(3.2F, 2.6F).clientTrackingRange(16).updateInterval(1).build(entityKey("hpj11")));
     /** The 81 mm mortar: the baseplate plus the tube at 45 degrees (design/mortar/rig.json). */
     public static final DeferredHolder<EntityType<?>, EntityType<ttv.migami.jeg.vehicle.entity.MortarEntity>> MORTAR = REGISTER.register("mortar",
             () -> EntityType.Builder.<ttv.migami.jeg.vehicle.entity.MortarEntity>of(ttv.migami.jeg.vehicle.entity.MortarEntity::new, MobCategory.MISC)
@@ -269,10 +292,10 @@ public final class ModEntities {
     public static final DeferredHolder<EntityType<?>, EntityType<ttv.migami.jeg.vehicle.entity.Type63Entity>> TYPE63 = REGISTER.register("type63",
             () -> EntityType.Builder.<ttv.migami.jeg.vehicle.entity.Type63Entity>of(ttv.migami.jeg.vehicle.entity.Type63Entity::new, MobCategory.MISC)
                     .sized(1.6F, 1.2F).clientTrackingRange(14).updateInterval(1).build(entityKey("type63")));
-    /** The Leopard 2A7 main battle tank (design/leopard2/rig.json). */
-    public static final DeferredHolder<EntityType<?>, EntityType<ttv.migami.jeg.vehicle.entity.Leopard2Entity>> LEOPARD2 = REGISTER.register("leopard2",
-            () -> EntityType.Builder.<ttv.migami.jeg.vehicle.entity.Leopard2Entity>of(ttv.migami.jeg.vehicle.entity.Leopard2Entity::new, MobCategory.MISC)
-                    .sized(3.7F, 2.6F).clientTrackingRange(16).updateInterval(1).build(entityKey("leopard2")));
+    /** Superb Warfare's YX-100 main battle tank (design/yx100/rig.json). */
+    public static final DeferredHolder<EntityType<?>, EntityType<ttv.migami.jeg.vehicle.entity.Yx100Entity>> YX100 = REGISTER.register("yx100",
+            () -> EntityType.Builder.<ttv.migami.jeg.vehicle.entity.Yx100Entity>of(ttv.migami.jeg.vehicle.entity.Yx100Entity::new, MobCategory.MISC)
+                    .sized(3.7F, 2.5F).clientTrackingRange(16).updateInterval(1).build(entityKey("yx100")));
     /** The PLZ-05 155 mm self-propelled howitzer (design/plz05/rig.json). */
     public static final DeferredHolder<EntityType<?>, EntityType<ttv.migami.jeg.vehicle.entity.Plz05Entity>> PLZ05 = REGISTER.register("plz05",
             () -> EntityType.Builder.<ttv.migami.jeg.vehicle.entity.Plz05Entity>of(ttv.migami.jeg.vehicle.entity.Plz05Entity::new, MobCategory.MISC)

@@ -189,6 +189,16 @@ public final class MortarEntity extends VehicleEntity implements ttv.migami.jeg.
         }
     }
 
+    /**
+     * The baseplate turns only on its traverse handwheel (A/D, {@link #TRAVERSE_RATE}); the mouse looks around. Taking
+     * the heading from the view as well made it turn at mouse speed, and with the view turning with the mount it spun
+     * on its own (the user's review, 2026-11-18).
+     */
+    @Override
+    public boolean yawFollowsRider(Entity rider) {
+        return false;
+    }
+
     private void countDown(EntityDataAccessor<Integer> accessor) {
         int value = this.entityData.get(accessor);
         if (value > 0) {

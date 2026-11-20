@@ -80,11 +80,8 @@ public class GrenadeEntity extends TimedThrowableItemProjectile {
         ExplosionInteraction interaction = this.isLaunched() ? ExplosionInteraction.TNT : ExplosionInteraction.MOB;
         float visualPower = Math.max(1.2F, this.explosionPower * 0.5F);
         ServerLevel serverLevel = (ServerLevel) this.level();
-        serverLevel.sendParticles(ModParticleTypes.BIG_EXPLOSION.get(), true, false, this.getX(), this.getY(), this.getZ(), 2, 0.2D, 0.2D, 0.2D, 0.01D);
-        serverLevel.sendParticles(ModParticleTypes.SMALL_EXPLOSION.get(), true, false, this.getX(), this.getY(), this.getZ(), 14, 0.8D, 0.8D, 0.8D, 0.12D);
-        serverLevel.sendParticles(ModParticleTypes.SMOKE.get(), true, false, this.getX(), this.getY(), this.getZ(), 10, 1.0D, 1.0D, 1.0D, 0.02D);
-        serverLevel.sendParticles(ModParticleTypes.FIRE.get(), true, false, this.getX(), this.getY(), this.getZ(), 8, 0.7D, 0.7D, 0.7D, 0.04D);
-        this.level().explode(this, this.getX(), this.getY(), this.getZ(), visualPower, interaction);
+        // The realistic blast, not the classic JEG burst (the user's review, 2026-11-18).
+        ttv.migami.jeg.vehicle.projectile.RealisticBlast.explode(serverLevel, this, null, this.position(), visualPower, false, interaction);
         this.applyBalancedBlastDamage();
         this.igniteNearby();
     }

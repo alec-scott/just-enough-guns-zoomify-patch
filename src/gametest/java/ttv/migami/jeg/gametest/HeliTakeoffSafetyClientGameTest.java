@@ -78,8 +78,9 @@ public class HeliTakeoffSafetyClientGameTest implements FabricClientGameTest {
         server.runCommand("execute as @p at @s run summon jeg:" + id + " ~ ~ ~4 {Rotation:[0f,0f]}");
         server.runCommand("execute as @p at @s run summon minecraft:villager ~ ~ ~6 {NoAI:1b}");
         context.waitTicks(5);
-        server.runCommand("ride @p mount @e[type=jeg:" + id + ",limit=1,sort=nearest]");
-        server.runCommand("ride @e[type=minecraft:villager,limit=1,sort=nearest] mount @e[type=jeg:" + id + ",limit=1,sort=nearest]");
+        // Nearest to the player, not to the world origin the server runs commands from.
+        server.runCommand("execute as @p at @s run ride @s mount @e[type=jeg:" + id + ",limit=1,sort=nearest]");
+        server.runCommand("execute as @p at @s run ride @e[type=minecraft:villager,limit=1,sort=nearest] mount @e[type=jeg:" + id + ",limit=1,sort=nearest]");
         context.waitFor(mc -> mc.player != null && mc.player.getVehicle() instanceof VehicleEntity);
         context.waitTicks(10);
         synchronized (passengerHits) {

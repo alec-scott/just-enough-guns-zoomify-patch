@@ -22,9 +22,10 @@ Status, 2026-11-15:
   (`FireMissions`).
 - **BMP-2 refit pass 1 done** (fleet plan section 2, [../bmp2/BRIEF.md](../bmp2/BRIEF.md)): 1:1, the shared track
   driver, rescaled data.
-- **MBT built** (2026-11-17, [../leopard2/BRIEF.md](../leopard2/BRIEF.md)): a Leopard 2A7, our own generated model,
-  keeping the YX-100's behaviour on the Mk42's shells (user decisions). With it every vehicle in the port's scope is
-  built; none since the mortar is released.
+- **MBT: the YX-100 itself** (2026-11-17, [../yx100/BRIEF.md](../yx100/BRIEF.md)). A Leopard 2A7 was generated first
+  in its place; the user then reverted it to SBW's YX-100, refit like the PLZ-05 and kept as the fleet's one deliberate
+  science-fiction vehicle. Same behaviour (the Mk42's shells, coax, weapon station). With it every vehicle in the port's
+  scope is built; none since the mortar is released.
 - The track driver is built with the PLZ-05; the weapon station's driver comes with the MBT.
 
 Create Big Cannons: checked. It builds fixed multi-block guns, including a drop mortar, so the carried mortar, the
@@ -54,13 +55,13 @@ projectile renderers. The mortar shell is the one round model kept: it is loaded
 | BL-132 130 mm/58 (fixed gun, air and ground) | refit | scale ~0.82; names; LODs |
 | Type-63 107 mm MLRS (towed) | refit | scale ~0.78; name 100 generic bones |
 | PLZ-05 155 mm SPH | refit | scale ~0.77; names |
-| Main battle tank (from the YX-100) | **remodel** | new generated model of a real MBT; keeps the YX-100's behaviour (main gun, coax, weapon station) and SBW's track driver |
+| YX-100 MBT | **refit** (was remodel) | scale 0.74, SBW's look kept as a science-fiction exception; main gun, coax, weapon station, the shared track driver |
 
 Out: Mle1934 (dropped at triage), all standalone explosives, Prism Tank (a Command & Conquer unit), Annihilator and
 swarm drone (sci-fi), wheelchair and "Beast Senpai" (memes), mounting guns on Create-built ships.
 
 **Animations** are those of the vehicles in scope: SBW's state-driven bones (turret, barrel, tracks, wheels, recoil
-shake, weapon station) and the `fire` clips as one-shots. The new MBT gets its own.
+shake, weapon station) and the `fire` clips as one-shots.
 
 Already in jegn (see [vehicle_sw_alignment_mapping.md](../../docs/vehicle_sw_alignment_mapping.md)): A-10, AH-6,
 BMP-2, HPJ-11, laser tower, LAV-150, Mi-28, speedboat, TOM-6, truck, waveforce tower, C4, Claymore, TM-62,
@@ -89,7 +90,7 @@ jegn's existing systems instead of copying classes wholesale:
   from the sprocket and idler positions in `rig.json`. Keep SBW `fire` clips only as one-shots started by a synced
   shot event; drop the `idle` clips.
 - **Models:** keep SBW geometry where triage says so. Each kept model gets a refit script, so changes to it stay
-  reproducible (the guide's "generator, not hand edits" rule). The MBT is generated from scratch, like the bulldozer.
+  reproducible (the guide's "generator, not hand edits" rule).
 - **Sound:** the guide asks for CC0 field recordings with `CREDITS.md`. SBW sound can now be used, but the far,
   distant, start-up and interior layers still have to meet the guide. Watch the stream pool (static loops only).
 

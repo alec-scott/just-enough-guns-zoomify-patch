@@ -16,8 +16,8 @@ import ttv.migami.jeg.vehicle.client.render.AircraftLights;
 import ttv.migami.jeg.vehicle.entity.base.VehicleEntity;
 
 /**
- * Fleet plan Phase 0.8, the armoured vehicles' lights. A BMP-2, a PLZ-05, a Leopard and a LAV-150, each with a husk at the
- * controls, and an uncrewed Leopard stand side by side at midnight. Fails unless the crewed ones are lit and throw their
+ * Fleet plan Phase 0.8, the armoured vehicles' lights. A BMP-2, a PLZ-05, a YX-100 and a LAV-150, each with a husk at the
+ * controls, and an uncrewed YX-100 stand side by side at midnight. Fails unless the crewed ones are lit and throw their
  * headlamp beams at night, the uncrewed one is dark, the beams are off by day, and a hull that slows or reverses shows
  * bright tail lamps on the client. Screenshots from outside, at night and by day, and from the BMP-2 driver's seat.
  */
@@ -44,8 +44,8 @@ public class ArmourNightLightsClientGameTest implements FabricClientGameTest {
             int[] ids = server.computeOnServer(s -> {
                 var level = s.overworld();
                 Object[][] spawns = {{ModEntities.BMP2.get(), -13.5D, true}, {ModEntities.PLZ05.get(), -5.5D, true},
-                        {ModEntities.LEOPARD2.get(), 2.5D, true}, {ModEntities.LAV150.get(), 10.5D, true},
-                        {ModEntities.LEOPARD2.get(), 18.5D, false}};
+                        {ModEntities.YX100.get(), 2.5D, true}, {ModEntities.LAV150.get(), 10.5D, true},
+                        {ModEntities.YX100.get(), 18.5D, false}};
                 int[] out = new int[spawns.length];
                 for (int i = 0; i < spawns.length; i++) {
                     @SuppressWarnings("unchecked")
@@ -60,6 +60,8 @@ public class ArmourNightLightsClientGameTest implements FabricClientGameTest {
                         driver.setSilent(true);
                         driver.snapTo(vehicle.getX(), vehicle.getY(), vehicle.getZ(), 0, 0);
                         level.addFreshEntity(driver);
+                        // Since yftm.22 only a player or tagged crew may drive or man a gun.
+                        driver.addTag(ttv.migami.jeg.vehicle.ai.EnemyVehicleController.ENEMY_VEHICLE_CREW_TAG);
                         driver.startRiding(vehicle, true, true);
                     }
                     out[i] = vehicle.getId();
@@ -73,7 +75,7 @@ public class ArmourNightLightsClientGameTest implements FabricClientGameTest {
             context.waitTicks(60);
             context.takeScreenshot("armour_lights_day");
             float[][] day = context.computeOnClient(mc -> this.levels(mc, ids));
-            String[] names = {"BMP-2", "PLZ-05", "Leopard", "LAV-150", "uncrewed Leopard"};
+            String[] names = {"BMP-2", "PLZ-05", "YX-100", "LAV-150", "uncrewed YX-100"};
             for (int i = 0; i < ids.length; i++) {
                 LOGGER.info(String.format(Locale.ROOT, "[armour-lights] %s: powered %s/%s, beam night %.2f, day %.2f",
                         names[i], night[i][0] > 0, day[i][0] > 0, night[i][1], day[i][1]));

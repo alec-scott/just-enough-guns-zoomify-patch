@@ -6,5 +6,6 @@ import ttv.migami.jeg.vehicle.entity.ConfiguredVehicleEntity;
 public final class Ah6Renderer extends AbstractVehicleGeoRenderer<ConfiguredVehicleEntity> {
     public Ah6Renderer(EntityRendererProvider.Context context) {
         super(context, new Ah6GeoModel());
+        this.withRenderLayer(new Ah6CockpitLayer<>(this));
     }
 }

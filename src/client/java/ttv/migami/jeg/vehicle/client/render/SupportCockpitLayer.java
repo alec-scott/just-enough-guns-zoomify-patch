@@ -223,8 +223,10 @@ final class SupportCockpitLayer extends GeoRenderLayer<SupportVehicleEntity, Voi
             // The beacon terminal: level pips and lamps, the beam pulsing while lit, the rack's level.
             for (int k = 0; k < 4; k++) {
                 if (beaconLevel > k) wallRect(BEACON_PANEL, pose, buffer, 82 + k * 36, 50, 25, 11, amber);
+                // Lit only: an "off" colour drawn emissive came out as pale beige squares under shaders; off, the
+                // model's dark lens shows.
                 float u = -4.5F + 3.0F * k;
-                BEACON_PANEL.face(pose, buffer, u - 0.95F, 9.45F, 1.9F, 1.5F, 0.3F, beaconLevel > k ? amber : 0xFF2A2C2C);
+                if (beaconLevel > k) BEACON_PANEL.face(pose, buffer, u - 0.95F, 9.45F, 1.9F, 1.5F, 0.3F, amber);
             }
             if (lit) {
                 float pulse = 0.55F + 0.45F * (0.5F + 0.5F * Mth.sin(seconds * 3.0F));

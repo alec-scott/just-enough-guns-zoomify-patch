@@ -1,5 +1,76 @@
 # Changelog
 
+## Unreleased
+
+### Added
+- AH-6: a live glass cockpit on its dash: a colour attitude display (speed, radar height, heading), an engine page (rotor, turbine, torque, temperature, fuel), a navigation display with a turning compass rose, standby airspeed and altimeter, caution and master warning lamps, and a weapons page on the console (rounds, rockets, selected weapon, flares).
+- Vehicle creator: the BD-40, Mk42, BL-132 and Type-63 now show their picture.
+- HPJ-11 and perimeter sentry: an Automatic switch on their screen (and the key shown on the HUD). On automatic they fire at hostile mobs by themselves without using ammunition; the HPJ-11 now also takes hostile mobs on the ground within 64 blocks, never firing through a player, villager or pet.
+- Land vehicles and boats: the last F5 view is a hull camera clamped to the side of the hull, like the helicopters' tail camera and the A-10's wing camera.
+- BD-40: a real reversing beeper.
+- Bush plane: a real propeller idle for taxiing and the landing approach that opens up into full power on take-off, and a light tyre roll.
+- BD-40: lane lock (X, the weapon-switch key, which the dozer has no other use for). The dozer drives square to the block grid, along a compass heading, centred on a block edge, so a cut or a paved road runs dead straight without drifting sideways. With the lock on, a tap of A or D turns it a quarter turn. Press X again for free steering.
+- BD-40: when the ripper bay runs out of blocks, the ripper takes another stack of the block it was laying from your inventory and keeps paving.
+
+### Changed
+- Speedboat: with the bow gun on automatic the driver no longer aims or fires it; they only switch it on and off. The boat no longer swings round to wherever the driver looks while the gun is on automatic or a gunner has it.
+- BMP-2, PLZ-05, YX-100 and LAV-150: the hull leans in a hard turn and dips when braking over tracks and wheels that stay on the ground, instead of the tracks sinking into the dirt.
+- The GS shells (Mk42, BL-132, PLZ-05, YX-100) are now incendiary shells (INC) in place of grapeshot: they burst in the air over where they would land and rain burning fragments that set what they hit on fire and the ground below alight. No fire where land claims or spawn protection forbid it, or with the tnt_explodes game rule off (the fragments still set targets alight). Made from blaze powder, copper and gunpowder; shells already made become incendiary.
+- Mk42 and BL-132: reloads of their own: the Mk42's automatic loader whirs and slams, the BL-132's crew drops heavy cases and rams the rounds home by hand.
+- Bush plane: much less wind noise in the cockpit.
+- Sentry and speedboat gun: no minigun wind-up sound on automatic (they are machine guns).
+- A-10: no gun marker over the nose in first person (the chase camera keeps it).
+- A-10: back to its white paint; the engines' orange glow no longer drops out under shaders; the intakes are fixed: only the fan turns (the intake's lip turned with it), and no square edge stands out of the nacelle; nothing opens out under the wings any more; the speed readout shows how fast it is really flying; the gun is louder from the cockpit.
+- BL-132: a steel-blue navy finish, darker than the Mk42.
+- A-10: its split wingtip ailerons now open as speed brakes and move as ailerons, the elevators and rudders move as it flies, and the canopy opens when it stands parked and empty; a new weathered two-tone grey finish with gun gas on the nose, exhaust staining and the DM tail code.
+- BD-40: a weathered finish (soil on the blade, rust, soot, oil streaks) with a sharp BD-40 badge, and earth builds up on the blade as it cuts and spills off when it lifts.
+- FSV-6: the generator's smoke no longer comes up through the deployed floor; sharper, cleaner wall and cab screens.
+- FSV-6: a detailed, weathered finish (panel seams, worn edges, grime, mud on the wheels).
+- A gun or vehicle towed by the FSV-6 follows smoothly, its tow bar steady, instead of lagging and jumping.
+- 105 mm howitzer: a clear, real report (three shots from US Army footage) instead of the muffled one.
+- Vehicles look real: the Mk42 and BL-132 in naval grey, the speedboat as a grey patrol boat, the Mi-28 in Russian grey-green, and weathering (panel seams, worn edges, grime, mud, salt and rust at sea) on the Mk42, BL-132, speedboat, Mi-28, YX-100, PLZ-05, Type-63, TOW, AH-6 and howitzer, at up to four times the texture detail.
+- Sentry: a detailed new model (telescoping tripod, battery box and antenna, a proper machine gun with its belt of rounds, camera with sunshade).
+- Bush plane: a detailed new model (rounder fuselage, nose inlets and exhaust, struts, fabric rib tapes, registration N618).
+- Tanks each have their own engine: the BMP-2 an armoured carrier's diesel, the PLZ-05 a heavy tank diesel, the YX-100 a gas turbine that whines up as it starts and runs down as it stops.
+- Helicopters in first person: the vehicle card sits in the bottom left corner and the crew list in the top left, so neither covers the instrument panel or the speed box.
+- Turrets and gun mounts have weight: the BMP-2, LAV-150, speedboat gun, HPJ-11 and sentry turn at real rates, and every powered mount speeds up and slows down instead of following the mouse.
+- BMP-2 and LAV-150: slower on the road; standing still they sound like an idling engine, not a moving one; smaller muzzle flashes; troop seats use the chase camera instead of a view from outside the hull.
+- The vehicle HUD is simpler: one status card (hull, energy, speed in a fixed card), weapons only in the weapon list, the crew list only when someone else is aboard, and the gun-direction marker is a ring labelled GUN.
+- Explosions (grenades, explosive rounds, autocannon shells, vehicles blowing up) use the realistic blast and smoke of the missiles.
+- Faster reloads: TOW 3.75 s, PLZ-05 3 s, Type-63 8 s. Mk42 and BL-132 reloads sound like a heavy case hitting the deck and the next shell rammed home.
+- Heavier sounds: the sentry's gun, the howitzer's report, the LAV-150's start, the BD-40's horn, and the heavy mounts' traverse whine.
+- Helicopters no longer tip so far nose-down at full throttle; seated riders bank with the aircraft.
+- Lights under shaders: soft glows that light the vehicle and the ground around them; ground vehicles' headlight beams no longer flicker or show a drawn shaft; tail and reversing lamps keep their size.
+- Speedboat: the gunner stands at the bow gun, and the boat runs up a beach and slides to a stop instead of halting dead.
+- TOW: its gunner holds the launcher's grips.
+- Type-63: far less launch smoke in front of the crew.
+
+- Bush plane: sits tail down on the ground like a real taildragger and lifts its tail on the take-off roll; its ailerons, elevator and rudder now move as it flies; real light-aircraft recordings in the cockpit, from afar and on a flyby.
+- 105 mm howitzer: its own report from real field artillery recordings, up close and rolling in from afar (it borrowed the Mk42's).
+- TOW: a real TOW missile launch (it used the BMP-2's missile sound).
+- HPJ-11: real close-in weapon system recordings, heard up close and from far off (out to about a kilometre), with the barrels spooling up and running down and the burst ringing out when it stops.
+- Perimeter sentry: its own gun sound (a real 7.62 mm machine gun) and a bigger status lamp that glows at night (green watching, amber tracking, red firing or out of ammunition). The FSV-6 now feels the weight of what it tows.
+- Vehicle HUD: redesigned and about 20% smaller. Every panel now shares one clean, modern style: dark panels with soft rounded corners, a smooth sans-serif font (Inter), crisp antialiased icons, thin rounded bars, colour only for state, and rounded keycap hints that fade after boarding. Warnings no longer flash. The damage diagram is now a single "Damaged" line naming the parts, and the vehicle hold screen has flat panels to match.
+- BD-40: top speed 6 m/s (was 3.4).
+- BD-40: click the Ripper bay in the hold (its tab or an empty slot) to select it; shift-clicked blocks then go into the bay instead of the hold. Click again to deselect.
+- Jets on the ground: the throttle only stays open while W is held, so taxiing speed builds only while you hold W. In the air the throttle stays where you leave it.
+- Helicopters in first person: a helmet-style HUD with a heading tape, airspeed and altitude beside the reticle, the weapon under it, and hull and power at the bottom left. It replaces the panel that covered the windscreen.
+
+### Fixed
+- Right-clicking a vehicle with a gun in hand now boards it.
+- YX-100 (and every gun firing grapeshot): the pellets no longer hit the gun's own barrel and destroy the vehicle.
+- 81 mm mortar: it no longer spins on its own after moving the mouse; A/D turn it, the mouse looks around.
+- FSV-6: no camera shake in first person, and the bunk's bed no longer flickers against the wall and floor.
+- BD-40: the travel lever no longer twitches in first person.
+- Perimeter sentry: its status lamp no longer flashes in the operator's view.
+- Perimeter sentry: it was silent while firing on automatic; you now hear every round. Also stopped a log error repeated every frame for each sentry and HPJ-11 in view.
+- A-10: the engine rear and its orange exhaust glow are back as they were in yftm.20, now with a shimmer. The yftm.21 nozzle rework had hidden the glow.
+- Helicopter gun tracers are back to the earlier tracer look.
+- FSV-6: the lantern lights the room more softly (it was blown out under shader packs), and a fitted lantern stays lit while driving.
+- FSV-6: a bunk's fold-down frame no longer sits inside its real bed once deployed.
+- FSV-6: at night the headlights no longer show a white blob between them from the front or a white sliver beside the cab from the side.
+- Helicopters and the A-10: the cockpit's instrument light no longer paints the canopy frame by day (a lime pillar in the AH-6), and under shader packs it no longer washes the cockpit orange or green at night.
+
 ## 1.7.2+mc26.1.2.yftm.22 - 2026-11-16
 
 ### Added

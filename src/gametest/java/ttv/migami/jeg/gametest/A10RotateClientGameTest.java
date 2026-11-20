@@ -60,6 +60,8 @@ public class A10RotateClientGameTest implements FabricClientGameTest {
                     pilot.setSilent(true);
                     pilot.snapTo(jet.getX(), jet.getY(), jet.getZ(), 0.0F, 0.0F);
                     level.addFreshEntity(pilot);
+                    // Since yftm.22 only a player or tagged crew may drive or man a gun.
+                    pilot.addTag(ttv.migami.jeg.vehicle.ai.EnemyVehicleController.ENEMY_VEHICLE_CREW_TAG);
                     pilot.startRiding(jet, true, true);
                     return jet.getUUID().toString();
                 });

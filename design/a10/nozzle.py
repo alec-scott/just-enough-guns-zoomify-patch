@@ -1,4 +1,7 @@
-"""The A-10's exhaust nozzles: the generator for the cubes in bones houzhou / houzhou2 of a10.geo.json.
+"""RETIRED (2026-11-17): the user found these nozzles worse than the model's own and the glow in them gone, so
+a10.geo.json and VehicleExhaustGlowLayer are back to their yftm.20 state. Do not run this again without asking.
+
+The A-10's exhaust nozzles: the generator for the cubes in bones houzhou / houzhou2 of a10.geo.json.
 
 python -I design/a10/nozzle.py            # rewrite the nozzle cubes in the mod's a10.geo.json (idempotent)
 python -I design/a10/nozzle.py --review   # also render rear and side review images into design/a10/

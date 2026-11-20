@@ -97,8 +97,8 @@ the deployed set opens with them). The gun is the `turret` part, so a hit there 
 
 ## Sound
 
-Stand-ins until a CC0 105 mm report is found: the Mk42's report (fire, distant, interior) and loading sounds. **To be
-replaced and checked by ear.**
+Real recordings (`prepare_audio.py`): a field gun's report up close and for the crew, a US Army piece's rounds rolling
+off the ground from afar; the Mk42's loading. **To be checked by ear.**
 
 ## Not built yet
 

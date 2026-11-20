@@ -168,6 +168,8 @@ def main():
         "| `load.ogg` | `type63/ty63_reload` |\n"
         "| `handwheel.ogg` | `type63/rot1` |\n\n"
         "The distant report is the Mk42's (`vehicle/mk42/fire_distant`).\n", encoding="utf-8")
+    # SBW has no icon for the Type-63: the vehicle creator's is drawn from the model.
+    L.silhouette_icon(geo, texture, assets / f"textures/vehicle_icon/{ID}_icon.png")
     L.write_json(HERE / "rig.json", rig)
 
     data_path = L.ROOT / f"src/main/resources/data/jeg/vehicles/{ID}.json"

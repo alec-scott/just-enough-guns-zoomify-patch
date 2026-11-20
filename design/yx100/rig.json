@@ -1,0 +1,314 @@
+{
+  "model": "jeg:entity/vehicle/yx100",
+  "source": "Superb Warfare yx_100, CrawKatt/SuperbWarfareReFabricated@952d73c (used with the SBW team's permission)",
+  "units_per_block": 16,
+  "front": "-Z in the model, +Z in vehicle data",
+  "scale_from_source": 0.74,
+  "elevation_degrees": [
+    -10.0,
+    30.0
+  ],
+  "lowest_elevation_by_bearing": {
+    "step_degrees": 5,
+    "from": "turret straight ahead, either side",
+    "degrees": [
+      -3.5,
+      -3.5,
+      -3.5,
+      -2.0,
+      -2.0,
+      -2.0,
+      -2.0,
+      -2.0,
+      -2.5,
+      -3.5,
+      -4.0,
+      -4.5,
+      -5.0,
+      -5.5,
+      -5.5,
+      -6.0,
+      -7.0,
+      -7.0,
+      -7.0,
+      -6.5,
+      -6.0,
+      -5.5,
+      -5.0,
+      -4.5,
+      -4.0,
+      -4.0,
+      -3.5,
+      -3.0,
+      -2.5,
+      2.0,
+      2.0,
+      2.5,
+      3.0,
+      3.5,
+      3.5,
+      3.5,
+      3.5,
+      3.5,
+      3.5,
+      3.5,
+      3.0,
+      2.5,
+      2.0,
+      2.0,
+      -2.5,
+      -3.0,
+      -3.5,
+      -4.0,
+      -4.0,
+      -4.5,
+      -5.0,
+      -5.5,
+      -6.0,
+      -6.5,
+      -7.0,
+      -7.0,
+      -7.0,
+      -6.0,
+      -5.5,
+      -5.5,
+      -5.0,
+      -4.5,
+      -4.0,
+      -3.5,
+      -2.5,
+      -2.0,
+      -2.0,
+      -2.0,
+      -2.0,
+      -2.0,
+      -3.5,
+      -3.5
+    ]
+  },
+  "turret_origin": [
+    0.0,
+    1.5584,
+    -0.3191
+  ],
+  "trunnion": [
+    0.0068,
+    1.9753,
+    0.1602
+  ],
+  "barrel_offset_from_turret": [
+    0.0068,
+    0.4169,
+    0.4793
+  ],
+  "muzzle_rest": [
+    -0.0,
+    1.8649,
+    5.1471
+  ],
+  "bore_from_trunnion_blocks": 4.987,
+  "recoil_pixels": 6.845,
+  "coax_muzzle_rest": [
+    -0.2289,
+    2.0294,
+    1.8282
+  ],
+  "turret_roof_y": 2.4399,
+  "rws_mount_pivot": [
+    -0.561,
+    2.4054,
+    -0.743
+  ],
+  "rws_trunnion": [
+    -0.5598,
+    2.6717,
+    -0.7024
+  ],
+  "rws_muzzle_rest": [
+    -0.5598,
+    2.6717,
+    0.7529
+  ],
+  "rws_elevation_degrees": [
+    -10.0,
+    60.0
+  ],
+  "tracks": {
+    "links": 41,
+    "rest": [
+      -44.301,
+      18.7415
+    ],
+    "rest_s": 208.7122,
+    "half_width": 1.3089,
+    "wheels": [
+      {
+        "bones": [
+          "idler_left",
+          "idler_right"
+        ],
+        "radius": 3.023
+      },
+      {
+        "bones": [
+          "road_wheel_left_1",
+          "road_wheel_left_2",
+          "road_wheel_left_3",
+          "road_wheel_left_4",
+          "road_wheel_left_5",
+          "road_wheel_left_6",
+          "road_wheel_left_7",
+          "road_wheel_right_1",
+          "road_wheel_right_2",
+          "road_wheel_right_3",
+          "road_wheel_right_4",
+          "road_wheel_right_5",
+          "road_wheel_right_6",
+          "road_wheel_right_7"
+        ],
+        "radius": 5.496
+      },
+      {
+        "bones": [
+          "sprocket_left",
+          "sprocket_right"
+        ],
+        "radius": 3.658
+      }
+    ],
+    "path_points": 124,
+    "path_length_px": 219.04,
+    "link_pitch_px": 5.342,
+    "rest_off_path_px": 0.31,
+    "lowest_link_px": 0.23
+  },
+  "model_bounds": [
+    [
+      -1.8824,
+      0.032,
+      -3.3585
+    ],
+    [
+      1.8823,
+      2.8868,
+      5.1471
+    ]
+  ],
+  "hull_bounds": [
+    [
+      -1.8446,
+      0.5306,
+      -3.2609
+    ],
+    [
+      1.8446,
+      1.605,
+      3.7064
+    ]
+  ],
+  "engine_deck_bounds": [
+    [
+      -1.4959,
+      1.0306,
+      -3.3585
+    ],
+    [
+      1.4959,
+      1.7648,
+      -1.9586
+    ]
+  ],
+  "turret_house_bounds": [
+    [
+      -1.8824,
+      1.4404,
+      -2.9145
+    ],
+    [
+      1.8823,
+      2.8868,
+      1.9318
+    ]
+  ],
+  "hitbox": [
+    {
+      "part": "body",
+      "covers": "hull",
+      "x": -0.0,
+      "y": 1.0678,
+      "z": 0.2227,
+      "half_width": 1.8446,
+      "half_height": 0.5372,
+      "half_depth": 3.4836
+    },
+    {
+      "part": "wheel_left",
+      "covers": "left track and running gear",
+      "x": 1.3089,
+      "y": 0.6268,
+      "z": 0.1476,
+      "half_width": 0.393,
+      "half_height": 0.5948,
+      "half_depth": 3.1605
+    },
+    {
+      "part": "wheel_right",
+      "covers": "right track and running gear",
+      "x": -1.3089,
+      "y": 0.6268,
+      "z": 0.1476,
+      "half_width": 0.393,
+      "half_height": 0.5948,
+      "half_depth": 3.1605
+    },
+    {
+      "part": "main_engine",
+      "covers": "engine deck",
+      "x": 0.0,
+      "y": 1.3977,
+      "z": -2.6585,
+      "half_width": 1.4959,
+      "half_height": 0.3671,
+      "half_depth": 0.7
+    },
+    {
+      "part": "turret",
+      "covers": "turret house",
+      "x": -0.0,
+      "y": 2.1636,
+      "z": -0.4914,
+      "half_width": 1.8824,
+      "half_height": 0.7232,
+      "half_depth": 2.4232,
+      "follows": "turret"
+    },
+    {
+      "part": "turret",
+      "covers": "gun, outside the house",
+      "x": 0.0,
+      "y": 1.9626,
+      "z": 3.5395,
+      "half_width": 0.374,
+      "half_height": 0.3511,
+      "half_depth": 1.6077,
+      "follows": "barrel"
+    }
+  ],
+  "transparent_faces_dropped": 30,
+  "sprocket_right_pivot": {
+    "sbw": [
+      -26.8759,
+      20.02979,
+      55.03276
+    ],
+    "centred": [
+      -26.8759,
+      20.03026,
+      59.34631
+    ]
+  },
+  "coplanar_face_pairs": {
+    "in_source": 34,
+    "after_refit": 0
+  }
+}

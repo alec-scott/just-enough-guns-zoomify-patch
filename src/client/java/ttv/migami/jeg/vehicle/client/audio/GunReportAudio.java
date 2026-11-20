@@ -33,6 +33,7 @@ public final class GunReportAudio {
         if (minecraft.level == null || minecraft.getCameraEntity() == null) {
             return;
         }
+        ttv.migami.jeg.client.render.MissileBlastRenderer.gunFired(payload);
         if (minecraft.player != null && minecraft.player.getVehicle() != null
                 && minecraft.player.getVehicle().getId() == payload.gunId()
                 && ModSounds.ALL.containsKey(Reference.id(payload.sound() + ".fire_interior"))) {

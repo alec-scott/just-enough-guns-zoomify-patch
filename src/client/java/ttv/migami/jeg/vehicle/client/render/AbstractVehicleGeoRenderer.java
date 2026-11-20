@@ -80,6 +80,13 @@ abstract class AbstractVehicleGeoRenderer<T extends VehicleEntity> extends GeoEn
         renderState.pitch = Mth.lerp(partialTick, vehicle.xRotO, vehicle.getXRot());
         renderState.roll = vehicle.roll(partialTick);
         renderState.jetPose = vehicle.isJet() ? new org.joml.Quaternionf(vehicle.poseRotation(partialTick)) : null;
+        // On an FSV-6's hitch: drawn from the truck's smooth position (SupportVehicleEntity.clientTowPose).
+        var towed = ttv.migami.jeg.vehicle.entity.SupportVehicleEntity.clientTowPose(vehicle, partialTick);
+        if (towed != null) {
+            renderState.x = towed.position().x;
+            renderState.z = towed.position().z;
+            renderState.yaw = towed.yaw();
+        }
     }
 
     @Override
@@ -137,16 +144,90 @@ abstract class AbstractVehicleGeoRenderer<T extends VehicleEntity> extends GeoEn
                 && VehicleClientState.zoomDown();
     }
 
+    /** The bush plane's control surfaces per airframe, smoothed per tick: aileron, elevator, rudder (degrees), tick. */
+    private static final java.util.Map<VehicleEntity, float[]> TOM6_SURFACES = new java.util.WeakHashMap<>();
+    private static final java.util.Map<VehicleEntity, float[]> A10_SURFACES = new java.util.WeakHashMap<>();
+    /** Each A-10's canopy: open now and a tick ago (0 shut, 1 open), and the tick it was last moved. */
+    private static final java.util.Map<VehicleEntity, float[]> A10_CANOPY = new java.util.WeakHashMap<>();
+
+    /**
+     * The A-10's ailerons, elevators and rudders from its attitude rates (its pose, which a jet's quaternion drives; bank
+     * right and nose down are positive), eased tick to tick as the bush plane's.
+     */
+    private static float[] a10Surfaces(VehicleEntity vehicle) {
+        float[] s = A10_SURFACES.computeIfAbsent(vehicle, v -> new float[]{0.0F, 0.0F, 0.0F, -1.0F});
+        if (s[3] != vehicle.tickCount) {
+            s[3] = vehicle.tickCount;
+            net.minecraft.world.phys.Vec3 now = vehicle.poseAngles(1.0F), before = vehicle.poseAngles(0.0F);
+            float yawRate = Mth.wrapDegrees((float) (now.x - before.x));
+            float pitchRate = Mth.wrapDegrees((float) (now.y - before.y));
+            float rollRate = Mth.wrapDegrees((float) (now.z - before.z));
+            s[0] += (Mth.clamp(rollRate * 4.0F, -20.0F, 20.0F) - s[0]) * 0.35F;
+            s[1] += (Mth.clamp(pitchRate * 5.0F, -18.0F, 18.0F) - s[1]) * 0.35F;
+            s[2] += (Mth.clamp(yawRate * 5.0F, -18.0F, 18.0F) - s[2]) * 0.35F;
+        }
+        return s;
+    }
+
+    /** The A-10's canopy, 0 shut to 1 open: open while it stands still on its gear with nobody aboard. */
+    static float a10Canopy(VehicleEntity vehicle, float partialTick) {
+        float[] c = A10_CANOPY.computeIfAbsent(vehicle, v -> new float[]{vehicle.getPassengers().isEmpty() ? 1.0F : 0.0F, 0.0F, -1.0F});
+        if (c[2] != vehicle.tickCount) {
+            c[2] = vehicle.tickCount;
+            c[1] = c[0];
+            boolean parked = vehicle.getPassengers().isEmpty() && vehicle.getDeltaMovement().horizontalDistance() < 0.05D
+                    && vehicle.jetGear(1.0F) > 0.95F;
+            c[0] = Mth.approach(c[0], parked ? 1.0F : 0.0F, parked ? 0.025F : 0.035F);
+        }
+        float open = Mth.lerp(partialTick, c[1], c[0]);
+        return open * open * (3.0F - 2.0F * open);
+    }
+
+    /**
+     * Ailerons, elevator and rudder from the attitude rates every client sees (roll right is positive and turns the
+     * nose right, pitch positive is nose down): the stick and pedals as the airframe answers them.
+     */
+    private static float[] tom6Surfaces(VehicleEntity vehicle) {
+        float[] s = TOM6_SURFACES.computeIfAbsent(vehicle, v -> new float[]{0.0F, 0.0F, 0.0F, -1.0F});
+        if (s[3] != vehicle.tickCount) {
+            s[3] = vehicle.tickCount;
+            float rollRate = Mth.wrapDegrees(vehicle.roll(1.0F) - vehicle.roll(0.0F));
+            float pitchRate = vehicle.getXRot() - vehicle.xRotO;
+            float yawRate = Mth.wrapDegrees(vehicle.getYRot() - vehicle.yRotO);
+            s[0] += (Mth.clamp(rollRate * 5.0F, -20.0F, 20.0F) - s[0]) * 0.35F;
+            s[1] += (Mth.clamp(pitchRate * 6.0F, -20.0F, 20.0F) - s[1]) * 0.35F;
+            s[2] += (Mth.clamp(yawRate * 6.0F, -20.0F, 20.0F) - s[2]) * 0.35F;
+        }
+        return s;
+    }
+
     private void vehicleAxis(VehicleRenderState renderState, PoseStack poseStack) {
         float rootY = renderState.rootY;
         if (renderState.jetPose != null) {
             // The model faces -Z: turn it round, then by the jet's own orientation.
             poseStack.rotateAround(new org.joml.Quaternionf(renderState.jetPose).mul(Axis.YP.rotationDegrees(180.0F)), 0.0F, rootY, 0.0F);
+            float stance = renderState.vehicle == null ? 0.0F : BushPlaneStance.of(renderState.vehicle);
+            if (stance > 0.0F) {
+                // A taildragger at rest sits on its tailwheel, nose up, about its main wheels (model z -24 px).
+                poseStack.rotateAround(Axis.XP.rotationDegrees(stance), 0.0F, rootY, BushPlaneStance.MAIN_GEAR_Z);
+            }
             return;
         }
         poseStack.rotateAround(Axis.YP.rotationDegrees(180.0F - renderState.yaw), 0.0F, rootY, 0.0F);
         poseStack.rotateAround(Axis.XP.rotationDegrees(-renderState.pitch), 0.0F, rootY, 0.0F);
         poseStack.rotateAround(Axis.ZP.rotationDegrees(-renderState.roll), 0.0F, rootY, 0.0F);
+        VehicleEntity vehicle = renderState.vehicle;
+        ttv.migami.jeg.vehicle.data.subdata.VehicleType type = vehicle == null ? null : vehicle.vehicleData().defaults().vehicleType();
+        if ((type == ttv.migami.jeg.vehicle.data.subdata.VehicleType.LAND || type == ttv.migami.jeg.vehicle.data.subdata.VehicleType.BOAT)
+                && !SPRUNG.containsKey(vehicle.vehicleDataId().getPath())) {
+            // The hull on its suspension (VehicleFeel): squat, dive, roll and the drop after a landing; a boat's bank into
+            // a turn and its pitch and heave on the chop. A vehicle whose running gear is its own bone rides it on its
+            // hull alone (SPRUNG, updateSuspension).
+            float partialTick = renderState.ageInTicks - vehicle.tickCount;
+            poseStack.translate(0.0F, ttv.migami.jeg.vehicle.client.VehicleFeel.lift(vehicle, partialTick) * 0.6F, 0.0F);
+            poseStack.rotateAround(Axis.XP.rotationDegrees(-ttv.migami.jeg.vehicle.client.VehicleFeel.pitch(vehicle, partialTick)), 0.0F, rootY, 0.0F);
+            poseStack.rotateAround(Axis.ZP.rotationDegrees(-ttv.migami.jeg.vehicle.client.VehicleFeel.roll(vehicle, partialTick)), 0.0F, rootY, 0.0F);
+        }
     }
 
     /**
@@ -185,6 +266,10 @@ abstract class AbstractVehicleGeoRenderer<T extends VehicleEntity> extends GeoEn
         if (tracks != null) {
             updateTracks(vehicle, tracks, partialTick, snapshots);
         }
+        String[] sprung = SPRUNG.get(vehicle.vehicleDataId().getPath());
+        if (sprung != null) {
+            updateSuspension(vehicle, sprung, partialTick, snapshots);
+        }
         ttv.migami.jeg.vehicle.data.subdata.WheelInfo wheels = vehicle.vehicleData().wheels();
         if (wheels != null) {
             updateWheels(vehicle, wheels, partialTick, snapshots);
@@ -194,11 +279,16 @@ abstract class AbstractVehicleGeoRenderer<T extends VehicleEntity> extends GeoEn
             case "bmp2" -> {
                 updateTurret(vehicle, partialTick, snapshots, -74.0F, 7.5F);
                 // The muzzle flashes show only while that gun fires, flickering shot to shot (the generic idle left
-                // them drawn all the time). Weapon slots: 0 the 30 mm, 1 the coaxial machine gun.
+                // them drawn all the time). Weapon slots: 0 the 30 mm AP, 1 the coaxial machine gun, 2 the 30 mm HE, 3 the
+                // ATGM (the HE moved next to the AP, 2026-11-19).
                 int firing = vehicle.activeFireWeaponSlot();
                 boolean flicker = (vehicle.tickCount & 1) == 0;
-                hideIf(snapshots, "cannon_flash", firing != 0 || !flicker);
+                hideIf(snapshots, "cannon_flash", firing != 0 && firing != 2 || !flicker);
                 hideIf(snapshots, "coax_flash", firing != 1 || !flicker);
+                // The squad's rear doors swing open on their outer hinges while someone boards or leaves.
+                float doors = VehicleDoors.open(vehicle, partialTick) * 100.0F * Mth.DEG_TO_RAD;
+                swingAboutHinge(snapshots, "rear_door_left", -doors, -13.30012F, 46.66886F, -16.5F, 50.5F);
+                swingAboutHinge(snapshots, "rear_door_right", doors, 13.30012F, 46.66886F, 16.5F, 50.5F);
             }
             case "lav150" -> {
                 updateTurret(vehicle, partialTick, snapshots, -15.0F, 32.5F);
@@ -207,6 +297,9 @@ abstract class AbstractVehicleGeoRenderer<T extends VehicleEntity> extends GeoEn
                 boolean flicker = (vehicle.tickCount & 1) == 0;
                 hideIf(snapshots, "cannon_flash", firing != 0 || !flicker);
                 hideIf(snapshots, "coax_flash", firing != 1 || !flicker);
+                // The turret's left hatch stands open while the rifleman (seat 5) rides in it, on its outer hinge.
+                float lid = HatchState.open(vehicle, vehicle.passengerForSeat(5) != null, partialTick) * 110.0F * Mth.DEG_TO_RAD;
+                swingAboutHingeZ(snapshots, "turret_hatch_left", lid, -5.1F, 41.82F, -10.2F, 42.3F);
             }
             case "mi28" -> {
                 updateTurret(vehicle, partialTick, snapshots, -70.0F, 30.0F);
@@ -218,7 +311,63 @@ abstract class AbstractVehicleGeoRenderer<T extends VehicleEntity> extends GeoEn
                 hideIf(snapshots, "missile2", kh39 < 2);
                 hideIf(snapshots, "missile1", kh39 < 1);
             }
-            case "speedboat" -> updateTurret(vehicle, partialTick, snapshots, -25.0F, 50.0F);
+            case "tom6" -> {
+                // The bush plane: the propeller turns with the engine; the flaps droop as it slows for take-off and
+                // landing (from the speed every client sees, as the flight model sets them).
+                // The same turn as the A-10's fans, so VehicleFanBlurLayer blurs it into a disc at power.
+                float spin = vehicle.jetFanRotation(partialTick) * Mth.DEG_TO_RAD;
+                snapshots.ifPresent("propeller", snapshot -> snapshot.setRotZ(spin));
+                var aircraft = vehicle.vehicleData().aircraft();
+                double stall = vehicle.vehicleData().defaults().engine().jetStallSpeed();
+                double speed = Math.abs(vehicle.clientForwardSpeed());
+                float flaps = aircraft.hasFlaps() ? (float) Mth.clamp((aircraft.flapSpeedFactor() * stall - speed) / (0.3D * stall), 0.0D, 1.0D) : 0.0F;
+                float droop = flaps * 30.0F * Mth.DEG_TO_RAD;
+                snapshots.ifPresent("flap_left", snapshot -> snapshot.setRotX(droop));
+                snapshots.ifPresent("flap_right", snapshot -> snapshot.setRotX(droop));
+                // The control surfaces move with the airframe's rates (a positive rotation is trailing edge down, as
+                // the flaps): rolling right lifts the right aileron and lowers the left; the elevator goes up as the nose
+                // comes up; the rudder swings into the turn.
+                float[] surfaces = tom6Surfaces(vehicle);
+                float aileron = surfaces[0] * Mth.DEG_TO_RAD, elevator = surfaces[1] * Mth.DEG_TO_RAD, rudder = surfaces[2] * Mth.DEG_TO_RAD;
+                snapshots.ifPresent("aileron_left", snapshot -> snapshot.setRotX(aileron));
+                snapshots.ifPresent("aileron_right", snapshot -> snapshot.setRotX(-aileron));
+                snapshots.ifPresent("elevator", snapshot -> snapshot.setRotX(elevator));
+                // GeckoLib's frame has X mirrored from the model's (the pilot's right, +X in model pixels, is its -X),
+                // so a turn to the right swings the trailing edge to its -X: a negative rotation about Y.
+                snapshots.ifPresent("rudder", snapshot -> snapshot.setRotY(-rudder));
+            }
+            case "sentry" -> {
+                if (vehicle instanceof ttv.migami.jeg.vehicle.entity.SentryEntity sentry) {
+                    updateTurret(sentry, partialTick, snapshots, -30.0F, 60.0F);
+                    // The belt empties from the can end as the hold runs down (a full belt from 128 rounds).
+                    int rounds = sentry.vehicleRifleAmmo();
+                    for (int i = 1; i <= 4; i++) {
+                        hideIf(snapshots, "belt_" + i, rounds <= (i - 1) * 32);
+                    }
+                    // Its operator in first person doesn't see the lamp: it sat in the sight's view, lit (review, 2026-11-18).
+                    var mc = net.minecraft.client.Minecraft.getInstance();
+                    boolean operatorView = mc.player != null && mc.player.getVehicle() == sentry && mc.options.getCameraType().isFirstPerson();
+                    int lamp = operatorView ? 0 : sentry.statusLamp();
+                    hideIf(snapshots, "lamp_green", lamp != 1);
+                    hideIf(snapshots, "lamp_amber", lamp != 2);
+                    hideIf(snapshots, "lamp_red", lamp != 3);
+                }
+            }
+            case "hpj11" -> {
+                if (vehicle instanceof ttv.migami.jeg.vehicle.entity.Hpj11Entity ciws) {
+                    updateHpj11(ciws, partialTick, snapshots);
+                }
+            }
+            case "speedboat" -> {
+                // The bow gun; the hull rides bow-up on the plane; the screw and rudder follow the hull's motion.
+                updateTurret(vehicle, partialTick, snapshots, -25.0F, 50.0F);
+                float rise = vehicle.boatBowRise(partialTick) * Mth.DEG_TO_RAD;
+                snapshots.ifPresent("root", snapshot -> snapshot.setRotX(rise));
+                float screw = vehicle.boatPropellerAngle(partialTick) * Mth.DEG_TO_RAD;
+                snapshots.ifPresent("propeller", snapshot -> snapshot.setRotZ(screw));
+                float rudder = vehicle.boatRudder(partialTick) * Mth.DEG_TO_RAD;
+                snapshots.ifPresent("rudder", snapshot -> snapshot.setRotY(rudder));
+            }
             case "a10" -> updateA10(vehicle, partialTick, snapshots);
             case "mortar" -> {
                 if (vehicle instanceof ttv.migami.jeg.vehicle.entity.MortarEntity mortar) {
@@ -260,10 +409,10 @@ abstract class AbstractVehicleGeoRenderer<T extends VehicleEntity> extends GeoEn
                     if (gun instanceof ttv.migami.jeg.vehicle.entity.Plz05Entity plz05) {
                         updatePlz05(plz05, partialTick, snapshots);
                     }
-                    if (gun instanceof ttv.migami.jeg.vehicle.entity.Leopard2Entity leopard) {
-                        updatePintleGun(leopard, leopard.passengerIn(ttv.migami.jeg.vehicle.entity.Leopard2Entity.COMMANDER_SEAT),
-                                "rws_mount", "rws", ttv.migami.jeg.vehicle.util.Leopard2Rig.RWS_MIN_ELEVATION,
-                                ttv.migami.jeg.vehicle.util.Leopard2Rig.RWS_MAX_ELEVATION, partialTick, snapshots);
+                    if (gun instanceof ttv.migami.jeg.vehicle.entity.Yx100Entity yx100) {
+                        updatePintleGun(yx100, yx100.passengerIn(ttv.migami.jeg.vehicle.entity.Yx100Entity.COMMANDER_SEAT),
+                                "rws_mount", "rws", ttv.migami.jeg.vehicle.util.Yx100Rig.RWS_MIN_ELEVATION,
+                                ttv.migami.jeg.vehicle.util.Yx100Rig.RWS_MAX_ELEVATION, partialTick, snapshots);
                     }
                 }
             }
@@ -271,7 +420,34 @@ abstract class AbstractVehicleGeoRenderer<T extends VehicleEntity> extends GeoEn
     }
 
     /**
-     * A gun on the turret roof aimed by its own gunner's view (the PLZ-05's 12.7 mm, the Leopard's weapon station): the
+     * The HPJ-11: the mount and gun as any turret, the barrel cluster spinning with the rotary gun, the search radar
+     * turning while the mount is manned or on automatic, and the tracking radar pointing at what it tracks.
+     */
+    private static void updateHpj11(ttv.migami.jeg.vehicle.entity.Hpj11Entity ciws, float partialTick, com.geckolib.renderer.base.BoneSnapshots snapshots) {
+        updateTurret(ciws, partialTick, snapshots, -25.0F, 85.0F);
+        float spin = ciws.rotaryGunAngle(partialTick) * Mth.DEG_TO_RAD;
+        snapshots.ifPresent("barrel_cluster", snapshot -> snapshot.setRotZ(spin));
+        boolean watching = ciws.automatic() || ciws.getControllingPassenger() != null;
+        float sweep = watching ? (ciws.tickCount + partialTick) * 9.0F * Mth.DEG_TO_RAD : 0.0F;
+        snapshots.ifPresent("search_radar", snapshot -> snapshot.setRotY(sweep));
+        net.minecraft.world.entity.Entity target = ciws.tracked();
+        float trackYaw = 0.0F, trackPitch = 0.0F;
+        if (target != null) {
+            net.minecraft.world.phys.Vec3 to = target.getBoundingBox().getCenter().subtract(ciws.position().add(0.0D, 3.25D, 0.0D));
+            float worldYaw = (float) (Mth.atan2(-to.x, to.z) * Mth.RAD_TO_DEG);
+            float hullYaw = Mth.rotLerp(partialTick, ciws.yRotO, ciws.getYRot());
+            trackYaw = (-Mth.wrapDegrees(worldYaw - hullYaw) - ciws.turretYaw(partialTick)) * Mth.DEG_TO_RAD;
+            trackPitch = (float) (Mth.atan2(to.y, Math.sqrt(to.x * to.x + to.z * to.z))) ;
+        }
+        float yaw = trackYaw, pitch = trackPitch;
+        snapshots.ifPresent("tracking_radar", snapshot -> {
+            snapshot.setRotY(yaw);
+            snapshot.setRotX(pitch);
+        });
+    }
+
+    /**
+     * A gun on the turret roof aimed by its own gunner's view (the PLZ-05's 12.7 mm, the YX-100's weapon station): the
      * mount turns to the view's bearing, taken off the turret's (it rides the turret), and the gun elevates within its
      * limits; with nobody at it, it rests straight ahead.
      */
@@ -321,6 +497,57 @@ abstract class AbstractVehicleGeoRenderer<T extends VehicleEntity> extends GeoEn
      * rollers turn by the same distance over their radius. The refit computed the path in the model's (file) sense; the
      * snapshot's X rotation is the negative of the file's.
      */
+    /**
+     * The sprung bones of vehicles whose running gear (tracks, road wheels, wheels) are bones of their own: the suspension's
+     * squat, dive and roll (VehicleFeel) move these and leave the running gear on the ground. Rolling the whole model
+     * pushed the outer track into the dirt in a hard turn and the front of the tracks into it braking (the user's review,
+     * 2026-11-19: the BMP-2's and PLZ-05's). Each is listed with its pivot (file pixels): the first is the hull, about
+     * whose pivot they all turn; any other is a top-level bone riding on it.
+     */
+    private static final java.util.Map<String, String[]> SPRUNG = java.util.Map.of(
+            "bmp2", new String[]{"hull", "None_part_1"},
+            "plz05", new String[]{"base"},
+            "yx100", new String[]{"hull"},
+            "lav150", new String[]{"hull"});
+    /** The sprung bones' pivots (file pixels), where a second bone must turn about the hull's. */
+    private static final java.util.Map<String, org.joml.Vector3f> SPRUNG_PIVOTS = java.util.Map.of(
+            "bmp2/hull", new org.joml.Vector3f(0.0F, 11.64998F, 8.2125F),
+            "bmp2/None_part_1", new org.joml.Vector3f(0.0F, 0.0F, 0.0F));
+
+    /**
+     * The hull on its suspension: the same turns the whole model had (VehicleFeel's pitch, roll and lift), on the sprung
+     * bones alone. A further bone with a different pivot is moved by what turning about the hull's pivot instead of its
+     * own adds, so the two stay together.
+     */
+    private static void updateSuspension(VehicleEntity vehicle, String[] bones, float partialTick, com.geckolib.renderer.base.BoneSnapshots snapshots) {
+        float rotX = -ttv.migami.jeg.vehicle.client.VehicleFeel.pitch(vehicle, partialTick) * Mth.DEG_TO_RAD;
+        float rotZ = -ttv.migami.jeg.vehicle.client.VehicleFeel.roll(vehicle, partialTick) * Mth.DEG_TO_RAD;
+        float lift = ttv.migami.jeg.vehicle.client.VehicleFeel.lift(vehicle, partialTick) * 0.6F * 16.0F;
+        String id = vehicle.vehicleDataId().getPath();
+        org.joml.Vector3f hullPivot = SPRUNG_PIVOTS.get(id + "/" + bones[0]);
+        org.joml.Matrix3f turn = new org.joml.Matrix3f().rotationZ(rotZ).rotateX(rotX);
+        for (int i = 0; i < bones.length; i++) {
+            float tx = 0.0F, ty = lift, tz = 0.0F;
+            org.joml.Vector3f own = i == 0 || hullPivot == null ? null : SPRUNG_PIVOTS.get(id + "/" + bones[i]);
+            if (own != null) {
+                // Render space has the file's X negated (pivots and translations alike).
+                org.joml.Vector3f d = new org.joml.Vector3f(-(hullPivot.x - own.x), hullPivot.y - own.y, hullPivot.z - own.z);
+                org.joml.Vector3f turned = turn.transform(new org.joml.Vector3f(d));
+                tx = -(d.x - turned.x);
+                ty += d.y - turned.y;
+                tz = d.z - turned.z;
+            }
+            float x = tx, y = ty, z = tz;
+            snapshots.ifPresent(bones[i], snapshot -> {
+                snapshot.setRotX(snapshot.getRotX() + rotX);
+                snapshot.setRotZ(snapshot.getRotZ() + rotZ);
+                snapshot.setTranslateX(snapshot.getTranslateX() + x);
+                snapshot.setTranslateY(snapshot.getTranslateY() + y);
+                snapshot.setTranslateZ(snapshot.getTranslateZ() + z);
+            });
+        }
+    }
+
     private static void updateTracks(VehicleEntity vehicle, ttv.migami.jeg.vehicle.data.subdata.TrackInfo tracks, float partialTick,
                                      com.geckolib.renderer.base.BoneSnapshots snapshots) {
         int links = tracks.links();
@@ -406,17 +633,13 @@ abstract class AbstractVehicleGeoRenderer<T extends VehicleEntity> extends GeoEn
     }
 
     /**
-     * The spinner and fan disc of each engine, centred on the nacelle's axis. The tapered rear cowling and the exhaust
-     * duct inside it (houwaiyuan, houneiyuan) are fixed: spun, their eight-sided shells blurred into a see-through haze.
+     * The spinner and fan disc of each engine, centred on the nacelle's axis: the fan's blades are painted on the disc.
+     * Everything else is fixed: the intake's eight-panel lip (qianwaiyuan) was spun as if it were the fan, so it turned
+     * out of line with the cowling behind it and its blurred copies stood out of the nacelle (the user's review,
+     * 2026-11-19: "fix the engine animation and model"); spun, the tapered rear cowling and the exhaust duct
+     * (houwaiyuan, houneiyuan) blurred into a see-through haze.
      */
     private static final String[] A10_FAN_BONES = {"qianzhou", "qianzhou2"};
-    /**
-     * The front fan blades, whose pivots sit 0.338 blocks off the nacelle's axis (outboard on the left engine, which is
-     * +X in the model, and on the right one -X): spun as they are they swing round in a circle. Each is moved back by
-     * as much as the spin carries its centre, so it turns in place.
-     */
-    private static final String[] A10_FRONT_FANS = {"qianwaiyuan", "qianwaiyuan2"};
-    private static final float[] A10_FRONT_FAN_PIVOT_OFFSET = {0.338F, -0.338F};
     /** How far each half of a speed brake opens, in radians. */
     private static final float SPEED_BRAKE_ANGLE = 40.0F * Mth.DEG_TO_RAD;
     /** Rocket pods and bombs the A-10's loadout does not carry. */
@@ -433,18 +656,6 @@ abstract class AbstractVehicleGeoRenderer<T extends VehicleEntity> extends GeoEn
         for (String bone : A10_FAN_BONES) {
             snapshots.ifPresent(bone, snapshot -> snapshot.setRotZ(fan));
         }
-        for (int i = 0; i < A10_FRONT_FANS.length; i++) {
-            // Spinning by fan about the pivot carries the fan's centre, offset by v from it, to v rotated; translate it
-            // back. Snapshot translations are in pixels, X negated, in the parent's frame.
-            float offset = A10_FRONT_FAN_PIVOT_OFFSET[i];
-            float dx = offset * (1.0F - Mth.cos(fan));
-            float dy = -offset * Mth.sin(fan);
-            snapshots.ifPresent(A10_FRONT_FANS[i], snapshot -> {
-                snapshot.setRotZ(fan);
-                snapshot.setTranslateX(-dx * 16.0F);
-                snapshot.setTranslateY(dy * 16.0F);
-            });
-        }
         // The wheels roll forward (the model faces -Z, so that is a negative turn about X).
         float wheels = -vehicle.jetWheelRotation(partialTick) * Mth.DEG_TO_RAD;
         for (String bone : new String[]{"wheel1", "wheel2", "wheel3"}) {
@@ -452,6 +663,27 @@ abstract class AbstractVehicleGeoRenderer<T extends VehicleEntity> extends GeoEn
         }
         // The GAU-8's seven barrels turn about the gun's axis.
         snapshots.ifPresent("maingun", snapshot -> snapshot.setRotZ(vehicle.jetGunAngle(partialTick) * Mth.DEG_TO_RAD));
+        // Control surfaces (the A-10 animation upgrade, 2026-11-19), already their own hinged bones on the model
+        // (design/a10/articulate.py names them): the elevators and rudders follow the airframe's rates. A positive turn
+        // about X is trailing edge down, as the bush plane's. -X in model pixels is the pilot's left: wingRR (upper) and
+        // wingRR2 (lower) there, wingLR and wingLR2 on the right wing. Nothing comes out from under the wing (the user,
+        // 2026-11-15, and again 2026-11-19 when the speed brakes opened the lower halves): each aileron only rises, both
+        // halves together, as the wing it is on goes up in a roll; the speed brake (below) lifts the upper halves alone.
+        float[] surfaces = a10Surfaces(vehicle);
+        float aileron = surfaces[0] * Mth.DEG_TO_RAD, elevator = surfaces[1] * Mth.DEG_TO_RAD, rudder = surfaces[2] * Mth.DEG_TO_RAD;
+        float leftUp = Math.min(0.0F, aileron), rightUp = Math.min(0.0F, -aileron);
+        snapshots.ifPresent("wingRR", snapshot -> snapshot.setRotX(leftUp));
+        snapshots.ifPresent("wingRR2", snapshot -> snapshot.setRotX(leftUp));
+        snapshots.ifPresent("wingLR", snapshot -> snapshot.setRotX(rightUp));
+        snapshots.ifPresent("wingLR2", snapshot -> snapshot.setRotX(rightUp));
+        snapshots.ifPresent("wingLB", snapshot -> snapshot.setRotX(elevator));
+        snapshots.ifPresent("wingRB", snapshot -> snapshot.setRotX(elevator));
+        snapshots.ifPresent("weiyiL", snapshot -> snapshot.setRotY(-rudder));
+        snapshots.ifPresent("weiyiR", snapshot -> snapshot.setRotY(-rudder));
+        // The canopy (its frame, bone61, hinged at the foot of its bow) stands open while the jet is parked with
+        // nobody aboard, and closes over a second and a half once a pilot climbs in.
+        float canopy = a10Canopy(vehicle, partialTick) * 42.0F * Mth.DEG_TO_RAD;
+        snapshots.ifPresent("bone61", snapshot -> snapshot.setRotX(canopy));
         // Battle damage: below 30% health the ailerons and an elevator are shot away; a wreck has lost the outer
         // right wing, its pylons and a fin, and the burning hulk lies on its belly with the gear gone.
         float max = vehicle.maxVehicleHealth();
@@ -485,7 +717,7 @@ abstract class AbstractVehicleGeoRenderer<T extends VehicleEntity> extends GeoEn
         float split = vehicle.jetSpeedBrake(partialTick) * SPEED_BRAKE_ANGLE;
         if (split > 0.0F) {
             for (String upper : new String[]{"wingLR", "wingRR"}) {
-                snapshots.ifPresent(upper, snapshot -> snapshot.setRotX(-split));
+                snapshots.ifPresent(upper, snapshot -> snapshot.setRotX(Math.min(snapshot.getRotX(), -split)));
             }
         }
         for (String bone : A10_UNUSED_STORES) {
@@ -511,6 +743,91 @@ abstract class AbstractVehicleGeoRenderer<T extends VehicleEntity> extends GeoEn
             }
         }
         return 0;
+    }
+
+    /**
+     * Turns a door about Y on a hinge other than its bone's pivot (SBW's pivots sit mid-door): the bone turns about its
+     * pivot P and is moved by (I - R)(H - P), so it turns about the hinge H instead. Coordinates are GeckoLib's (model
+     * pixels with X mirrored from the Bedrock file), x and z only.
+     */
+    private static void swingAboutHinge(com.geckolib.renderer.base.BoneSnapshots snapshots, String bone, float angle,
+                                        float pivotX, float pivotZ, float hingeX, float hingeZ) {
+        if (angle == 0.0F) {
+            return;
+        }
+        float dx = hingeX - pivotX, dz = hingeZ - pivotZ;
+        float cos = Mth.cos(angle), sin = Mth.sin(angle);
+        float rx = dx * cos + dz * sin, rz = -dx * sin + dz * cos;
+        snapshots.ifPresent(bone, snapshot -> {
+            snapshot.setRotY(angle);
+            snapshot.setTranslateX(dx - rx);
+            snapshot.setTranslateZ(dz - rz);
+        });
+    }
+
+    /** As {@link #swingAboutHinge}, about Z (a lid hinged along the hull's length), in GeckoLib's frame, x and y only. */
+    private static void swingAboutHingeZ(com.geckolib.renderer.base.BoneSnapshots snapshots, String bone, float angle,
+                                         float pivotX, float pivotY, float hingeX, float hingeY) {
+        if (angle == 0.0F) {
+            return;
+        }
+        float dx = hingeX - pivotX, dy = hingeY - pivotY;
+        float cos = Mth.cos(angle), sin = Mth.sin(angle);
+        float rx = dx * cos - dy * sin, ry = dx * sin + dy * cos;
+        snapshots.ifPresent(bone, snapshot -> {
+            snapshot.setRotZ(angle);
+            snapshot.setTranslateX(dx - rx);
+            snapshot.setTranslateY(dy - ry);
+        });
+    }
+
+    /** A hatch that stands open while its seat is taken, easing open and shut over about half a second. 0 shut, 1 open. */
+    static final class HatchState {
+        private static final java.util.Map<Integer, float[]> STATE = new java.util.HashMap<>();
+
+        static float open(VehicleEntity vehicle, boolean occupied, float partialTick) {
+            float[] s = STATE.computeIfAbsent(vehicle.getId(), id -> new float[]{occupied ? 1.0F : 0.0F, occupied ? 1.0F : 0.0F, vehicle.tickCount});
+            if (s[2] != vehicle.tickCount) {
+                s[0] = s[1];
+                s[1] = Mth.clamp(s[1] + (occupied ? 0.1F : -0.1F), 0.0F, 1.0F);
+                s[2] = vehicle.tickCount;
+            }
+            if (STATE.size() > 256) {
+                STATE.clear();
+            }
+            float x = Mth.lerp(partialTick, s[0], s[1]);
+            return x * x * (3.0F - 2.0F * x);
+        }
+    }
+
+    /**
+     * Doors that open while someone boards or leaves (client side, from the passenger count): open over half a second,
+     * held two seconds, closed over three quarters of one. 0 shut, 1 open.
+     */
+    static final class VehicleDoors {
+        private static final java.util.Map<Integer, int[]> STATE = new java.util.HashMap<>();
+        private static final int OPEN = 10, HOLD = 40, CLOSE = 15;
+
+        static float open(VehicleEntity vehicle, float partialTick) {
+            int[] s = STATE.computeIfAbsent(vehicle.getId(), id -> new int[]{vehicle.getPassengers().size(), Integer.MIN_VALUE / 2});
+            int count = vehicle.getPassengers().size();
+            if (count != s[0]) {
+                // Already open: keep them open rather than swinging them shut and open again.
+                float now = shape(vehicle.tickCount - s[1]);
+                s[0] = count;
+                s[1] = vehicle.tickCount - (now > 0.0F ? Math.round(now * OPEN) : 0);
+            }
+            if (STATE.size() > 256) {
+                STATE.clear();
+            }
+            return shape(vehicle.tickCount - s[1] + partialTick);
+        }
+
+        private static float shape(float t) {
+            if (t < 0.0F || t > OPEN + HOLD + CLOSE) return 0.0F;
+            float x = t < OPEN ? t / OPEN : t < OPEN + HOLD ? 1.0F : 1.0F - (t - OPEN - HOLD) / CLOSE;
+            return x * x * (3.0F - 2.0F * x);
+        }
     }
 
     private static void hideIf(com.geckolib.renderer.base.BoneSnapshots snapshots, String bone, boolean hide) {

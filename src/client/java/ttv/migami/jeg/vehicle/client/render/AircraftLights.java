@@ -129,7 +129,9 @@ public final class AircraftLights {
             new PointLight(Kind.POSITION, -9.3F, 25.5F, 29F, RED, .1F, .7F, .1F, 0),
             new PointLight(Kind.POSITION, 9.3F, 25.5F, 29F, RED, .1F, .7F, .1F, 0),
             new PointLight(Kind.BEACON, 7.8F, 49.3F, 14.8F, 0xFFAC35, .45F, 1.3F, .3F, 0)
-    ), new Searchlight(0, 26.4F, -35.6F, 16, 26, 30, SEARCH_WHITE, false), List.of(), null, true);
+    // A pair of headlamps: no lens glare of its own between them (a white ball floating mid-grille, the user's report,
+    // 2026-11-19), as every other road vehicle's.
+    ), new Searchlight(0, 26.4F, -35.6F, 16, 26, 30, SEARCH_WHITE, false, false), List.of(), null, true);
 
     /**
      * The FSV-6: headlamps (the beam), tail lamps, cab marker lamps and the two amber beacons on the cab roof. Render
@@ -142,13 +144,15 @@ public final class AircraftLights {
             new PointLight(Kind.BRAKE, -15.3F, 7.5F, 63.3F, RED, .24F, 1.4F, .3F, 0),
             new PointLight(Kind.BRAKE, 15.3F, 7.5F, 63.3F, RED, .24F, 1.4F, .3F, 0),
             new PointLight(Kind.BRAKE, 0F, 47.1F, 60.7F, RED, .18F, 1.0F, .2F, 0),
-            new PointLight(Kind.REVERSE, -10.9F, 7.5F, 63.3F, WHITE, .2F, 1.6F, .3F, 0),
-            new PointLight(Kind.REVERSE, 10.9F, 7.5F, 63.3F, WHITE, .2F, 1.6F, .3F, 0),
+            new PointLight(Kind.REVERSE, -10.9F, 7.5F, 63.3F, WHITE, .24F, 1.6F, .3F, 0),
+            new PointLight(Kind.REVERSE, 10.9F, 7.5F, 63.3F, WHITE, .24F, 1.6F, .3F, 0),
             new PointLight(Kind.POSITION, -16.5F, 49.6F, -61.5F, 0xFFAC35, .06F, .4F, .05F, 0),
             new PointLight(Kind.POSITION, 16.5F, 49.6F, -61.5F, 0xFFAC35, .06F, .4F, .05F, 0),
             new PointLight(Kind.BEACON, -12F, 52F, -40F, 0xFFAC35, .4F, 1.3F, .3F, 0),
             new PointLight(Kind.BEACON, 12F, 52F, -40F, 0xFFAC35, .4F, 1.3F, .3F, .5F)
-    ), new Searchlight(0, 22F, -65F, 8, 22, 34, SEARCH_WHITE, false), List.of(), null, false);
+    // A pair of headlamps: no lens glare of its own in the middle of the grille (a white blob from the front and a sliver
+    // from the side at night, 2026-11-17), as the armoured vehicles' headlamps.
+    ), new Searchlight(0, 22F, -65F, 8, 22, 34, SEARCH_WHITE, false, false), List.of(), null, false);
 
     private static final int WARM = 0xFFC27A;
 
@@ -158,11 +162,15 @@ public final class AircraftLights {
      * the matching block light. Render space negates the model's X: the lamp hook is at model x 0, z 16, the middle of
      * the room ({@code SupportVehicleRenderer.LAMP_HOOK}); the glow sits on the lantern's body, drawn at 0.65 scale.
      */
+    /*
+     * Softened on 2026-11-17 (the user wanted the lantern more ambient, with a softer exposure): the glow on the lantern
+     * from .3 to .18 and the wash from .38/.16/.12 to .2/.08/.06, spread a little wider so it fills rather than pools.
+     */
     private static final List<PointLight> TRUCK_ROOM_LAMP = List.of(
-            new PointLight(Kind.POSITION, 0F, 41F, 16F, WARM, .3F, 0F, 0F, 0),
-            new PointLight(Kind.COCKPIT, 0F, 40F, 16F, WARM, 0F, 3.2F, .38F, 0),
-            new PointLight(Kind.COCKPIT, -16F, 34F, 16F, WARM, 0F, 1.6F, .16F, 0),
-            new PointLight(Kind.COCKPIT, 16F, 34F, 16F, WARM, 0F, 1.6F, .12F, 0));
+            new PointLight(Kind.POSITION, 0F, 41F, 16F, WARM, .18F, 0F, 0F, 0),
+            new PointLight(Kind.COCKPIT, 0F, 40F, 16F, WARM, 0F, 3.6F, .2F, 0),
+            new PointLight(Kind.COCKPIT, -16F, 34F, 16F, WARM, 0F, 1.8F, .08F, 0),
+            new PointLight(Kind.COCKPIT, 16F, 34F, 16F, WARM, 0F, 1.8F, .06F, 0));
     /** Outside: the awning's light strip, on whenever the generator is. */
     private static final List<PointLight> TRUCK_AWNING = List.of(
             new PointLight(Kind.POSITION, -43F, 44.8F, 16F, WARM, .28F, 1.8F, .2F, 0));
@@ -174,6 +182,15 @@ public final class AircraftLights {
     /** The FSV-6 on its generator: deploying or packing (awning), deployed (and the mast), each with or without a lamp. */
     private static final LightSet TRUCK_DEPLOYING = truckSet(false, false), TRUCK_DEPLOYING_LAMP = truckSet(true, false),
             TRUCK_MAST_UP = truckSet(false, true), TRUCK_MAST_UP_LAMP = truckSet(true, true);
+
+    /**
+     * Driving (or parked off its generator) with a lamp fitted: the road lights and the lamp, so the room is still lit by
+     * its lantern on the move. The room's block light only exists while deployed, so on the move the lamp's drawn light
+     * is all there is.
+     */
+    private static final LightSet TRUCK_LAMP = new LightSet(
+            java.util.stream.Stream.concat(TRUCK.lights().stream(), TRUCK_ROOM_LAMP.stream()).toList(),
+            TRUCK.searchlight(), List.of(), null, false);
 
     private static LightSet truckSet(boolean lamp, boolean mast) {
         List<PointLight> lights = new java.util.ArrayList<>(TRUCK_AWNING);
@@ -199,12 +216,35 @@ public final class AircraftLights {
             new PointLight(Kind.BRAKE, -23.4F, 22.1F, 44.1F, RED, .14F, 1.0F, .2F, 0),
             new PointLight(Kind.BRAKE, 23.4F, 22.1F, 44.1F, RED, .14F, 1.0F, .2F, 0)
     ), new Searchlight(0, 20.2F, -65.1F, 8, 24, 32, SEARCH_WHITE, false, false), List.of(), null, false);
-    private static final LightSet LEOPARD2 = new LightSet(List.of(
-            new PointLight(Kind.POSITION, -24F, 22.3F, -58.7F, SEARCH_WHITE, .16F, 1.1F, .14F, 0),
-            new PointLight(Kind.POSITION, 24F, 22.3F, -58.7F, SEARCH_WHITE, .16F, 1.1F, .14F, 0),
-            new PointLight(Kind.BRAKE, -26F, 22.7F, 62.9F, RED, .14F, 1.0F, .2F, 0),
-            new PointLight(Kind.BRAKE, 26F, 22.7F, 62.9F, RED, .14F, 1.0F, .2F, 0)
-    ), new Searchlight(0, 22.3F, -58.8F, 8, 24, 32, SEARCH_WHITE, false, false), List.of(), null, false);
+    /** The YX-100: SBW's amber marker lamps at the front corners of the hull and the lamps at the rear plate's corners. */
+    private static final LightSet YX100 = new LightSet(List.of(
+            new PointLight(Kind.POSITION, -25.9F, 16.2F, -58.8F, SEARCH_WHITE, .16F, 1.1F, .14F, 0),
+            new PointLight(Kind.POSITION, 25.9F, 16.2F, -58.8F, SEARCH_WHITE, .16F, 1.1F, .14F, 0),
+            new PointLight(Kind.BRAKE, -26.4F, 18.0F, 52.0F, RED, .14F, 1.0F, .2F, 0),
+            new PointLight(Kind.BRAKE, 26.4F, 18.0F, 52.0F, RED, .14F, 1.0F, .2F, 0)
+    ), new Searchlight(0, 16.2F, -59.0F, 8, 24, 32, SEARCH_WHITE, false, false), List.of(), null, false);
+    /**
+     * The speedboat's navigation lights (design/speedboat): red to port and green to starboard at the cabin's front
+     * corners, white on the masthead and at the stern, and the searchlight on the cabin roof.
+     */
+    private static final LightSet SPEEDBOAT = new LightSet(List.of(
+            new PointLight(Kind.POSITION, 21.6F, 30.0F, -19.0F, RED, .14F, .9F, .14F, 0),
+            new PointLight(Kind.POSITION, -21.6F, 30.0F, -19.0F, GREEN, .14F, .9F, .14F, 0),
+            new PointLight(Kind.POSITION, 0.0F, 53.2F, 26.0F, WHITE, .14F, 1.0F, .12F, 0),
+            new PointLight(Kind.POSITION, 0.0F, 15.2F, 55.0F, WHITE, .12F, .8F, .12F, 0)
+    ), new Searchlight(0, 37.5F, -19.5F, 6, 18, 40, SEARCH_WHITE, false, false), List.of(), null, false);
+    /**
+     * The bush plane (design/bushplane): red and green navigation lights on the wingtips, the white tail light, the red
+     * beacon on the fin, and the landing light in the left wing's leading edge.
+     */
+    private static final LightSet TOM6 = new LightSet(List.of(
+            new PointLight(Kind.POSITION, -84.0F, 31.2F, -23.5F, RED, 0.4F, 1.4F, 0.45F, 0.0F),
+            new PointLight(Kind.POSITION, 84.0F, 31.2F, -23.5F, GREEN, 0.4F, 1.4F, 0.45F, 0.0F),
+            new PointLight(Kind.POSITION, 0.0F, 24.7F, 64.0F, WHITE, 0.32F, 1.0F, 0.35F, 0.0F),
+            new PointLight(Kind.BEACON, 0.0F, 37.8F, 59.2F, RED, 0.7F, 1.8F, 0.6F, 0.0F)
+    // The landing light in the wing: no lens glare or drawn shaft of its own (a white ball ahead and a stick off the wing
+    // at night, the user's review, 2026-11-19); its light on the ground and the wing shows it.
+    ), new Searchlight(-36.0F, 32.6F, -27.5F, 6.0F, 12.0F, 48.0F, SEARCH_WHITE, true, false));
     /** The LAV-150: the caged lamp boxes on the glacis and the small tail lamps at the rear corners (design/lav150). */
     private static final LightSet LAV150 = new LightSet(List.of(
             new PointLight(Kind.POSITION, -10.5F, 30.7F, -40.4F, SEARCH_WHITE, .16F, 1.1F, .14F, 0),
@@ -270,6 +310,8 @@ public final class AircraftLights {
     private static float nightRamp;
     private static float nightRampO;
     private static final Map<Integer, Spot> SPOTS = new HashMap<>();
+    /** Each vehicle's searchlight spot as last smoothed. */
+    private static final Map<Integer, Spot> SMOOTHED = new HashMap<>();
 
     /** Where a searchlight's beam lands this tick: a light {@code luminance} strong (0..15) at {@code pos}. */
     public record Spot(Vec3 pos, float radius, float luminance) {
@@ -282,13 +324,16 @@ public final class AircraftLights {
         return switch (vehicle.vehicleDataId().getPath()) {
             case "bulldozer" -> BULLDOZER;
             case "truck" -> {
-                if (!(vehicle instanceof ttv.migami.jeg.vehicle.entity.SupportVehicleEntity support) || !support.generatorRunning()) yield TRUCK;
+                if (!(vehicle instanceof ttv.migami.jeg.vehicle.entity.SupportVehicleEntity support)) yield TRUCK;
                 boolean lamp = !support.fittedForDisplay(ttv.migami.jeg.vehicle.support.SupportModules.LAMP).isEmpty();
+                if (!support.generatorRunning()) yield lamp ? TRUCK_LAMP : TRUCK;
                 yield support.isDeployed() ? (lamp ? TRUCK_MAST_UP_LAMP : TRUCK_MAST_UP) : (lamp ? TRUCK_DEPLOYING_LAMP : TRUCK_DEPLOYING);
             }
             case "bmp2" -> BMP2;
             case "plz05" -> PLZ05;
-            case "leopard2" -> LEOPARD2;
+            case "yx100" -> YX100;
+            case "speedboat" -> SPEEDBOAT;
+            case "tom6" -> TOM6;
             case "lav150" -> LAV150;
             case "a10" -> A10;
             case "ah6" -> AH6;
@@ -403,7 +448,11 @@ public final class AircraftLights {
             nightOn = false;
             nightRamp = nightRampO = 0.0F;
             SPOTS.clear();
+            SMOOTHED.clear();
             return;
+        }
+        if (level.getGameTime() % 200 == 0) {
+            SMOOTHED.keySet().removeIf(id -> level.getEntity(id) == null);
         }
         float sky = skyLight(level);
         if (nightOn ? sky > NIGHT_OFF_SKY_LIGHT : sky < NIGHT_ON_SKY_LIGHT) {
@@ -418,6 +467,17 @@ public final class AircraftLights {
      * whose beam is on screen from being culled when the helicopter itself is not. */
     private static void updateSpots(ClientLevel level) {
         SPOTS.clear();
+        // A burning flare is a real light, by day as by night: it lights the airframe it left, the ground under it and
+        // the smoke round it, flickering as it burns (the user's review, 2026-11-19).
+        for (Entity entity : level.entitiesForRendering()) {
+            if (entity instanceof ttv.migami.jeg.vehicle.projectile.VehicleDecoyEntity flare && !flare.isSmokeDecoy()) {
+                float burn = flare.flareBurn(1.0F);
+                if (burn > 0.05F) {
+                    float flicker = 0.85F + 0.15F * Mth.sin(flare.tickCount * 2.3F + flare.getId());
+                    SPOTS.put(-1 - flare.getId(), new Spot(flare.position().add(0.0D, 0.2D, 0.0D), 1.0F, 15.0F * burn * flicker));
+                }
+            }
+        }
         if (nightRamp <= 0.0F) {
             return;
         }
@@ -426,7 +486,11 @@ public final class AircraftLights {
                 continue;
             }
             LightSet set = forVehicle(vehicle);
-            if (set == null || set.searchlight() == null) {
+            if (set == null) {
+                continue;
+            }
+            addLampSpots(level, vehicle, set);
+            if (set.searchlight() == null) {
                 continue;
             }
             Searchlight light = set.searchlight();
@@ -450,7 +514,47 @@ public final class AircraftLights {
             }
             Vec3 normal = new Vec3(hit.getDirection().getStepX(), hit.getDirection().getStepY(), hit.getDirection().getStepZ());
             float radius = Mth.clamp(0.4F + (float) distance * Mth.sin(light.halfAngle() * Mth.DEG_TO_RAD), 1.0F, 8.0F);
-            SPOTS.put(vehicle.getId(), new Spot(hit.getLocation().add(normal.scale(0.6D)), radius, luminance));
+            Vec3 pos = hit.getLocation().add(normal.scale(0.6D));
+            // Smoothed over a few ticks: a beam from a rocking hull swept its spot and its strength back and forth, and
+            // the ground light flickered as a vehicle drove (the BD-40 and FSV-6, the user's review, 2026-11-18).
+            Spot last = SMOOTHED.get(vehicle.getId());
+            if (last != null && last.pos().distanceToSqr(pos) < 36.0D) {
+                pos = last.pos().lerp(pos, 0.3D);
+                luminance = Mth.lerp(0.3F, last.luminance(), luminance);
+                radius = Mth.lerp(0.3F, last.radius(), radius);
+            }
+            Spot spot = new Spot(pos, radius, luminance);
+            SMOOTHED.put(vehicle.getId(), spot);
+            SPOTS.put(searchlightKey(vehicle), spot);
+        }
+    }
+
+    /** The spot key of a vehicle's searchlight; its lamps follow it (up to {@link #MAX_LAMP_SPOTS}). */
+    private static int searchlightKey(VehicleEntity vehicle) {
+        return vehicle.getId() * (MAX_LAMP_SPOTS + 1);
+    }
+
+    private static final int MAX_LAMP_SPOTS = 15;
+    /** How strongly a lamp lights what is round it (0..15): a navigation lamp lights a few blocks of airframe. */
+    private static final float LAMP_LUMINANCE = 7.0F;
+
+    /** Each lit lamp as a small light source at the lamp, so it lights the airframe and ground round it. */
+    private static void addLampSpots(ClientLevel level, VehicleEntity vehicle, LightSet set) {
+        if (!isPowered(vehicle) || set.lights().isEmpty()) {
+            return;
+        }
+        Matrix4f toWorld = modelToWorld(vehicle, 1.0F);
+        float seconds = (vehicle.tickCount) / 20.0F;
+        float seed = (vehicle.getId() * 0.37F) % 1.0F;
+        int index = 0;
+        for (PointLight light : set.lights()) {
+            if (index >= MAX_LAMP_SPOTS) break;
+            if (light.kind() == Kind.COCKPIT || light.kind() == Kind.STROBE) continue;
+            float on = flash(vehicle, light, seconds, seed);
+            if (on <= 0.3F) continue;
+            Vector3f at = toWorld.transformPosition(new Vector3f(light.x() / 16.0F, light.y() / 16.0F, light.z() / 16.0F));
+            float luminance = LAMP_LUMINANCE * Math.min(1.0F, on);
+            SPOTS.put(searchlightKey(vehicle) + 1 + index++, new Spot(vehicle.position().add(at.x, at.y, at.z), 1.0F, luminance));
         }
     }
 
@@ -461,7 +565,7 @@ public final class AircraftLights {
 
     /** The bounds of this vehicle's searchlight spot, or null when its searchlight is off or reaches nothing. */
     public static AABB spotBounds(VehicleEntity vehicle) {
-        Spot spot = SPOTS.get(vehicle.getId());
+        Spot spot = SPOTS.get(searchlightKey(vehicle));
         return spot == null ? null : AABB.ofSize(spot.pos(), spot.radius() * 2.0F, spot.radius() * 2.0F, spot.radius() * 2.0F);
     }
 

@@ -82,6 +82,8 @@ public final class VehicleMissileEntity extends Entity {
     private static final EntityDataAccessor<String> DATA_WEAPON = SynchedEntityData.defineId(VehicleMissileEntity.class, EntityDataSerializers.STRING);
 
     private int ownerId = -1;
+    /** Whether the enemy fired it (decided at launch: the launcher may be gone by the time an air defence sees it). */
+    private boolean enemyLaunched;
     private int targetId = -1;
     private int directHitVehicleId = -1;
     /** A spot to fly to, when launched at a point on the ground (a jet's targeting pod) with nothing there to lock. */
@@ -104,6 +106,7 @@ public final class VehicleMissileEntity extends Entity {
     public VehicleMissileEntity(Level level, Entity owner, @Nullable Entity target, Vec3 position, Vec3 velocity, Identifier weaponId) {
         this(ModEntities.VEHICLE_MISSILE.get(), level);
         this.ownerId = owner.getId();
+        this.enemyLaunched = ttv.migami.jeg.vehicle.util.AirDefenceTargets.isEnemyLaunched(owner);
         this.targetId = target == null ? -1 : target.getId();
         this.weaponId = weaponId;
         this.entityData.set(DATA_WEAPON, weaponId.toString());
@@ -212,6 +215,24 @@ public final class VehicleMissileEntity extends Entity {
     @Override
     protected void defineSynchedData(SynchedEntityData.Builder builder) {
         builder.define(DATA_WEAPON, "jeg:vehicle_bmp2_missile");
+    }
+
+    /** Who fired it, while that entity is still loaded (the air defence spares players' missiles). */
+    @Nullable
+    public Entity owner() {
+        return this.ownerId < 0 ? null : this.level().getEntity(this.ownerId);
+    }
+
+    /** Whether the enemy fired it, as judged at launch. */
+    public boolean enemyLaunched() {
+        return this.enemyLaunched;
+    }
+
+    /** Hit in flight (an air defence round's proximity burst): the warhead goes off where it is. */
+    public void shootDown() {
+        if (!this.level().isClientSide() && this.isAlive()) {
+            this.explode();
+        }
     }
 
     public Identifier missileWeaponId() {

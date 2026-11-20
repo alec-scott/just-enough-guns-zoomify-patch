@@ -153,18 +153,6 @@ def starter(idle, seconds=1.1, catch=1.0):
     return fade(out, .01, .25)
 
 
-def air_release(seconds=1.0):
-    """The parking brake's air release: a valve click and a bright hiss that decays. Synthesized."""
-    rng = np.random.default_rng(6063)
-    n = round(seconds * RATE)
-    t = np.arange(n) / RATE
-    hiss = band(rng.standard_normal(n), 1800, 11000) * np.exp(-t / .3) * np.minimum(1, t / .006)
-    click = np.zeros(n)
-    k = round(.004 * RATE)
-    click[:k] = band(rng.standard_normal(k), 400, 4000)
-    return fade(hiss + 1.5 * click, .001, .15)
-
-
 def muffled_cab(loop_slice):
     """The diesel heard through a closed cab: the high end gone, a little low resonance from the cab's panels."""
     low = lowpass(loop_slice, 700)
@@ -219,7 +207,6 @@ def main():
         "slide_motor": normalize(loop(motor_slice, .15), .08),
         "horn": normalize(loop(np.tile(horn_slice, 3), .05), .16, .8),
         "horn_distant": normalize(loop(np.tile(band(horn_slice, 120, 1200), 3), .05), .12, .7),
-        "air_brake": normalize(air_release(), .1, .85),
         "ramp_clank": normalize(fade(segment(band(door, 60, 9000), max(0, door_at - .03), 1.1), .004, .3), .12, .9),
     }
     loops = {"engine_idle", "engine_load", "engine_distant", "engine_cab", "generator", "generator_distant", "slide_motor",
@@ -229,7 +216,7 @@ def main():
         write(name, data, loops, report)
     report["source_segments_seconds"] = {"idle": idle_at, "load": load_at, "generator": gen_at, "motor": motor_at,
                                          "horn": horn_at, "door": door_at, "diesel_repitch": deep,
-                                         "synthesized": ["air_brake"],
+                                         "shared": ["air_brake: vehicle/movement/brake (design/ground-vehicles/prepare_movement.py)"],
                                          "derived": ["engine_cab (the idle, muffled)", "engine_distant (load, rumble + echo)"]}
     (HERE / "audio-validation.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     print(f"Validated {len(assets)} mono Ogg assets: finite samples, peaks and loop seams.")

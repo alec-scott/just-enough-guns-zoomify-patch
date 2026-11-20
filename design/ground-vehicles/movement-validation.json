@@ -1,0 +1,42 @@
+{
+  "traverse": {
+    "s": 12.0,
+    "loop": true,
+    "seam_jump": 0.0082
+  },
+  "elevation": {
+    "s": 4.5,
+    "loop": true,
+    "seam_jump": 0.002
+  },
+  "servo": {
+    "s": 3.2,
+    "loop": true,
+    "seam_jump": 0.0056
+  },
+  "handwheel": {
+    "s": 19.5,
+    "loop": true,
+    "seam_jump": 0.0085
+  },
+  "brake": {
+    "s": 1.6,
+    "loop": false,
+    "seam_jump": null
+  },
+  "brake_heavy": {
+    "s": 2.13,
+    "loop": false,
+    "seam_jump": null
+  },
+  "bump": {
+    "s": 0.75,
+    "loop": false,
+    "seam_jump": null
+  },
+  "splash": {
+    "s": 1.73,
+    "loop": false,
+    "seam_jump": null
+  }
+}

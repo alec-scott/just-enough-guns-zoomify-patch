@@ -1,0 +1,32 @@
+{
+  "fire": {
+    "s": 1.0,
+    "peak": 0.57,
+    "loop_seam_db": 0.58
+  },
+  "fire_stop": {
+    "s": 4.4,
+    "peak": 0.861,
+    "loop_seam_db": null
+  },
+  "fire_distant": {
+    "s": 2.6,
+    "peak": 0.544,
+    "loop_seam_db": 0.59
+  },
+  "fire_stop_distant": {
+    "s": 5.6,
+    "peak": 0.833,
+    "loop_seam_db": null
+  },
+  "spin_up": {
+    "s": 0.9,
+    "peak": 0.767,
+    "loop_seam_db": null
+  },
+  "spin_down": {
+    "s": 1.35,
+    "peak": 0.504,
+    "loop_seam_db": null
+  }
+}

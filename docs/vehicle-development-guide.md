@@ -18,7 +18,9 @@ pattern, a test technique), add it here in the same change. The sections below c
 A vehicle is done when all of these are true and shown by a game test run with `-PwithPack`:
 
 1. **It looks like the real machine.** It has real-world proportions and parts, and every visible part is either
-   functional or documented as cosmetic. If a player will ask "what does this do?", the answer must exist.
+   functional or documented as cosmetic. If a player will ask "what does this do?", the answer must exist. One
+   exception, by the user's choice: SBW's YX-100 keeps its science-fiction look (`design/yx100/BRIEF.md`); its size is
+   still a real tank's.
 2. **Its hitbox fits it.** The collision and hit boxes follow the model's silhouette: nothing visible is
    unhittable, and nothing empty is hittable or collides.
 3. **It drives like the other vehicles.** It uses the same keys, sensitivity and physics family as its peers (land
@@ -81,6 +83,43 @@ player, with real keys and clicks, before reporting a vehicle done. Write the an
 
 **Ask the user to listen.** Builders can't hear the game. Say in the report which sounds are new and ask for a
 listening check. Don't call a sound finished because its gain values look right.
+
+### The fleet review: rules every vehicle must meet
+
+The user played all nineteen vehicles together (2026-11-18) and the same faults came up on vehicle after vehicle. Each
+is a rule now: check every new vehicle against it before hand-over, as a player, in the pack with shaders. The
+tracker is `design/READINESS.md` ("The user's fleet review"); "how" names the shared fix to reuse.
+
+| Area | Rule | Found on | How |
+| --- | --- | --- | --- |
+| Sound | **Standing still sounds standing still.** At rest only a real idle plays: no track, tyre or labouring engine layer, and the cab hears a muffled idle, not a muffled drive | BMP-2, LAV-150 (the idle was the driving take slowed down) | `engine_idle` and `engine_cab_idle` cut from the real start take's idle (`design/ground-vehicles/prepare_idles.py`); `GroundVehicleAudio` crossfades the cab from idle to load |
+| Feel | **Turrets and mounts have weight.** Every powered turret or mount has a real `traverse_rate`/`elevation_rate` (degrees a tick) and spins up and brakes; nothing follows the mouse 1:1. The view leads; the gun follows and its bore marker shows where it points | BMP-2, LAV-150, HPJ-11, sentry, speedboat gun | `"turret"` rates in the data; `VehicleEntity.slewSpeed` (full rate in `TURRET_SPIN_UP_TICKS`, braking to stop on the aim). Typical: tank and IFV 1.5-2 (30-40 deg/s), hand-swung pintle 3, CIWS 4 |
+| Feel | **The view and the mount never drive each other.** A mount that takes its heading from the rider's view must not also turn the rider with it | mortar (spun on its own after any mouse move) | `VehicleEntity.yawFollowsRider`; `clampSeatView` skips the turn-with-vehicle for it. A handwheel-laid mount (mortar) overrides it to false: keys traverse, the mouse looks |
+| Feel | **A turning circle a player can use**: radius from a crawl at most about 9 blocks for wheeled vehicles and IFVs, 14 for heavy armour, measured as `ArmourTurningClientGameTest` does. `steering_speed` is scaled by mass; check it after changing `"mass"` | BMP-2, LAV-150 (were 29 and 19), PLZ-05, YX-100 (50) | `engine.steering_speed` |
+| Camera | **A camera on a moving part moves smoothly**: a server-laid turret is drawn on clients between its synced angles at the last two ticks (packets arrive mid-tick), and the crew camera's rumble never steps more than 0.45 rad a tick | LAV-150, BMP-2 first person | `VehicleEntity.drawsTurretFromSnapshots`, `VehicleFeel.MAX_RUMBLE_STEP`; `cameraJump` in `ArmourTurningClientGameTest` |
+| Feel | **Speed for the game, not the spec sheet.** Real top speeds felt too fast for the armour; set road speed and acceleration by feel and write the number in the brief | BMP-2 (now 52 km/h), LAV-150 (72) | `max_forward_speed`, `acceleration`; mass scales the response (G13) |
+| Weapons | **Muzzle flash to the calibre, small in the gunner's view.** An autocannon's flash is one short shrinking flare; a coax beside the sight uses the smallest flash | BMP-2, LAV-150 | `spawnVehicleMuzzleFlare` (20/30 mm), `spawnVehicleGunMuzzleFlash` (land vehicles: small) |
+| Weapons | **Rounds never strike their own vehicle.** Submunitions and pellets from a shell that breaks up at the muzzle keep its arming time | YX-100 (its grapeshot destroyed it) | `ShellEntity.dispense`: children inherit the carrier's `tickCount` |
+| Weapons | **Tracers and flashes leave the muzzle in every view, zoomed included**: lay a gun on the server at a rate (R2) so the drawn gun and the rounds agree; a zoomed sight sits **above and behind the gun, never on its muzzle** (from the muzzle, rounds and flash came out of the crosshair), so they rise into the crosshair from the bottom of the view | speedboat, Mi-28 gunner | the speedboat's rates; the Mi-28's `zoom_x/y/z` 0.26 above the bore and 1.6 behind the muzzle (`Mi28GunnerAimClientGameTest` pins it); a turreted helicopter gun's tracer starts on the gun as drawn, not where the server fired it a few ticks earlier (`BulletTrailRenderer.drawnVehicleMuzzleOffset`) |
+| Weapons | **Reloads at a playable pace, and heard as heavy work** (a spent case dropped, the next round slid home): under about 4 s for a single round, 8 s for a rocket rack | TOW, PLZ-05, Type-63; BL-132, Mk42 | stats in `VehicleWeaponStats` (x 0.64); `design/mk42/prepare_reload_audio.py` |
+| Camera | **No seat looks out from outside the hull.** A troop seat with no real view of its own has no first person | BMP-2, LAV-150 | `"no_first_person_seats"` in the data; F5 cycles the chase and hull cameras there |
+| Camera | **The last F5 view is an action camera on the vehicle** (helicopters: tail boom; A-10: wing; land vehicles and boats: rear corner of the hull's side, looking forward along it) | BMP-2, LAV-150 | `VehicleEntity.tailCameraPosition`/`hasHullCamera` |
+| Model | **Textured like a real machine, not flat colour**: panel lines, weathering, decals, colour variation | BMP-2, LAV-150, HPJ-11 | `design/ground-vehicles/detail_texture.py <id>`: enlarges the texture and weathers each texel by where it sits on the model (seams, worn edges, bolts, mottling, streaks, dust, mud); the untouched texture kept as `design/<id>/texture_base.png`, a before/after in `review-texture.png`. Add a vehicle to its `VEHICLES` table |
+| Model | **The occupant never clips the vehicle**: head clear of walls and roofs, feet on the floor, and a seated pilot stays in the seat as the airframe banks or slips | FSV-6, AH-6 | walls and floors stop short of the block cells real blocks sit in (`design/support/generate.py`); `VehiclePassengerRenderHandler.tiltWithAircraft` |
+| Model | **Cab controls and the first-person view are steady**: a gear stick or lever moves only when its control does; no camera jitter | BD-40 gear stick, FSV-6 first person | drive levers from whole-tick motion, eased per frame (never from in-tick progress); crew cameras interpolate from `xOld` as the renderer does (`interpolatedVehiclePosition`) |
+| Lights | **Lamps read as light under shaders** (Iris in the pack): a lit lamp is an emissive lens plus a soft glow, never a bare white cube; glows are not see-through from behind | Mi-28 tail, AH-6, A-10 tail and exhaust, bush plane | glows on `entityTranslucentEmissive` under shaders with the premultiplied `light_glow_soft.png` (a texture white to its rim is emitted as a disc), dimmer, no drawn searchlight shaft under shaders, small lens glare, and no glare at all for a lamp that is not a searchlight; flares are light sources too; each steady lamp a LambDynamicLights source (`AircraftLights.addLampSpots`); a glow inside a part (a jet's nozzle) fades out as the view turns off its axis, since the pack's bloom shines it through the walls (`VehicleExhaustGlowLayer`) |
+| Lights | **Beams are steady and soft**: a headlight beam doesn't flicker as the vehicle moves and fades smoothly, not as a hard drawn shape | BD-40, FSV-6 | no drawn shaft on ground vehicles; the beam's spot smoothed over ticks |
+| Lights | **A lamp's lit glow matches its unlit lens in size** (reversing lamps looked tiny next to their glow) | road vehicles | road lamps keep their size and only brighten |
+| Damage | **Explosions are the realistic blast** of the A-10 and helicopters (fireball, real smoke column, debris), never the classic JEG burst | all | `RealisticBlast.explode` / `show` |
+| Damage | **Smoke looks like smoke** (soft, volumetric, drifting) and never hides the target from its own gunner | LAV-150, Type-63 | rockets blow their smoke out behind the launcher (`ShellGunEntity.fireShell`); smoke screens (dischargers, grenades, smoke shells) are one billowing lit cloud per canister (`SmokeScreenPayload` -> `MissileBlastRenderer`'s smoke), never vanilla campfire smoke. **All other vehicle smoke and flame** (damage by hull left, burning wrecks, jet trails, gun gas, exhausts, flare trails) goes through `SmokeFx.emit` (kinds GREY, DARK, BLACK, FIRE, WHITE); a shell gun's muzzle blast and barrel wisps are drawn from its `GunReportPayload` (`MissileBlastRenderer.gunFired`). No `ParticleTypes.*SMOKE*` or campfire smoke on a vehicle (`SmokeFxClientGameTest`) |
+| HUD | **Cards hold their size**: a card never shrinks back after a reading grows it, numbers have a digit of headroom, numbers sit against the right edge (`HudPanel`); F1 hides the vehicle HUD | all | `HudPanel.width`, `numeric` |
+| HUD | **Minimal and single**: show only what this seat needs now, each fact once; readouts in fixed-width cards (the m/s card grew with its digits); nothing flashes; every mark on screen is explained by its shape (the yellow bore marker was not) | all | `VehicleHudOverlay`: one status card headed by the vehicle's name (the user wants the name kept, 2026-11-19) with `HudPanel.reading` rows, the weapon list for weapons, the crew list only when it matters, the bore marker a ring labelled GUN; switches drawn in the HUD style, never vanilla buttons |
+| Interaction | **The helm has live instruments**, in the vehicle's own style, as the helicopters' cockpits do: no blank dash | speedboat | `SpeedboatCockpitLayer` (textures `design/speedboat/make_console.py`); draw in the dash's own bone frame (`inDash`), or it sinks into the dash when the hull pitches |
+| Interaction | **A right-click on any visible part boards it, every time**, whatever is in hand | all | the gun mod's own right-click (aim) never swallows a click on a vehicle (`FabricClientBootstrap` UseEntityCallback) |
+| Defences | **Automatic mode is a visible switch** (the hold's screen, the HUD's key chip), heard when thrown, engages hostile mobs only (a monster's mount included: a chicken jockey) and needs no ammunition; a mounted gun on a crewed vehicle gets one too, for when nobody is at it | HPJ-11, sentry, speedboat | `VehicleMenu.BUTTON_TOGGLE_AUTO` and the screen's switch; `AutoDefenceEntity.unmannedFireIsFree`; `Hpj11Entity.targetPriority` takes hostile mobs after air threats |
+| Sound | **Weight and grit**: guns heavy and loud with a mechanical edge, horns deep, starts real; traverse a heavy electric whine, deeper the heavier the mount | sentry, howitzer, LAV-150 start, BD-40 horn, HPJ-11, BL-132, Mk42, Type-63 | the guns' body raised and soft-clipped (`design/sentry`, `design/howitzer` prepare_audio); `VehicleFeel` powered mounts on the traverse drive, pitched by mass |
+| Sound | **Work machines warn**: a reversing beeper on construction and support vehicles | BD-40 | `design/bulldozer/prepare_review_audio.py` |
+
 
 ## 1. Learn from the A-10 and the helicopters
 
@@ -198,10 +237,21 @@ clears, and grows the entity box at every angle that isn't square on.
   brief, then measure it in a test: drive at full lock for 2 s and work out the radius from the distance travelled
   and the heading change (`SupportInteriorClientGameTest`).
 - **Other entries.** Give it no `weapons`, `seek` or decoys unless it is armed.
-- **An unarmed vehicle still needs code.** A missing or empty `"weapons"` list falls back to the test wheel vehicle's
-  assault rifle and pistol (`VehicleDataManager.parseWeapons`), so the entity class overrides
-  `hasVehicleWeapons()` to return false (the bulldozer, FSV-6 and mortar do). A weapon that isn't a vehicle gun
-  (the mortar's load-and-drop drill) is handled the same way, in its own class.
+- **The vehicle creator.** Every assembled vehicle needs a `data/jeg/vehicle_assembly/<id>.json` recipe and a
+  creator icon, `textures/vehicle_icon/<id>_icon.png` (256 x 64, a light grey side view on a transparent strip, nose
+  to the left, as SBW's). `VehicleAssemblingScreen` finds the icon by its file; without one the vehicle shows no
+  picture (the BD-40, Mk42, BL-132 and Type 63 did until 2026-11-19). A refit copies SBW's icon when it has one, and
+  otherwise draws one from the model with `refit_lib.silhouette_icon`. Carried weapons (the mortar, the TOW) are crafted
+  items instead and pack into their own item on a sneak-click with an empty hand; everything else packs into its
+  container with the crowbar (`VehiclePackUp` covers both for the whole fleet).
+- **An unarmed vehicle: `"weapons": []`.** An empty list means no weapons (since 2026-11-17); only a missing list
+  falls back to the vehicle type's default assault rifle and pistol (`VehicleDataManager.parseWeapons`). Before that
+  the empty list also fell back, and the bush plane's pilot found a rifle and a pistol on the HUD. The bulldozer,
+  FSV-6 and mortar also override `hasVehicleWeapons()` to return false, from before the fix. A seat whose crew works
+  the vehicle with R or the mouse needs `"ban_hand": true`: hand items are banned only by that or by a weapon usable
+  from the seat, and the fallback rifle had been doing it for the mortar, so after the fix its R reloaded the gunner's
+  hand gun instead of loading a round. A weapon that isn't a vehicle gun (the mortar's load-and-drop drill) is handled
+  in its own class.
 
 ## 5. Model
 
@@ -320,6 +370,43 @@ alpha between 1 and 254, and every other pixel 0 or 255.
 **Damage states.** Plan them as the helicopters do: smoke, sparks and fire as health falls; a wreck that behaves
 physically; parts that stop working when hit.
 
+### Texture quality (the review of 2026-11-19)
+
+- **No flat swatches.** A face painted one colour at one texel a model pixel reads as plastic next to the pack's
+  shaded world. Refits run `design/ground-vehicles/detail_texture.py <id>` (4x texture, panel seams, worn edges, bolt
+  heads, grime streaks, dust on top faces, mud low down; salt and thin rust runs for ships' guns; non-skid on decks).
+- **Our own generators bake unique UVs.** A generator that textured every cube from one tile per material
+  (`material_uv`) gives every face its own texels with `refit_lib.bake_unique(BONES, MATERIALS, texels)` before
+  writing the geometry, paints its markings on the baked faces (registration, stencils, rib tapes), runs
+  `detail_texture.detail_image(geo, base, cfg)` and puts glass and lamps back with `refit_lib.paste_faces`. The glow
+  layer comes from the same faces (`refit_lib.glow_of`). The sentry, bush plane, howitzer and FSV-6 do; a generator
+  whose tiles carry patterns (the FSV-6's diamond plate, hazard stripes, dials) passes `fill=` to lay each face with
+  its tile, stretched or repeated as the tile atlas showed it.
+- **Repaint an unrealistic livery with rules, not by hand.** `detail_texture.py`'s `repaint` rules map a hue band (and
+  optionally bones) to a real paint, shaded as the old paint was: SBW's teal Mk42 became haze grey, its pleasure-boat
+  speedboat a patrol boat. A per-vehicle `skip` regex keeps glass and lamps; `protect` keeps glowing strips; fabric
+  skins take `bolts=False`.
+- **Imported models with shared, stretched UVs** (the A-10: its halves on the same texels, 4 x 2 texel patches over
+  20 px panels) go through `refit_lib.rebake_imported(geo, texture, texels)`: every face gets a rectangle sized by the
+  face, its old paint resampled into it and its UV moved with the same signs, so it looks as it did and can then be
+  weathered and marked per side. Keep the original geometry and texture beside the script (`a10_base.geo.json`) so it
+  re-runs from them.
+- **Thin cubes painted with a cut-out picture** (the A-10's fan disc: a 20 px square, 1 px thick, painted with a round
+  fan whose corners are clear) keep only their two big faces. Their edge faces stretch the whole picture over 1 px; given
+  texels of their own by the rebake they turn solid, and the A-10's square rim and corners stood out of the nacelle,
+  turning with the fan (2026-11-19). After a rebake, look at a render of every part that spins or sits inside another.
+- **Local stains** (`stains=[...]` in a detail config): a colour at a strength, limited by bones, facing, a centre and
+  radius, a height, broken into patches (`noise`) or run in streaks (`streak`, down or along a direction). The BD-40's
+  soil, rust, soot and oil; the A-10's gun gas, exhaust and fluid streaks; the Compass Ghost's darker grey in soft
+  patches over the upper surfaces.
+- **Lettering on a small plate:** `bake_unique(..., boost={"label": 4})` gives a material's faces four times the
+  texel density; draw the text with Inter at the plate's texel size. Check which side faces run back to front in a
+  render of both sides before mirroring anything (neither does on the BD-40's engine).
+- **Edit Blockbench files by the line.** A json rewrite of an imported model reformats every line (the A-10's file went
+  from tabs to a 79,000-line diff); `design/a10/articulate.py` changes only the line it needs.
+- **Regenerating a model rewrites its hitbox.** Generators write their own coarse `obb` rows: run
+  `design/hitbox/audit_hitboxes.py --write <id>` after every regeneration, or the tight boxes are lost.
+
 ## 6. Behaviour
 
 - **Server first.** World changes happen on the server only. Respect the world border, spawn protection and
@@ -422,6 +509,12 @@ Lessons from the FSV-6 (`design/support/`).
 
 ### Towed guns
 
+- **Draw a towed vehicle from the tower's smooth position.** The server moves it once a tick and the client eases
+  between packets, while the truck its driver moves is smooth: drawn from its network position, the gun trailed a
+  block behind and jumped, and the tow bar stretched and snapped (2026-11-19). Its renderer and the bar take the pose
+  from `SupportVehicleEntity.clientTowPose` (the server's own tow geometry, `towPose`, applied to the truck's
+  interpolated position each frame); `TowSmooth` measures the bar's length between frames.
+
 Lessons from the 105 mm howitzer (`design/howitzer/`) and the Type-63.
 - **Towing is the FSV-6's hitch; a gun says how it is towed.** `VehicleEntity.towEye()` gives the lunette in vehicle
   data coordinates, and the hitch puts that point on the pintle with the gun trailing away from the truck, so it goes
@@ -437,11 +530,199 @@ Lessons from the 105 mm howitzer (`design/howitzer/`) and the Type-63.
   (`HowitzerRig.recoilLength`, as real variable recoil does), and check the breech against the ground and the trails
   over the whole elevation range in the generator's validation.
 
+### Boats
+
+Lessons from the speedboat (`design/speedboat/`); the hull's behaviour is its data's `"boat"` block (`BoatInfo`), not
+code keyed to its id.
+- **Float it at its waterline:** `"draft"` (blocks the keel sits under the surface). Without it buoyancy settles the keel
+  a little above the water and the antifouling shows; with it the hull rises until its waterline meets the surface.
+- **Keep "afloat" separate from buoyancy.** A hull on the plane rides up out of the shallow buoyancy probe; when that
+  also decided whether the engine pushed, the speedboat fell back to its crawl ashore every few ticks and never got
+  past 30 km/h. Water anywhere within a block under the keel counts as afloat.
+- **Planing is drag, not a speed cap:** high `"displacement_friction"` below `"plane_speed"` (set the thrust so the
+  displacement speed settles just above it), low `"planed_friction"` above, with hysteresis so a bob doesn't drop it
+  off the plane. A fixed cruise speed (the old speedboat's) also cancels currents; the keel (`"keel_grip"`) only removes
+  sideways slip.
+- **Beaching:** measure the shore from the waterline, and lift the hull yourself: vanilla only steps an entity that
+  stands on ground, which a floating hull never does. Probe from the front of the box the hull collides with: a bow gun
+  overhanging the stem is in it, and it met the bank before a probe started at the entity box's edge. Ashore, scrape it
+  to a stop and let it crawl both ways (to back off, or reach the water from the workbench); no impact damage while
+  beaching.
+- **Place effects from the hull's own boxes** (its `"body"` OBBs). The entity box is square: spray put at its edge
+  spawned inside the hull and nobody saw it.
+- **The driver keeps the gun when alone:** the turret's `"fallback_seat"` (`VehicleEntity.turretSeat()`,
+  `weaponUsableBySeat`). Weapons on the turret's seat follow it to the fallback while that seat is empty. Only a player
+  or tagged enemy crew mans the gunner's seat: a mob carried there (yftm.22's passengers) leaves the gun with the driver.
+  The BMP-2 (gunner, index 7, fallback 0) and the speedboat use it; the seat panel names the turret's seat "Gunner".
+- **Passengers at firing ports face out of them:** seat yaw limits are relative to the hull, so a left-side port seat
+  gets `min_yaw` -140, `max_yaw` -40, a right-side one 40 to 140 (seat `x` > 0 is the left). Their view comes from the
+  seat's `zoom_camera` whenever it has `use_fixed_camera_pos` (always, not only zoomed; `usesFixedPassengerCamera`),
+  so put that camera at the port **just outside the hull side**; the seat itself stays inside. SBW's cameras sat inside
+  the side armour, and the squad saw only the hull's faces. (The server reports a rider at the hull's centre in x and
+  z; check positions with mcpfabric's `player.getState`, which is the client's.)
+
+### Weight and feel (the user's rule, 2026-11-17)
+
+"A tank should feel heavy to move compared to a lighter vehicle. Every movement of a vehicle should have some sound
+effect and tactile feedback." For every ground vehicle:
+- **Give it a `"mass"`** (tonnes, the real machine's). `VehicleEntity.inertia()` = sqrt(12 / mass), clamped 0.4–1.15,
+  scales the throttle's wind-up, the brakes, the steering's response and ground friction, with the thrust rebalanced so
+  the top speed stays where the data puts it. Measured (`VehicleWeightClientGameTest`): the 10 t LAV-150 reaches 80% of
+  top in 28 ticks and stops in 21; the 55 t YX-100 takes 63 and 44.
+- **Top speed is where friction levels off:** 0.15 × `max_forward_speed` × f / (1 − f), about 0.6 × the max for f
+  0.8, and in practice 7–18% under that. Set `max_forward_speed` from the brief's road speed and measure it.
+- **The hull rides its suspension** (`VehicleFeel`, drawn in `vehicleAxis`): squat pulling away, dive braking, roll out
+  of turns, a drop on landing; a heavy hull rocks slower and settles later. The crew's camera takes 40% of the rock, a
+  speed rumble (deeper in a heavy hull) and the landing jolt; not through a zoomed gun sight (stabilised).
+- **Every movement has a real sound** (`design/ground-vehicles/prepare_movement.py`, `VehicleFeel`): the turret's
+  electric drive and the gun's elevation (armour), servos (HPJ-11, sentry), handwheels (towed guns), the brakes when the
+  driver brakes (`driverBraking()`, synced; speed changes seen by a client are smoothed and can't tell braking from
+  coasting), a heavy knock landing from a drop, a splash driving into water; with the engine's start, stop, idle, load
+  and cab loops, the track clank or the tyres on gravel.
+- **Set the acceleration with the mass.** The FSV-6 kept an acceleration of 0.01 (the armour's is about 0.03): with its
+  15 t it wound up slower than the 55 t tank. `VehicleWeightClientGameTest` now drives the LAV-150, FSV-6 and YX-100 and
+  asks that they come up to speed in order of weight; add a vehicle there when you tune one.
+- **Boats** (`VehicleFeel`, `GroundVehicleAudio` "hull"): a planing hull banks into a turn (inward, against a car's body
+  roll), pitches and heaves on the chop more with speed and rocks at rest; the water along the hull is heard by speed
+  through the water (a swimming land hull's against its swim speed). A planing hull rides out of `isInWater()`: count
+  water just under the keel too.
+- **Towing shows its hitch:** the FSV-6 draws its tow bar (`SupportTowBarLayer`), an A-frame to a towed hull's nose or a
+  drawbar to a gun's tow eye, built camera-relative from both entities' interpolated positions.
+
+### Suspension moves the hull, not the running gear
+
+`VehicleFeel` rolls a land vehicle's hull out of a turn and dives it on braking. Applied to the whole model it pushed the
+outer track into the dirt in a hard turn (the BMP-2 and PLZ-05, 2026-11-19). A model whose running gear (tracks, road
+wheels, wheels) are bones of their own beside the hull is listed in `AbstractVehicleGeoRenderer.SPRUNG` with its sprung
+bones: the suspension turns those about the hull's pivot and the running gear stays on the ground. Keep the hull and the
+running gear as sibling bones under the root in a new model, and add it to `SPRUNG`.
+
+### A gun on automatic is its own
+
+A crewed gun with a fallback seat (the driver keeps the gun while the gunner's seat is empty) must not fall back while it
+fights on automatic: the driver could lay and fire a gun that was meant to be working by itself (the speedboat,
+2026-11-19). `AutoDefenceEntity` turns `turretFallsBack` off while automatic. Anything that asks "does this seat have the
+gun" must decide whether it means *now* (`turretSeat()`) or *can it ever* (the turret's seat or its fallback): a boat
+takes its heading from a driver without a gun (`yawFollowsRider`), and asking "now" swung the speedboat to its driver's
+view whenever the gun was on automatic or a gunner had it.
+
+### Projectiles the player must see
+
+A round too small or quick to see still has to read on screen. A canister's balls flew with a no-op renderer and the
+user saw grapeshot as doing nothing (2026-11-19). A round faster than about 10 blocks a tick usually strikes within a
+tick, so drawing the entity itself shows nothing (its client copy sits at the muzzle, then is removed): trace its path
+client side as it appears and let that hang a moment, fading (grapeshot's streaks did, until it was replaced); throw
+something where it strikes (sparks on armour, dust on the ground), and let it mark the world where it is real
+(`VehicleGunBlockDamage`). Vanilla draws an entity as small as a ball only within 16 blocks.
+
+### Incendiary and airburst shells
+
+The GS shells became incendiary (2026-11-19: "explode over a target leaving flames below it"). `ShellEntity.Incendiary`:
+once armed, a height fuze follows the path a few ticks ahead to where it comes down and bursts `burstHeight` above that,
+back along the path (at most `maxLead` short on a shallow path); struck first, it bursts where it strikes. Its burning
+fragments are shells too, each given the velocity that lands it on its own spot in the circle round where the shell
+would have come down, so they rain onto the target whatever the angle it came in at, and are drawn client side as flame
+and smoke (`trailFire`, always-visible particles: the entity renderer is a no-op). Fire is set only where the shell may
+break blocks: the `tnt_explodes` rule (the HE shells' explosions follow it), spawn protection and claims through
+`PlayerBlockBreakEvents.BEFORE` (`ShellEntity.setAlight`); what the fragments strike burns either way. The fuze's dud
+range covers the fire's circle (`Warhead.reach`). Test the burst height and the fire with `IncendiaryShell`, watched
+from beside the target with the player standing near it (the client draws nothing past its view distance).
+
+### Glows inside a part, under shaders
+
+Draw a glow the model holds (a jet's nozzles) the way every vehicle light is drawn under a shader pack:
+`entityTranslucentEmissive` with the premultiplied `light_glow_soft.png`, its brightness as opacity, not additive
+`RenderTypes.eyes`. The user saw the A-10's additive exhaust glow drop out as terrain loaded in, leaving black nozzles
+(2026-11-19). Keep additive `eyes` for the vanilla look without a pack.
+
+### Spinning parts of an imported model
+
+Before spinning a bone, check in a render what it is: the A-10's `qianwaiyuan` ("front outer rim") was spun and
+blurred as its fan from yftm.17 on, but it is the intake's eight-panel lip, so it turned out of line with the
+cowling and its blurred copies stood out round the intake (2026-11-19). The fan was the disc its blades are painted on
+(`qianzhou`), on the engine's axis. A part with eight-fold symmetry shows nothing turning but its texture; only spin
+what really turns, and blur only that.
+
+### Speeds shown
+
+Show how fast a vehicle actually moves (its position against last tick's, eased), not its velocity field: a jet's
+velocity and its motion part company (the A-10's readout looked wrong to the user, 2026-11-19). The cards' speed for
+ground vehicles was already measured this way.
+
+### Smoke and rooms
+
+Smoke puffs (SmokeFx, the blast renderer) have no collision. An exhaust under a deployed room sends its smoke up
+through the floor: vent it outside the deployed footprint, and let the renderer drop puffs inside the room
+(`SupportVehicleEntity.insideClientRoom`, the FSV-6's). A vehicle with a walk-in interior does both.
+
+### A load the vehicle carries
+
+Show what a working vehicle is carrying (the BD-40's earth on its blade): a bone of its own (not inside a bone a test
+captures, such as `finish_blade_tilt`), scaled from where it rests, driven client-side from synced state and eased frame
+to frame. Drive it from what the player sees happening (the dozer is cutting) rather than a figure that measures
+something else (the dozer's synced load is the hold's credit and stays near 0.15 while cutting a bank).
+
+### Destruction and wrecks
+
+Nothing vanishes when destroyed (2026-11-17, `VehicleEntity.goesDownAsWreck`). Aircraft go down burning; land
+vehicles and guns cook off where they stand (30 ticks of smoke and sparks), go up in the vehicle's `destroy` blast, throw
+out what was aboard, and burn as a charred hulk for 10 s before breaking apart, upright and without spinning
+(`GroundWreckClientGameTest`). Boats sink (`sinksAsWreck`, `BoatWreckClientGameTest`): they burn on the water losing
+way, the fuel goes up, then they flood by the stern, go under bow up with air bubbling, settle on the bottom and break up
+there; no fire under water. Test a sinking in a glass-walled pool deeper than the lake, from the rim looking down (under
+a shader pack the glass hides it from the side). A rotary gun heard as a loop should carry as far as the aircraft's guns: the HPJ-11 mixes a near and a far loop on
+`AircraftSoundRange` (`CiwsAudio`); the generic vehicle fire loop fades out by 56 blocks and cuts off with no tail.
+Automatic guns go through `fireUnmanned`, a path of their own: anything manned fire does there (the report, the
+flash, the trail) must be done in it too. The sentry on automatic fired in silence until 2026-11-18. Code that runs on
+a live vehicle must
+check `isWrecked()`: a wreck still exists, can be shot and seen, but has no controls.
+
+### Doors and hatches on SBW models
+
+SBW's door bones pivot mid-door, not on their hinges. Don't move pivots by hand in the generated model (a refit run
+overwrites it); turn the bone in the renderer about the real hinge with `swingAboutHinge` (rotate about the pivot, then
+translate by (I - R)(H - P), in GeckoLib's X-mirrored frame). The BMP-2's rear doors open while someone boards or leaves
+(`VehicleDoors`, from the passenger count). Check the swing in a screenshot from behind at mid-travel.
+
 ### Retiring a vehicle
 
 Keep the entity type registered for one release as a `RetiredVehicleEntity`: on its first server tick a saved one
 drops a chest item holding its hold (overflow loose) and removes itself. Remove its assembly recipe and icon entry at
-once, and the type in the release after (the waveforce tower, retired 2026-11-16).
+once, and the type in the release after (the waveforce tower, retired 2026-11-16; the laser tower and the light combat
+vehicle, 2026-11-17).
+
+### Base defences (automatic fire)
+
+The HPJ-11 and the sentry share `AutoDefenceEntity`: manual or automatic with N, a target picked by priority within
+reach and in sight, led at the round's speed, laid through the turret's own slew (`turretAutoLay`), fired through
+`VehicleEntity.fireUnmanned` once on. The server can switch automatic fire off and caps it per chunk (`Config`).
+- **Decide "hostile" when it happens, not when you look.** A missile's launcher may be gone by the time a defence sees
+  it (a crewman 150 blocks from any player despawned and the rocket was never engaged): `VehicleMissileEntity` records
+  at launch whether the enemy fired it.
+- **Never fire at anything friendly:** players, what they fired or drive, villagers, pets and passive animals; a
+  sentry checks its line of fire before every shot, an air defence never lays below its floor (5°).
+- **Give a new gun its armour piercing** (`BallisticProtection.explicitArmorPiercing`): an unlisted gun pierces almost
+  nothing, and the HPJ-11's rounds burst on an AH-6 for no damage.
+- **A remote gun's flash** is the medium one (`_hmg`, `_rws`, `_ciws`, `vehicle_sentry_*`): the cannon flare or the full
+  machine-gun flash filled the operator's camera.
+
+### Fixed-wing aircraft other than the A-10
+
+`JetFlight` was written for the A-10; another aircraft sets what differs in its data's `"aircraft"` block
+(`AircraftInfo`; the bush plane, `design/bushplane/`), not in code keyed to its id:
+- `"thrust_lapse"`: the share of thrust lost by top speed. A turbofan's 0.12 is the default; a propeller loses far
+  more (the bush plane 0.45), so it pulls hard off the brakes and tops out gently.
+- `"fixed_gear"`: the wheels stay down, with no retraction, gear sound or extra gear drag (the top speed in the data
+  already includes them).
+- Flaps (`"flap_stall_factor"`, `"flap_speed_factor"`): below that multiple of the clean stall speed they run out and
+  scale the stall and rotate speeds, at extra drag. That gives a short take-off and slow landing without lowering the
+  stall speed of the clean wing. The renderer droops the flap bones from the speed every client sees.
+- `"wing_camera"`: where the reversed third-person view's action camera sits on top of the left wing. The A-10's
+  spot (7.6 out, 3.75 up) floated past the bush plane's wingtip, looking into the wing.
+- `"strike_points"`: the wingtips, nose and tail checked against the terrain, in data coordinates. The A-10's
+  points on a smaller airframe hit the ground in mid-air, or miss a wingtip that is in a tree.
+- Spoken warnings are each jet's own recordings: `VehicleSoundHelper.jetOwnSound` keeps the A-10's "pull up" out of
+  other cockpits, while generic sounds (wind, runway roll, the stall horn) fall back to the A-10's.
 
 ### Hold and tool bays
 
@@ -468,8 +749,9 @@ once, and the type in the release after (the waveforce tower, retired 2026-11-16
 - **Gun mounts are `ShellGunEntity`s** (Mk42, BL-132): a subclass lists its shells (one vehicle weapon each, with a
   warhead), muzzles in firing order and recoiling bones; the base fires the next barrel, recoils it from the synced
   shot count, sends the report, and gets the fire-control panel, predictor and bone driver for free. Shell warheads
-  can break up (`ShellEntity.Dispense`: cluster bomblets near the target, grapeshot pellets at the muzzle), and every
-  shell is a dud within its blast radius (+1) of the gun that fired it, so firing at the gun's own feet can't hurt it.
+  can break up (`ShellEntity.Dispense`: cluster bomblets near the target) or burst over it (`ShellEntity.Incendiary`),
+  and every shell is a dud within its reach (blast radius or fire circle, +1) of the gun that fired it, so firing at the
+  gun's own feet can't hurt it.
   Rocket launchers use it too (the Type-63): `shellsAreRockets` gives the shells a motor glow and short trail, and
   `nextBarrel`/`barrelFiring` set the tube order when the tubes empty in turn and reload together. The base plays
   `animation.<id>.rest`, so write that clip (empty if need be) even when the source model has none; without it
@@ -496,10 +778,13 @@ once, and the type in the release after (the waveforce tower, retired 2026-11-16
 - **The gun's panel goes to whoever lays the gun**, not the driver: `ShellGunEntity.laysGun(passenger)` (the PLZ-05's
   gunner is seat 1). Look seats up with `seatOf(passenger)`, never the passenger list's order: after a seat change the
   two differ (the bore marker compared them).
-- **Limit elevation by bearing where the hull is in the way** (`clampTurretPitch`): the Leopard's gun stays level
-  within 70° of straight back, over the rear deck. Check the gun against the hull's real top (each cube, sloped plates by
-  their slope) over the whole elevation and traverse range in the generator: a deck-height check flagged the glacis
-  falsely and missed the headlights, which the gun struck at full depression until they moved down onto the glacis.
+- **Limit elevation by bearing where the hull is in the way** (`clampTurretPitch`). Check the gun against the hull's
+  real top (each cube, sloped plates by their slope) over the whole elevation and traverse range in the generator or
+  refit, and write the lowest clear elevation per bearing to the rig (`design/yx100/refit.py`: the tube and shroud
+  sampled every px against the hull's faces sampled every half px, 5° steps; the entity takes the stricter neighbour).
+  Leave out the mantlet, which sits inside the turret house. Sample faces densely: corners alone, or a fixed count per
+  face, leave holes over big plates that read as clear bearings. A refit inherits the source's clashes: SBW's YX-100
+  allows −10° all round, but its gun meets the front deck at −3.5° and the engine deck below +3.5°.
 - **Lift a dismount point 0.1 off the ground.** Hulls sit a few hundredths into the ground, so a dismount point at the
   hull's own height overlaps the block below and is refused; the player then lands on the roof (the BMP-2's rear-door
   exit, first try).
@@ -553,8 +838,13 @@ loops; idle slowed, cab and distant low-passed). Lessons:
 - **Sync whether the engine runs.** Inferred on the client from the crew, it fell silent 128 blocks off, inside entity
   range: clients aren't sent a mob crew that far (`groundEngineRunning`).
 - **Write Ogg in blocks.** libsndfile's Vorbis encoder overflows the stack on Windows given a long buffer in one call.
-- **Still missing for these vehicles:** real start and stop recordings, and real cab recordings (the cab loops are
-  filtered exterior takes). Find CC0 ones before calling them finished, and ask the user to listen.
+- **Real starts and stops** (2026-11-17, `design/ground-vehicles/prepare_starts.py`): `engine_start`, `engine_stop`
+  and their muffled `_cab` versions, cut from CC0 diesel takes. The loops wait for the engine to **catch** in the
+  recording (`GroundVehicleSounds.startCatchTicks`) before they wind up, so the crank is never covered by a running
+  engine. A start plays only when this client **saw** the engine start: a player arriving at a vehicle already running
+  (back into entity range) hears it running, never a second start (`GroundVehicleAudio.LAST_RUNNING`).
+- **No real cab recordings exist under CC0** for armour (searched 2026-11-17; the only "tank interior" take is a rattling
+  car). The cab loops stay filtered exterior takes; say so in each status file rather than calling it missing work.
 
 **Sources.**
 - Use field recordings of the real machine type, licensed CC0, credited in `sounds/vehicle/<id>/CREDITS.md`.
@@ -623,6 +913,27 @@ silent after a camera switch.
 - Our own volume variables prove nothing about audibility. Nobody on the build side can hear the game, so ask the
   user to listen and say so in the report.
 
+### Don't bury a report
+
+A gun's report must keep its crack. The howitzer's was rebuilt "heavier" with its 25-180 Hz lifted 9 dB, a synthetic
+sub thump and hard soft-clipping over a take that was already dull, and the user heard it as muffled (2026-11-19):
+89% of its energy under 200 Hz, 1.6% above 2 kHz, a 6 dB crest. Measure a report before shipping it: a close shot of a
+gun has several percent of its energy above 2 kHz and a crest over 10 dB. Choose a take that has the crack, lift the
+low end a few dB at most, and only round the peaks (a gentle tanh); weight comes from the take, not from processing.
+Vorbis overshoots a clipped crack: keep the peak at 0.7.
+
+### Each tank its own engine (2026-11-19)
+
+The user: "find a separate audio recording for each tank, it should have its own identity". Three vehicles had come
+to share the BMP-2's engine; each now has a real recording of its own class of engine (CC0, fetched, licence-checked
+and cached by `prepare_starts.source`): the BMP-2 an APC's diesel, the PLZ-05 a heavy tank diesel, the YX-100 a gas
+turbine. One take should give a vehicle its start, idle and working loop where it can (they then sound like one
+engine). A take with no stop can still give one: `prepare_starts.py` plays a turbine's spool-up backwards
+(`"<take>:reverse"`) or runs an idle down (`"<take>:rundown"`). A short idle stretch is chained into a varying
+16 s loop (`prepare_idles.py`) so it doesn't beat. Set `GroundVehicleSounds.startCatchTicks` to the new start's catch
+(the YX-100's turbine: 80 ticks). Tracks already clank on their own layer, so prefer a drive take without track noise
+when there is one; the PLZ-05's ride has some.
+
 ## 8. Lights and HUD
 
 - **Lights** go in `AircraftLights` at the real lamp positions in model pixels. Put the searchlight lens on a real
@@ -636,18 +947,58 @@ silent after a camera switch.
   for real, leave the drawn version out under shaders (`ShaderPacks.inUse()`; spots light the ground through
   `LambDynamicLightsCompat`), as `VehicleLightsLayer` does for the pool. Check every light at night from outside with
   the user's shader pack: Photon by default (`-PpackShaders`), with their options from `pack-config/shaderpacks/`.
-- **Glows need geometry behind them.** The A-10's exhaust glow was placed for a nozzle the model never had and read
-  as a hole into the engine; model the part first (`design/a10/nozzle.py`), then put the glow inside it.
-- **HUD.** Add a compact panel for the vehicle's state, drawn small (the bulldozer's is three-quarter size).
-  - Show key hints only for a few seconds after boarding, then fade them.
-  - Read key names from the bindings.
-  - Show tool lines only while the tool is in use.
-  - Snap the scale to whole screen pixels per font pixel: `round(guiScale * 0.75) / guiScale`, not a plain 0.75,
-    which blurs the text at GUI scale 3.
-    For a scale-3 game test, use a window large enough (the dozer test uses 1280×900) and assert the actual
+- **Moving a bone about Y or Z: mind GeckoLib's mirrored X.** The model's +X (the pilot's right) is -X in the
+  frame bones turn in, so a rotation about X keeps its sign but one about Y or Z is reversed: the bush plane's rudder
+  turns into a right turn with a *negative* `setRotY`. Drive control surfaces from the attitude rates every client sees
+  (roll right is positive, pitch positive is nose down), smoothed per tick (`AbstractVehicleGeoRenderer.tom6Surfaces`).
+- **Taildraggers sit tail down.** Model the tailwheel as it hangs in level flight (above the main wheels' contact) and
+  pitch the drawn airframe nose up about the main wheels while slow on the ground (`BushPlaneStance`); the flight model
+  stays level.
+- **Navigation lights: red on the left (port), green on the right.** In model pixels with the nose at -Z, the pilot's
+  left is **-X** (the A-10's red is at -142.7). The bush plane's generator had it backwards and flew with them swapped
+  until a night screenshot from behind showed green on the left. Check it from behind in third person, where the
+  viewer's left is the pilot's.
+- **Glows need geometry behind them, and must stay visible.** yftm.21 modelled solid nozzle plugs on the A-10
+  (`design/a10/nozzle.py`) and tucked a smaller glow into them, flush with a black face; the user found the orange glow
+  gone and the rear looking worse, and both were put back as in yftm.20 (2026-11-17), with a shimmer. Before
+  re-modelling a part a glow sits in, compare day and night screenshots of the old and new look from the reported
+  angle, and keep the glow at its old size and brightness unless asked.
+- **Cockpit light is a night light.** `Kind.COCKPIT` spill is drawn additive over the whole model; by day it painted the
+  AH-6's windscreen pillar lime, and under Photon it bloomed the Mi-28's frame orange. On aircraft it follows
+  `AircraftLights.nightSwitch` and is cut to `SHADER_COCKPIT_SPILL` under a shader pack (`VehicleLightsLayer`); the
+  FSV-6's room lamp (a closed room) keeps its level. Check every cockpit from the seat at noon and at midnight.
+- **HUD.** Build the vehicle's state panel with `HudPanel` (`vehicle/client/overlay`), never with hand-placed text:
+  it is drawn in the information layer, top left, beside every other vehicle's panel (user, 2026-11-17: the HUD must
+  be clean, modern and 20% smaller, not cluttered). The look is `HudKit`:
+  - Dark panels with soft rounded corners, a clean sans (Inter SemiBold, `font/hud.ttf`: all text in it goes through
+    `HudKit.text`/`HudKit.width`), grey names, near-white readings, one amber accent. Use green, amber and red only for
+    state that needs attention; icons are smooth Material Icons Round glyphs (`HudKit.ICON_*`), bars are thin pills and
+    key hints rounded keycaps. Not pixel art (user, 2026-11-18: "clean and modern, not blocky or pixelated").
+  - Minecraft samples fonts and GUI textures NEAREST, so antialiased text and shapes look smooth only one texel to one
+    screen pixel. The layer is drawn at `HudKit.scale`, 80% of the GUI scale snapped to a whole number n of screen
+    pixels per HUD unit, and `design/hud/build_hud_assets.py` builds the font (`font/hud_<n>.json`, oversample n) and
+    the atlas of icons and round shapes (`textures/gui/hud/kit_<n>.png`) for n = 1..6; `HudKit` draws with the set
+    for the current n. A screen drawn at the GUI scale calls `HudKit.useDensity(guiScale)` first (`VehicleScreen`).
+    Draw rounded shapes with `roundRect`/`pill`, not `fill`, and new icons by adding a glyph name to the builder's
+    `ICONS`. Sights, reticles and markers stay at the GUI's own scale.
+  - Rows: `header` (status lamp and state), `bar`, `slider`, `value`, `note`, and `hints` (keycaps). They share one
+    name column, and the panel sizes itself from the measured text.
+  - Show key hints as keycaps (`HudKit.keyName` reads the binding and shortens SHIFT, CTRL, LMB) for a few seconds
+    after boarding, then fade them.
+  - Warnings are a breathing red chip under the crosshair, not flashing text.
+  - For a scale-3 game test, use a window large enough (the dozer test uses 1280×900) and assert the actual
     `getWindow().getGuiScale()`. Selecting 3 in the default 854×480 window still renders at 2.
-  - Lay it out in two columns, names on the left and readings in one shared column, and size the panel from the
-    measured text. The pack's font is wider than vanilla, so text placed at fixed offsets runs into its neighbour.
+- **Check for overlapping crosshairs** (user, 2026-11-17: seen on several ported vehicles). From every seat, in first and
+  third person, zoomed and not, with each weapon selected, screenshot the centre of the screen and count what is drawn
+  there: exactly one aiming mark. The sources that stack up are the vanilla crosshair (cancelled by `GuiMixin` while
+  the vehicle HUD is up), the gun crosshair a passenger's hand weapon draws (`CrosshairHandler`), the vehicle reticle
+  (`VehicleHudOverlay.renderReticle`), a slew-limited turret's bore marker (`renderBoreMarker`), a shell gun's impact
+  marker, and anything drawn into the vehicle's own model or cockpit layer (a sight bone in front of the camera). A
+  second mark that means something else (where the gun points while it catches up with the view) gets its own shape,
+  never another copy of the reticle, and is hidden when it lies on the reticle: the bore marker drew the same icon as
+  the third-person reticle and the two sat on top of each other on every slew-limited turret (the Mk42, BL-132,
+  Type-63, howitzer, PLZ-05, YX-100, HPJ-11 and sentry); it is four corner brackets now, gone within 7 GUI pixels of the
+  centre. Check while the turret slews and once it has settled.
 - **Tool slots in a hold** (the bulldozer's Ripper bay): mark them with a 1-pixel outline on the slot borders and a
   label inside the panel (the bay's tab), never a frame that spills over the counts of the next row or a label past
   the panel's edge.
@@ -711,6 +1062,38 @@ A closed cab gets live instruments, as the helicopters do (`SupportCockpitLayer`
   co-driver with bars filled from synced state.
 - **Power:** the screens boot with power (`CockpitPanel.bootLevel`) and dim a little at night.
 
+### Screens drawn on a vehicle's walls
+
+Wall and cab screens are textures the layer fills live. Draw them at five texels a layout unit (or more) in the HUD's
+Inter, never the default bitmap font or Arial at 1:1: the FSV-6's 232 x 120 CRT-style screens with scanlines read as
+pixelated (the user, 2026-11-19). Dark glass, a faint grid, rounded tracks round each live bar, a title bar with an icon.
+Keep every live element's place in the layout's units so the layer's code doesn't move. Never draw an "off" lamp in an
+emissive render type: under a shader pack a dark emissive colour shows as a pale square; draw only what is lit.
+
+### Aircraft instrument panels
+
+Every crewed aircraft gets a live panel on its model's own dash (the A-10, the Mi-28, and the AH-6 since 2026-11-19:
+"give the AH-6 the detailed instrument panel similar to the Mi-28"). A dash that is only painted on the model texture
+(the AH-6's static attitude picture and flat green screens) reads as a toy from the seat.
+- **Find the dash faces in the layer's own space.** `render_geo.load_quads` gives every model face in GeckoLib render
+  pixels, the space `passInfo.getModelRenderMatrixPose()` draws in (forward is -Z, the pilot's right +X): list the
+  faces in front of the seat, take each face's corners, and build a `CockpitPanel` from its top edge's centre, across,
+  down and out. Render the view from the eye (`design/ah6/render_seat_view.py`) and compare it with a game screenshot
+  from the seat before drawing anything.
+- **Cover the face, then draw.** A lit face texture over the model face (`entityCutout`, the world's light), the
+  screens on it (`eyes`), and the live marks last, each in its own `collector.order`. `eyes` blends translucent in
+  this version: an opaque colour covers what is under it, so a colour attitude display draws its sky, then its
+  ground (`CockpitPanel.ground`), then its lines and the overlay, each in its own `collector.order`: the quads of one
+  translucent buffer are sorted by distance, and in one buffer the AH-6's big sky quad was drawn over half its ground.
+  Use deep colours on emissive screens: a shader pack's bloom washes a light blue out to white.
+- **Live figures** are seven-segment digits (`CockpitPanel.text`, with N, E, S and W for a compass rose), drawn from
+  synced state only: attitude (`poseAngles`), speed and climb (`getDeltaMovement`), height (`altitudeAboveGround`),
+  rotor (`propellerSpeed` over the speed it runs at in flight), energy, hull, ammo per slot, the selected weapon and
+  the flares' cooldown.
+- **Keep the HUD off the panel.** In a helicopter's first person the top middle is the helmet display's heading tape,
+  the middle its speed and height boxes and the bottom middle the panel: the status card takes the bottom left corner
+  and the crew list moves to the top left (stacked above the crew list, the card covered the speed box).
+
 ### Screens inside the vehicle (consoles)
 
 A vehicle with more than one function needs a single screen that opens the rest. Make it part of the vehicle, not a
@@ -763,6 +1146,21 @@ calls the bridge (`python -I design/playtest/mcp.py session.join '{"worldId":"sp
 - `control.look` keeps holding its view until another look: a later `tp ... facing` is overridden by it.
 - Hold the use key with `/jegkey key.use <ticks>` (a spyglass, a held item); `control.setInput {"use":true}` doesn't
   start using an item. `screen.close` shuts any screen, where a second `key.inventory` press may not.
+- **A stand-in mob driver needs the crew tag** (since yftm.22, only players and enemy crew drive or man guns): add
+  `EnemyVehicleController.ENEMY_VEHICLE_CREW_TAG` before `startRiding`, or the vehicle stays dead and the test measures
+  silence. The tag alone does not start the enemy AI (that needs `ENEMY_VEHICLE_TAG` on the vehicle). Fifteen tests
+  were fixed for this on 2026-11-17.
+- Don't `/tp` a vehicle with you aboard: the server calls it "moved wrongly" and the vehicle was lost. Summon a new one,
+  or teleport yourself and board again.
+- `/jegkey` presses sent while you aren't aboard are queued and spent when you board: three change-seat presses landed
+  at once. Check the crew list (`[n] name`) after changing seat.
+- Shaders reflect the hull in calm water: a "boat above you" in a screenshot is often its reflection. Check heights
+  with `/data get entity @s Pos` and `execute positioned ... over world_surface` before building water.
+- An aircraft flies from the mouse, which mcpfabric can't move: `/jegstick <dx> <dy> <ticks>` moves the cursor that
+  many pixels a tick (negative dy pulls the nose up; `DevKeysClient`). It moves the real cursor too: shifting only
+  the game's copy snapped back on the next real event, a flick that put the bush plane's nose down mid-climb.
+- A sandbox's parked vehicles are obstacles: the AircraftTest world has a truck across x 0 at z 120, and the first
+  bush plane take-off along x 0 ended in it. Take off along a clear lane (x -60).
 - Ending the client loses what the world hasn't saved yet (`save-all` isn't available here): a vehicle summoned a
   few minutes before was gone after the restart. Summon again, or save and quit to the title first.
 

@@ -55,18 +55,6 @@ public final class ShellAim {
         return new Prediction(position, ballistics.maxFlightTicks(), horizontal(origin, position), true);
     }
 
-    /** Marks a predicted impact on loaded terrain with a short column of particles (for the gunner only). */
-    public static void mark(Minecraft minecraft, Prediction prediction) {
-        if (prediction.assumedLevel() || minecraft.level == null) {
-            return;
-        }
-        Vec3 at = prediction.impact();
-        for (int i = 0; i < 6; i++) {
-            minecraft.level.addAlwaysVisibleParticle(ParticleTypes.END_ROD, true, at.x, at.y + 0.2D + i * 0.6D, at.z,
-                    0.0D, 0.02D, 0.0D);
-        }
-    }
-
     private static double horizontal(Vec3 from, Vec3 to) {
         double dx = to.x - from.x;
         double dz = to.z - from.z;

@@ -96,6 +96,10 @@ public final class BallisticProtection {
             case "minigun" -> 3.00F;
             case "vehicle_20mm_cannon" -> 5.20F;
             case "vehicle_30mm_cannon" -> 9.80F;
+            // The BMP-2's HE belt: bursts on armour rather than going through it.
+            case "vehicle_30mm_cannon_he" -> 3.20F;
+            // The HPJ-11's 30 mm (proximity-fuzed): through aircraft and light vehicles, not a tank's front.
+            case "vehicle_hpj11_ciws" -> 7.50F;
             case "vehicle_70mm_rocket", "vehicle_80mm_rocket" -> 5.50F;
             case "vehicle_9m336_missile" -> 8.40F;
             case "vehicle_bmp2_missile" -> 10.80F;

@@ -65,48 +65,28 @@ public final class SmokeGrenadeEntity extends TimedThrowableItemProjectile {
     }
 
     /**
-     * A smoke screen at {@code at}: the grenade's clouds and burst, {@code width} times as wide (a 105 mm smoke shell
-     * lays one three times as wide). Puts out fires under it.
+     * A smoke screen at {@code at}: the grenade's cloud, {@code width} times as wide (a 105 mm smoke shell lays one three
+     * times as wide). Drawn by each client as one billowing cloud of real-looking smoke (SmokeScreenPayload), no longer
+     * vanilla's campfire puffs (the user's review, R17); the clouds under it carry the smoke's effect. Puts out fires.
      */
     public static void smokeScreen(ServerLevel serverLevel, net.minecraft.world.phys.Vec3 at, int width) {
         double x = at.x, y = at.y, z = at.z;
-        // A shell's screen is watched from far off (the observer's spyglass): sent out to 512 blocks, not 32.
+        // A shell's screen is watched from far off (the observer's spyglass): sent out to 512 blocks.
         boolean far = width > 1;
-        serverLevel.sendParticles(ParticleTypes.CAMPFIRE_COSY_SMOKE, far, far, x, y + 0.5D, z, 60 * width, 0.8D * width, 1.2D, 0.8D * width, 0.02D);
-        serverLevel.sendParticles(ParticleTypes.LARGE_SMOKE, far, far, x, y + 0.5D, z, 20 * width, 0.6D * width, 0.8D, 0.6D * width, 0.01D);
+        ttv.migami.jeg.network.SmokeScreenPayload.send(serverLevel, at, CLOUD_RADIUS * width, CLOUD_DURATION + 60 * width,
+                far ? 512.0D : 192.0D);
         for (double offset : CLOUD_OFFSETS) {
             AreaEffectCloud cloud = new AreaEffectCloud(serverLevel, x, y + offset, z);
             cloud.setRadius(CLOUD_RADIUS * width);
             cloud.setDuration(CLOUD_DURATION);
             cloud.setWaitTime(0);
             cloud.setRadiusPerTick(0.0F);
+            // The cloud's own particles would be the effect's coloured swirls: a little ash drifting in the smoke instead.
+            cloud.setCustomParticle(ParticleTypes.WHITE_ASH);
             cloud.addEffect(new MobEffectInstance(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(ModEffects.SMOKED.get()), 40, 0, false, false, true));
             serverLevel.addFreshEntity(cloud);
         }
         extinguishNearbyFire(serverLevel, BlockPos.containing(at), 4 * width);
-        if (far) {
-            // The clouds (and their particles) are only seen within entity range, about 160 blocks: a shell's screen
-            // keeps sending smoke to 512 blocks for as long as the clouds last, so the observer sees it hold.
-            SCREENS.add(new Screen(serverLevel, at, width, new int[] {CLOUD_DURATION}));
-        }
-    }
-
-    private record Screen(ServerLevel level, net.minecraft.world.phys.Vec3 at, int width, int[] ticksLeft) {}
-
-    private static final java.util.List<Screen> SCREENS = new java.util.ArrayList<>();
-
-    /** Keeps the far-seen smoke of the shells' screens going (FabricEntrypoint, every server tick). */
-    public static void tickScreens(net.minecraft.server.MinecraftServer server) {
-        SCREENS.removeIf(screen -> {
-            int left = --screen.ticksLeft()[0];
-            if (left % 4 == 0) {
-                // Big, long-lived grey puffs (ModParticleTypes.SMOKE_SCREEN): campfire smoke is a block across, a speck at 200 blocks.
-                double spread = 2.6D * screen.width();
-                screen.level().sendParticles(ttv.migami.jeg.init.ModParticleTypes.SMOKE_SCREEN.get(), true, true, screen.at().x,
-                        screen.at().y + 1.5D, screen.at().z, 2 * screen.width(), spread, 0.9D, spread, 0.005D);
-            }
-            return left <= 0;
-        });
     }
 
     private static void extinguishNearbyFire(ServerLevel level, BlockPos center, int radius) {

@@ -18,7 +18,10 @@ recording as CC0 1.0 (public domain); author links are kept as a courtesy. These
 
 License: [CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/).
 
-`reverse.ogg` is an original synthesized back-up alarm. Everything else is a field recording.
+Everything is a field recording (2026-11-18, design/bulldozer/prepare_review_audio.py):
+
+- `reverse.ogg`: "Back Up BEEP Only" by Bon_Vivant_Pictures, https://freesound.org/people/Bon_Vivant_Pictures/sounds/449081/ (CC0 1.0): a construction truck's back-up beeper, looped.
+- `horn.ogg`, `horn_distant.ogg`: "air horn close and loud.WAV" by goose278, https://freesound.org/people/goose278/sounds/174819/ (CC0 1.0), lowered and laid over the industrial horn below.
 
 Processing is reproducible with `design/bulldozer/prepare_audio.py` (mono, 44.1 kHz Ogg Vorbis). Source downloads
 are cached in `build/bulldozer-audio-sources/`. Segment offsets, peaks, levels, loop-seam measurements and hashes are

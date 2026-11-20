@@ -1,0 +1,7 @@
+{
+  "start_s": 3.2,
+  "catch_s": 0.6,
+  "stop_s": 2.9,
+  "hull_loop_s": 18.0,
+  "hull_seam_jump": 0.0407
+}

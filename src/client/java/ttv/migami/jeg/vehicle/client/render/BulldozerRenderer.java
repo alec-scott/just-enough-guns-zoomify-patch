@@ -13,6 +13,11 @@ import ttv.migami.jeg.vehicle.util.BulldozerRig;
 
 /** Drives every articulation from the machine's state: linkage, hydraulics, running gear, chassis and controls. */
 public final class BulldozerRenderer extends AbstractVehicleGeoRenderer<BulldozerEntity> {
+    /** Each dozer's load of earth on the blade as last drawn, 0 (empty) to 1 (full). */
+    private static final java.util.Map<BulldozerEntity, float[]> SPOIL = new java.util.WeakHashMap<>();
+    /** Each dozer's levers as last drawn: travel, steer, blade (eased). */
+    private static final java.util.Map<BulldozerEntity, float[]> LEVERS = new java.util.WeakHashMap<>();
+
     /** Opt-in game-test probe, captured from actual posed cutting-edge and rod vertices. */
     public static boolean captureRig;
     public static Vec3 renderedCut;
@@ -29,6 +34,51 @@ public final class BulldozerRenderer extends AbstractVehicleGeoRenderer<Bulldoze
     }
 
     public BulldozerRenderer(EntityRendererProvider.Context context) { super(context, new NamedVehicleGeoModel("bulldozer")); }
+
+    /**
+     * The earth the blade carries (the user, 2026-11-19: "the earth building up on the blade"): while the blade cuts (the
+     * work status is clearing, busy or spoiling) it builds to two thirds and more with the synced load (the cut itself
+     * goes to the hold, so that load alone stays low); it is held while the dozer pushes on or stands, and goes as the
+     * blade lifts (spilling over the cutting edge in clods) or the dozer backs off (the pile stays on the ground). Eased
+     * frame to frame.
+     */
+    private static float spoil(BulldozerEntity dozer, float lift, double travel, boolean working) {
+        float[] state = SPOIL.computeIfAbsent(dozer, d -> new float[1]);
+        float fill = state[0];
+        float dt = Math.min(3.0F, Minecraft.getInstance().getDeltaTracker().getRealtimeDeltaTicks());
+        boolean raised = lift > 9.0F;
+        float target;
+        if (raised || travel < -0.01D) target = 0.0F;
+        else if (working) target = Math.max(fill, Mth.clamp(0.65F + 0.35F * dozer.load(), 0.0F, 1.0F));
+        else target = fill;
+        float rate = target > fill ? 0.02F : raised ? 0.06F : 0.035F;
+        float next = fill + Mth.clamp(target - fill, -rate * dt, rate * dt);
+        if (raised && fill - next > 0.002F && Minecraft.getInstance().level != null) spill(dozer, lift, fill - next);
+        state[0] = next;
+        return next;
+    }
+
+    /** The earth on a dozer's blade as last drawn, 0 to 1 (for tests). */
+    public static float spoilShown(BulldozerEntity dozer) {
+        float[] state = SPOIL.get(dozer);
+        return state == null ? 0.0F : state[0];
+    }
+
+    /** Clods of earth falling off a lifting blade, over its cutting edge. */
+    private static void spill(BulldozerEntity dozer, float lift, float amount) {
+        var level = Minecraft.getInstance().level;
+        var random = level.getRandom();
+        Vec3 ahead = Vec3.directionFromRotation(0.0F, dozer.getYRot());
+        Vec3 side = new Vec3(-ahead.z, 0.0D, ahead.x);
+        double up = 0.15D + Math.sin(lift * Mth.DEG_TO_RAD) * 2.2D;
+        var dirt = new net.minecraft.core.particles.BlockParticleOption(net.minecraft.core.particles.ParticleTypes.BLOCK,
+                net.minecraft.world.level.block.Blocks.DIRT.defaultBlockState());
+        int clods = Math.min(6, 1 + (int) (amount * 300.0F));
+        for (int i = 0; i < clods; i++) {
+            Vec3 at = dozer.position().add(ahead.scale(3.0D)).add(side.scale((random.nextDouble() - 0.5D) * 3.6D)).add(0.0D, up, 0.0D);
+            level.addParticle(dirt, at.x, at.y, at.z, ahead.x * 0.05D, -0.05D, ahead.z * 0.05D);
+        }
+    }
 
     @Override public void preRenderPass(RenderPassInfo<VehicleRenderState> pass, SubmitNodeCollector collector) {
         super.preRenderPass(pass, collector);
@@ -51,12 +101,32 @@ public final class BulldozerRenderer extends AbstractVehicleGeoRenderer<Bulldoze
         boolean working = dozer.workStatus() == BulldozerTerrainWork.WORKING || dozer.workStatus() == BulldozerTerrainWork.BUSY
                 || dozer.workStatus() == BulldozerTerrainWork.SPOIL;
         float chatter = working ? (.25F + dozer.load() * .5F) : 0;
-        float liftRate = dozer.bladeLift(partial) - dozer.bladeLift(Math.max(0, partial - .5F));
-        double speed = dozer.leftTravel(partial) + dozer.rightTravel(partial) - dozer.leftTravel(0) - dozer.rightTravel(0);
-        double turn = dozer.leftTravel(partial) - dozer.rightTravel(partial) - dozer.leftTravel(0) + dozer.rightTravel(0);
+        // The levers follow the machine's motion over a whole tick, eased frame to frame: measured within the tick (from
+        // its start to this frame) they snapped back at every tick and the travel stick twitched in first person (the
+        // user's review, 2026-11-18).
+        float[] lever = LEVERS.computeIfAbsent(dozer, d -> new float[3]);
+        float ease = Math.min(1.0F, net.minecraft.client.Minecraft.getInstance().getDeltaTracker().getRealtimeDeltaTicks() * 0.25F);
+        lever[0] += ((float) (dozer.leftTravel(1) + dozer.rightTravel(1) - dozer.leftTravel(0) - dozer.rightTravel(0)) - lever[0]) * ease;
+        lever[1] += ((float) (dozer.leftTravel(1) - dozer.rightTravel(1) - dozer.leftTravel(0) + dozer.rightTravel(0)) - lever[1]) * ease;
+        lever[2] += ((dozer.bladeLift(1) - dozer.bladeLift(0)) * .5F - lever[2]) * ease;
+        float liftRate = lever[2];
+        double speed = lever[0];
+        double turn = lever[1];
+        float spoil = spoil(dozer, lift, speed, working);
         pass.addBoneUpdater((info, bones) -> {
             bones.ifPresent("chassis", b -> { b.setRotX(lean + jitterPitch); b.setTranslateY(jitterY); });
             bones.ifPresent("blade_lift", b -> b.setRotX(radians));
+            // The earth on the blade, grown from the cutting edge as it fills.
+            bones.ifPresent("blade_spoil", b -> {
+                if (spoil < 0.03F) {
+                    b.skipRender(true);
+                    b.skipChildrenRender(true);
+                } else {
+                    b.setScaleY(spoil);
+                    b.setScaleZ(0.35F + 0.65F * spoil);
+                    b.setScaleX(0.8F + 0.2F * spoil);
+                }
+            });
             bones.ifPresent("blade_level", b -> b.setRotX(-radians));
             bones.ifPresent("blade_tilt", b -> {
                 b.setRotZ(chatter * .004F * Mth.sin(time * 31F));

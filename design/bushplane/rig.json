@@ -1,0 +1,137 @@
+{
+  "model": "jeg:entity/vehicle/tom6",
+  "units_per_block": 16,
+  "front": "-Z in the model, +Z in vehicle data",
+  "reference": "PA-18 Super Cub-class two-seat STOL bush plane, 1:1",
+  "length_m": 7.49,
+  "span_m": 10.84,
+  "height_m": 2.4,
+  "propeller_axis": [
+    0.0,
+    1.3125,
+    3.1875
+  ],
+  "propeller_radius": 1.0,
+  "seats": {
+    "pilot": [
+      0.0,
+      0.9375,
+      1.0
+    ],
+    "passenger": [
+      0.0,
+      0.9375,
+      0.375
+    ]
+  },
+  "pilot_eye": [
+    0.0,
+    1.6875,
+    1.0
+  ],
+  "wingtips": [
+    [
+      5.3438,
+      1.95,
+      0.9375
+    ],
+    [
+      -5.3438,
+      1.95,
+      0.9375
+    ]
+  ],
+  "nav_lights": {
+    "left_red": [
+      -84.0,
+      31.2,
+      -23.5
+    ],
+    "right_green": [
+      84.0,
+      31.2,
+      -23.5
+    ],
+    "tail_white": [
+      0.0,
+      24.7,
+      64.0
+    ],
+    "beacon": [
+      0.0,
+      37.8,
+      59.2
+    ],
+    "landing_light": [
+      -36.0,
+      32.6,
+      -27.0
+    ]
+  },
+  "model_bounds": [
+    [
+      -5.4188,
+      0.0,
+      3.475
+    ],
+    [
+      5.4187,
+      2.4,
+      -4.0187
+    ]
+  ],
+  "hitbox": [
+    {
+      "part": "body",
+      "covers": "fuselage",
+      "x": 0.005,
+      "y": 1.5437,
+      "z": -0.3119,
+      "half_width": 0.3856,
+      "half_height": 0.7688,
+      "half_depth": 3.4406
+    },
+    {
+      "part": "main_engine",
+      "covers": "engine and propeller",
+      "x": 0.0,
+      "y": 1.2188,
+      "z": 2.6562,
+      "half_width": 0.375,
+      "half_height": 0.3438,
+      "half_depth": 0.7812
+    },
+    {
+      "part": "body",
+      "covers": "wing",
+      "x": -0.0,
+      "y": 1.9675,
+      "z": 0.9375,
+      "half_width": 5.4187,
+      "half_height": 0.095,
+      "half_depth": 0.815
+    },
+    {
+      "part": "body",
+      "covers": "tail",
+      "x": 0.0,
+      "y": 1.8562,
+      "z": -3.4469,
+      "half_width": 1.5625,
+      "half_height": 0.5438,
+      "half_depth": 0.5719
+    },
+    {
+      "part": "body",
+      "covers": "main gear",
+      "x": 0.0,
+      "y": 0.4069,
+      "z": 1.5,
+      "half_width": 1.1012,
+      "half_height": 0.4069,
+      "half_depth": 0.4062
+    }
+  ],
+  "bones": 13,
+  "cuboids": 127
+}

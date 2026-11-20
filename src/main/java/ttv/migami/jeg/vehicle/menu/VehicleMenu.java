@@ -63,10 +63,32 @@ public final class VehicleMenu extends AbstractContainerMenu {
     private final int vehicleColumns;
     private final int playerInventoryY;
     private final int toolStart, toolCount;
+    /**
+     * The tool bay is selected (clicked in the screen): shift-clicked blocks from the player's inventory go into it
+     * rather than the hold. Kept on both sides by {@link #BUTTON_TOGGLE_TOOL_BAY}.
+     */
+    private boolean toolBaySelected;
     @Nullable
     private final VehicleEntity vehicle;
+    private final Player viewer;
+
+    /** The vehicle this hold belongs to, or null. */
+    @org.jetbrains.annotations.Nullable
+    public VehicleEntity vehicle() {
+        if (this.vehicle == null && this.vehicleId >= 0 && this.viewer != null
+                && this.viewer.level().getEntity(this.vehicleId) instanceof VehicleEntity found) {
+            // The client's copy knows its vehicle only by id (OpeningData).
+            return found;
+        }
+        return this.vehicle;
+    }
     /** The vehicle's entity id, so the client can list who sits where (-1 when unknown). */
     private int vehicleId;
+
+    /** Menu button: select or deselect the tool bay as the target of shift-clicks (clear of the seat eject buttons, 0..seats). */
+    public static final int BUTTON_TOGGLE_TOOL_BAY = 1000;
+    /** Menu button: a base defence's automatic mode on or off (the HPJ-11, the sentry; the user's review, 2026-11-18). */
+    public static final int BUTTON_TOGGLE_AUTO = 1001;
 
     public VehicleMenu(int containerId, Inventory playerInventory) {
         this(containerId, playerInventory, DEFAULT_VEHICLE_SLOT_COUNT);
@@ -97,6 +119,7 @@ public final class VehicleMenu extends AbstractContainerMenu {
     public VehicleMenu(int containerId, Inventory playerInventory, Container vehicleInventory, int vehicleSlotCount, @Nullable VehicleEntity vehicle,
                        int toolStart, int toolCount) {
         super(ModMenuTypes.VEHICLE_MENU.get(), containerId);
+        this.viewer = playerInventory.player;
         this.toolStart = toolStart;
         this.toolCount = Math.max(0, toolCount);
         this.vehicleSlotCount = Math.max(0, Math.min(vehicleSlotCount, MAX_VEHICLE_SLOT_COUNT));
@@ -142,6 +165,10 @@ public final class VehicleMenu extends AbstractContainerMenu {
         return this.toolStart >= 0 && slot >= this.toolStart && slot < this.toolStart + this.toolCount;
     }
 
+    public boolean toolBaySelected() {
+        return this.toolBaySelected && this.toolCount() > 0;
+    }
+
     public int vehicleRows() {
         return this.vehicleRows;
     }
@@ -175,6 +202,11 @@ public final class VehicleMenu extends AbstractContainerMenu {
                 if (!this.moveItemStackTo(stack, playerInventoryStart, hotbarEnd, true)) {
                     return ItemStack.EMPTY;
                 }
+            } else if (this.toolBaySelected() && isLayableBlock(stack)) {
+                // The bay is selected: blocks go only into it (a full bay leaves them with the player, not in the hold).
+                if (!this.moveItemStackTo(stack, this.toolStart, this.toolStart + this.toolCount(), false)) {
+                    return ItemStack.EMPTY;
+                }
             } else if (!this.moveItemStackTo(stack, 0, this.vehicleSlotCount, false)) {
                 return ItemStack.EMPTY;
             }
@@ -192,10 +224,29 @@ public final class VehicleMenu extends AbstractContainerMenu {
         return this.vehicleId;
     }
 
-    /** A seat's eject button (the id is the seat index): puts the mob in that seat off the vehicle. Never a player. */
+    /**
+     * Menu buttons: {@link #BUTTON_TOGGLE_TOOL_BAY} selects or deselects the tool bay (both sides keep the flag); any
+     * other id is a seat's eject button (the id is the seat index), which puts the mob in that seat off the vehicle.
+     * Never a player.
+     */
     @Override
     public boolean clickMenuButton(@NotNull Player player, int id) {
+        if (id == BUTTON_TOGGLE_TOOL_BAY) {
+            if (this.toolCount() <= 0) {
+                return false;
+            }
+            this.toolBaySelected = !this.toolBaySelected;
+            return true;
+        }
         if (this.vehicle == null || !this.stillValid(player)) {
+            return false;
+        }
+        if (id == BUTTON_TOGGLE_AUTO) {
+            if (this.vehicle instanceof ttv.migami.jeg.vehicle.entity.AutoDefenceEntity defence
+                    && player instanceof net.minecraft.server.level.ServerPlayer serverPlayer) {
+                defence.towKey(serverPlayer);
+                return true;
+            }
             return false;
         }
         var passenger = this.vehicle.passengerForSeat(id);

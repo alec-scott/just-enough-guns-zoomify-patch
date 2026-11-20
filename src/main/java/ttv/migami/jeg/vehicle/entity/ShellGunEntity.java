@@ -137,9 +137,9 @@ public abstract class ShellGunEntity extends VehicleEntity {
         }
         level.addFreshEntity(shell);
         this.entityData.set(DATA_SHOTS, this.entityData.get(DATA_SHOTS) + 1);
-        Vec3 smoke = muzzle.add(bore.scale(0.8D));
-        level.sendParticles(ParticleTypes.EXPLOSION, smoke.x, smoke.y, smoke.z, 1, 0.0D, 0.0D, 0.0D, 0.0D);
-        level.sendParticles(ParticleTypes.CAMPFIRE_COSY_SMOKE, smoke.x, smoke.y, smoke.z, 10, 0.4D, 0.4D, 0.4D, 0.03D);
+        // The muzzle blast's smoke (a rocket's backblast behind the launcher, so it never hides the target from its crew,
+        // the Type-63 review of 2026-11-18) is drawn by each client from this report as real smoke on the gun as drawn
+        // (MissileBlastRenderer.gunFired), no longer the campfire puffs sent from here (2026-11-19).
         GunReportPayload.send(level, this, muzzle, this.reportSound(), this.reportLoudness());
     }
 
@@ -149,7 +149,7 @@ public abstract class ShellGunEntity extends VehicleEntity {
     }
 
     /** Whether this gun's shells are rockets (a motor glow and a short trail as they leave, MissileTrailRenderer). */
-    protected boolean shellsAreRockets() {
+    public boolean shellsAreRockets() {
         return false;
     }
 

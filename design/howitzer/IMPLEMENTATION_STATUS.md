@@ -51,9 +51,26 @@ Brief: [BRIEF.md](BRIEF.md).
 | Three HE rounds at 2 km | 2.5, 10.3 and 2.8 blocks from the target (bound: 20) |
 | Packed again, FSV-6 driver's N, drive 6 s | hitched; lunette 0.31 blocks from the pintle, gun facing away from the truck, towed 73 blocks |
 
+## Finalisation (2026-11-18, design/READINESS.md)
+
+- **Its own report from real recordings** (`prepare_audio.py`), replacing the Mk42's pitched down: a field artillery gun
+  fired close by (InMotionAudio, "69th Field Artillery Gun", CC0) up close and for the crew; three rounds of a US Army
+  piece in the field with their roll off the ground (qubodup, from Army footage, CC0) as the distant layer. Loading
+  stays the Mk42's (SBW, breech and rammer).
+- **Weight:** `"mass"` 2.1 t (the M101A1's); the FSV-6 pulls away slower with it on the hitch.
+- Wrecks as every gun does (cooks off, burns; `GroundWreckClientGameTest`, the shared artillery path).
+
+| Test (`-PwithPack`) | Result |
+| --- | --- |
+| `HowitzerClientGameTest` | passes, now also listening: `vehicle.howitzer.load` and `vehicle.howitzer.fire_interior` (the crew's take, the player at the gun) heard |
+
+Played (mcpfabric, pack client, midnight): from the gunner's seat the panel (shell, elevation, bearing 180 facing
+south, range, trails "Packed: N to deploy", charge, target) and the elevation scale read clearly in the dark; there are
+no lamps on the real gun. The third-person camera sits low behind it, the gun at the bottom of the frame.
+
 ## Not covered yet
 
-- Listening: the report and loading are the Mk42's sounds, pitched down, as stand-ins for a CC0 105 mm report.
+- **Listen:** `vehicle/howitzer/fire`, `fire_interior`, `fire_distant_1..3`; the loading is the Mk42's.
 - The observer at long range (the spyglass marks only within the client's render distance; 512 blocks at most); a mark
   1–2 km off needs Voxy-distance picking or typed coordinates.
 - A smoke screen seen from more than about 210 blocks; HE block damage at range; claim mods.

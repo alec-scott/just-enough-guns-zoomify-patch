@@ -2,13 +2,13 @@
   "type": "minecraft:crafting_shaped",
   "category": "equipment",
   "key": {
-    "N": "minecraft:iron_nugget",
+    "B": "minecraft:blaze_powder",
     "G": "minecraft:gunpowder",
     "C": "minecraft:copper_ingot"
   },
   "pattern": [
-    "NNN",
-    "NCN",
+    " B ",
+    "BCB",
     " G "
   ],
   "result": {

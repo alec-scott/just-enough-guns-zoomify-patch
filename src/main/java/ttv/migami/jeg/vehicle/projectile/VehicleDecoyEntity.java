@@ -29,7 +29,8 @@ public final class VehicleDecoyEntity extends Entity {
     private static final int SMOKE_LIFE_TICKS = 400;
     private static final int SMOKE_IGNITE_TICKS = 4;
     private static final double SMOKE_BLOCK_RANGE = 12.0D;
-    private static final double SMOKE_THICKNESS_MULTIPLIER = 1.5D;
+    /** How far each discharger grenade's smoke spreads. */
+    private static final float SMOKE_SCREEN_RADIUS = 4.5F;
 
     public VehicleDecoyEntity(EntityType<? extends VehicleDecoyEntity> type, Level level) {
         super(type, level);
@@ -114,27 +115,26 @@ public final class VehicleDecoyEntity extends Entity {
         if (burn <= 0.05F) {
             return;
         }
-        // The smoke trail, drawn back along this tick's path so it stays unbroken at speed.
+        // The smoke trail, real smoke (SmokeFx; 2026-11-19, it was sprite puffs), laid back along this tick's path so it
+        // stays unbroken at speed: thick and white behind the flare, thinning as it hangs and drifts.
         double px = this.xo;
         double py = this.yo + 0.17D;
         double pz = this.zo;
-        int puffs = this.getDeltaMovement().length() > 0.8D ? 2 : 1;
+        int puffs = this.getDeltaMovement().length() > 0.8D ? 3 : 2;
         for (int i = 0; i < puffs; i++) {
             double t = (i + this.random.nextDouble() * 0.5D) / puffs;
-            this.level().addAlwaysVisibleParticle(new ColoredFlareOption(TRAIL_COLOUR), true,
-                    Mth.lerp(t, px, x), Mth.lerp(t, py, y), Mth.lerp(t, pz, z),
-                    this.random.nextGaussian() * 0.004D, 0.006D, this.random.nextGaussian() * 0.004D);
+            ttv.migami.jeg.vehicle.effect.SmokeFx.emit(this.level(), new Vec3(Mth.lerp(t, px, x), Mth.lerp(t, py, y), Mth.lerp(t, pz, z)),
+                    new Vec3(this.random.nextGaussian() * 0.004D, 0.006D, this.random.nextGaussian() * 0.004D),
+                    ttv.migami.jeg.vehicle.effect.SmokeFx.WHITE, 0.7F + 0.5F * burn);
         }
-        // Fresh smoke is bright white right behind the flare, greying as it hangs.
-        this.level().addAlwaysVisibleParticle(ParticleTypes.CLOUD, true, px, py, pz,
-                this.random.nextGaussian() * 0.01D, 0.01D, this.random.nextGaussian() * 0.01D);
         int sparks = burn > 0.5F ? 2 : 1;
         for (int i = 0; i < sparks; i++) {
             this.level().addAlwaysVisibleParticle(ParticleTypes.FIREWORK, true, x, y, z,
                     this.random.nextGaussian() * 0.06D, -0.04D + this.random.nextGaussian() * 0.03D, this.random.nextGaussian() * 0.06D);
         }
-        if (this.random.nextFloat() < 0.5F) {
-            this.level().addParticle(ParticleTypes.FLAME, x, y, z, this.random.nextGaussian() * 0.01D, 0.01D, this.random.nextGaussian() * 0.01D);
+        if (this.random.nextFloat() < 0.6F) {
+            ttv.migami.jeg.vehicle.effect.SmokeFx.emit(this.level(), new Vec3(x, y, z),
+                    new Vec3(this.random.nextGaussian() * 0.01D, 0.01D, this.random.nextGaussian() * 0.01D), ttv.migami.jeg.vehicle.effect.SmokeFx.FIRE, 0.35F);
         }
     }
 
@@ -153,35 +153,25 @@ public final class VehicleDecoyEntity extends Entity {
         return distance < 320.0D * 320.0D;
     }
 
+    /**
+     * A smoke grenade from the vehicle's dischargers: it flies out a few blocks, bursts and lays its share of the screen.
+     * The screen is drawn by each client as one billowing cloud (SmokeScreenPayload, MissileBlastRenderer), no longer a
+     * blizzard of vanilla campfire smoke (the user's review, R17); the eight grenades of a salvo make a wall round the
+     * front of the vehicle. While it lasts, it still hides what is behind it from missiles (isSmokeBlockingTarget).
+     */
     private void tickSmoke() {
         this.move(MoverType.SELF, this.getDeltaMovement());
         if (this.tickCount == SMOKE_IGNITE_TICKS) {
             this.setDeltaMovement(Vec3.ZERO);
             if (this.level() instanceof ServerLevel serverLevel) {
-                serverLevel.sendParticles(ParticleTypes.CAMPFIRE_COSY_SMOKE, this.getX(), this.getY(), this.getZ(), 240, 6.0D, 3.2D, 6.0D, 0.08D);
-                serverLevel.sendParticles(ParticleTypes.FLAME, this.getX(), this.getY(), this.getZ(), 30, 0.25D, 0.25D, 0.25D, 0.12D);
-            }
-        }
-        if (!this.level().isClientSide() && this.level() instanceof ServerLevel serverLevel && this.tickCount > SMOKE_IGNITE_TICKS && this.tickCount % 5 == 0) {
-            double radius = this.smokeRadius();
-            serverLevel.sendParticles(ParticleTypes.CAMPFIRE_COSY_SMOKE, this.getX(), this.getY() + 0.5D, this.getZ(), 72, radius, 2.8D, radius, 0.015D);
-        }
-        if (this.level().isClientSide()) {
-            for (int i = 0; i < 10; i++) {
-                double radius = this.smokeRadius();
-                double x = this.getX() + (this.random.nextDouble() - 0.5D) * radius * 2.0D;
-                double y = this.getY() + this.random.nextDouble() * 5.6D;
-                double z = this.getZ() + (this.random.nextDouble() - 0.5D) * radius * 2.0D;
-                this.level().addParticle(ParticleTypes.CAMPFIRE_COSY_SMOKE, x, y, z, this.random.nextGaussian() * 0.01D, 0.015D, this.random.nextGaussian() * 0.01D);
+                serverLevel.sendParticles(ParticleTypes.FLAME, this.getX(), this.getY(), this.getZ(), 12, 0.2D, 0.2D, 0.2D, 0.08D);
+                ttv.migami.jeg.network.SmokeScreenPayload.send(serverLevel, this.position(), SMOKE_SCREEN_RADIUS,
+                        SMOKE_LIFE_TICKS - SMOKE_IGNITE_TICKS, 256.0D);
             }
         }
         if (this.tickCount > SMOKE_LIFE_TICKS) {
             this.discard();
         }
-    }
-
-    private double smokeRadius() {
-        return Mth.clamp(1.6D + (this.tickCount - SMOKE_IGNITE_TICKS) / 15.0D, 1.6D, 7.0D) * SMOKE_THICKNESS_MULTIPLIER;
     }
 
     private void shootFrom(Entity shooter, Vec3 direction, float velocity, float inaccuracy) {

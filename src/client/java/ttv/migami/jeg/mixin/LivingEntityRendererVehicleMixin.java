@@ -13,7 +13,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import ttv.migami.jeg.vehicle.client.VehiclePassengerRenderHandler;
 
 @Mixin(LivingEntityRenderer.class)
-public final class LivingEntityRendererVehicleMixin {
+public abstract class LivingEntityRendererVehicleMixin {
     @Inject(
             method = "submit(Lnet/minecraft/client/renderer/entity/state/LivingEntityRenderState;Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/SubmitNodeCollector;Lnet/minecraft/client/renderer/state/level/CameraRenderState;)V",
             at = @At("HEAD"),
@@ -23,6 +23,23 @@ public final class LivingEntityRendererVehicleMixin {
         if (renderState instanceof AvatarRenderState avatarRenderState
                 && VehiclePassengerRenderHandler.shouldHideLocalPlayerPassenger(avatarRenderState.id)) {
             ci.cancel();
+            return;
+        }
+        VehiclePassengerRenderHandler.standAtStation(renderState);
+        this.jeg$tilted = VehiclePassengerRenderHandler.tiltWithAircraft(renderState, poseStack);
+    }
+
+    /** Whether this submit pushed an aircraft's bank and pitch onto the pose, to pop at its end. */
+    private boolean jeg$tilted;
+
+    @Inject(
+            method = "submit(Lnet/minecraft/client/renderer/entity/state/LivingEntityRenderState;Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/SubmitNodeCollector;Lnet/minecraft/client/renderer/state/level/CameraRenderState;)V",
+            at = @At("RETURN")
+    )
+    private void jeg$untilt(LivingEntityRenderState renderState, PoseStack poseStack, SubmitNodeCollector submitNodeCollector, CameraRenderState cameraRenderState, CallbackInfo ci) {
+        if (this.jeg$tilted) {
+            this.jeg$tilted = false;
+            poseStack.popPose();
         }
     }
 }

@@ -30,6 +30,7 @@ public final class SupportVehicleRenderer extends AbstractVehicleGeoRenderer<Sup
         super(context, new NamedVehicleGeoModel("truck"));
         this.blockModels = context.getBlockModelResolver();
         this.withRenderLayer(new SupportCockpitLayer(this));
+        this.withRenderLayer(new SupportTowBarLayer(this));
     }
 
     /**
@@ -91,6 +92,16 @@ public final class SupportVehicleRenderer extends AbstractVehicleGeoRenderer<Sup
             // Bunks fold up against the slide-outs' walls for travel and down once deployed.
             bones.ifPresent("bunk_left", b -> b.setRotZ(90 * (1 - mast) * Mth.DEG_TO_RAD));
             bones.ifPresent("bunk_right", b -> b.setRotZ(-90 * (1 - mast) * Mth.DEG_TO_RAD));
+            // Once deployed, a bunk with a bed fitted is that real bed block: the folded-down bunk platform sat inside the
+            // bed and fought it for the same pixels (a flickering seam across the blanket, user report 2026-11-17).
+            if (truck.isDeployed()) {
+                if (isBed(truck.fittedForDisplay(ttv.migami.jeg.vehicle.support.SupportModules.BUNK_LEFT))) {
+                    bones.ifPresent("bunk_left", b -> b.skipRender(true));
+                }
+                if (isBed(truck.fittedForDisplay(ttv.migami.jeg.vehicle.support.SupportModules.BUNK_RIGHT))) {
+                    bones.ifPresent("bunk_right", b -> b.skipRender(true));
+                }
+            }
             for (int i = 0; i < 4; i++) {
                 float drop = jackDrop[i];
                 bones.ifPresent(JACK_NAMES[i], b -> b.setTranslateY(-drop));
@@ -187,6 +198,11 @@ public final class SupportVehicleRenderer extends AbstractVehicleGeoRenderer<Sup
                 pose.popPose();
             }
         }));
+    }
+
+    private static boolean isBed(net.minecraft.world.item.ItemStack stack) {
+        return stack.getItem() instanceof net.minecraft.world.item.BlockItem item
+                && item.getBlock() instanceof net.minecraft.world.level.block.BedBlock;
     }
 
     /** The lamp hook in the ceiling (model px x, z; generate.py's LAMP_HOOK): the middle of the room (user's choice, 2026-11-15). */

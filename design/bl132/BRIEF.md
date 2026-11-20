@@ -51,7 +51,7 @@ the house (`follows: barrel`, part `turret`, so only hits on the guns jam them).
 | HE | 250 | 160 within 11, blocks power 6.5 | proximity fuze 4 blocks, armed after 10 ticks |
 | AP | 470 | 125 within 3.7 | |
 | Cluster | 360 (whole) | 220 within 7 | 18 bomblets of 120 direct, 61 within 3.5 |
-| Grapeshot | 1,100 / 36 per pellet | none | 36 pellets at the muzzle |
+| Grapeshot (incendiary since 2026-11-19: bursts 8 up, 36 fragments of 14 over 6 blocks) | 1,100 / 36 per pellet | none | 36 pellets at the muzzle |
 
 The four guns fire in SBW's order: lower left, lower right, upper left, upper right. Every shell is a dud within its
 blast radius (+1) of the gun (shared with the Mk42).

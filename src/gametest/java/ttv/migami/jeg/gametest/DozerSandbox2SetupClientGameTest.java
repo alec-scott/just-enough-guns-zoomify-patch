@@ -190,6 +190,8 @@ public class DozerSandbox2SetupClientGameTest implements FabricClientGameTest {
         stand.snapTo(far.getX(), far.getY(), far.getZ(), 90, 0);
         stand.setInvisible(true);
         level.addFreshEntity(stand);
+        // Since yftm.22 only a player or tagged crew may drive or man a gun.
+        stand.addTag(ttv.migami.jeg.vehicle.ai.EnemyVehicleController.ENEMY_VEHICLE_CREW_TAG);
         stand.startRiding(far, true, true);
     }
 }

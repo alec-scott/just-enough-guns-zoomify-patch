@@ -17,6 +17,8 @@ public final class VehicleWeaponStats {
     private static final Identifier MEDIUM_ANTI_GROUND_MISSILE = Reference.id("medium_anti_ground_missile");
     private static final Identifier LARGE_ANTI_GROUND_MISSILE = Reference.id("large_anti_ground_missile");
     private static final Identifier ROCKET_FIRE = Reference.id("item.rocket_launcher.fire");
+    /** A real BGM-71 launch (design/tow/prepare_audio.py). */
+    private static final Identifier TOW_LAUNCH = Reference.id("vehicle.tow.launch");
     private static final Identifier ROCKET_RELOAD_START = Reference.id("item.rocket_launcher.lid_open");
     /** The GAU-8's reload: the ammunition drum opened, then refilled, the feed seated and the bolt home. */
     private static final Identifier A10_GUN_RELOAD_START = Reference.id("vehicle.a10.gun_reload_start");
@@ -33,9 +35,18 @@ public final class VehicleWeaponStats {
     private static final Identifier BL132_LOAD = Reference.id("vehicle.bl132.load");
     private static final Identifier TYPE63_LOAD = Reference.id("vehicle.type63.load");
     private static final Identifier PLZ05_LOAD = Reference.id("vehicle.plz05.load");
-    private static final Identifier LEOPARD2_LOAD = Reference.id("vehicle.leopard2.load");
+    private static final Identifier YX100_LOAD = Reference.id("vehicle.yx100.load");
 
     private static final Map<Identifier, GunStats> STATS = createStats();
+
+    /** A copy of a gun's stats under another id, with its own direct damage and tracer colour (a second belt). */
+    private static GunStats withId(GunStats s, Identifier id, float damage, int trailColor) {
+        return new GunStats(id, s.ammoItem(), s.reloadType(), s.magazineSize(), s.reloadTime(), s.additionalReloadTime(),
+                s.fireDelay(), damage, s.projectileSpeed(), s.projectileLife(), s.gravity(), s.flameTrail(), s.spread(),
+                s.projectileAmount(), s.fireSound(), s.silencedFireSound(), s.enchantedFireSound(), s.reloadStartSound(),
+                s.reloadLoadSound(), s.reloadEndSound(), s.ejectorPullSound(), s.ejectorReleaseSound(), s.projectileSize(),
+                trailColor, s.trailLengthMultiplier());
+    }
 
     private static Map<Identifier, GunStats> createStats() {
         Map<Identifier, GunStats> stats = new LinkedHashMap<>();
@@ -99,6 +110,9 @@ public final class VehicleWeaponStats {
                         2.8F
                 )
         );
+        // The 2A42's second feed (dual feed, fleet plan section 2): HE, bursting among infantry; the first is AP.
+        stats.put(Reference.id("vehicle_30mm_cannon_he"), withId(stats.get(Reference.id("vehicle_30mm_cannon")),
+                Reference.id("vehicle_30mm_cannon_he"), 40.0F, 0xFF7A1A));
         stats.put(
                 Reference.id("vehicle_coax_machine_gun"),
                 new GunStats(
@@ -322,7 +336,7 @@ public final class VehicleWeaponStats {
                     switch (kind) {
                         case "ap" -> 450.0F;
                         case "cm" -> 300.0F;
-                        case "gs" -> 1000.0F;
+                        case "gs" -> 376.0F; // incendiary: 28 fragments of 12 and the burst's 40
                         default -> 250.0F;
                     },
                     15.0F,
@@ -360,7 +374,7 @@ public final class VehicleWeaponStats {
                     switch (kind) {
                         case "ap" -> 470.0F;
                         case "cm" -> 360.0F;
-                        case "gs" -> 1100.0F;
+                        case "gs" -> 554.0F; // incendiary: 36 fragments of 14 and the burst's 50
                         default -> 250.0F;
                     },
                     15.0F,
@@ -415,7 +429,8 @@ public final class VehicleWeaponStats {
             ));
         }
         // The PLZ-05 (design/plz05/BRIEF.md): the Mk42's 5-inch shells, fired as ShellEntity shells (Plz05Entity, whose
-        // charge sets the muzzle velocity). One in the breech; the autoloader loads the next in 6 s (stat 188 * 0.64).
+        // charge sets the muzzle velocity). One in the breech; the autoloader loads the next in 3 s (stat 94 * 0.64; 6 s
+        // until the user's review, 2026-11-18, found it slow).
         for (String kind : new String[]{"he", "ap", "cm", "gs"}) {
             Identifier id = Reference.id("vehicle_plz05_" + kind);
             stats.put(id, new GunStats(
@@ -423,13 +438,13 @@ public final class VehicleWeaponStats {
                     Reference.id("shell_5in_" + kind),
                     "jeg:magazine",
                     1,
-                    188,
+                    94,
                     0,
                     20,
                     switch (kind) {
                         case "ap" -> 450.0F;
                         case "cm" -> 300.0F;
-                        case "gs" -> 1000.0F;
+                        case "gs" -> 376.0F; // incendiary: 28 fragments of 12 and the burst's 40
                         default -> 250.0F;
                     },
                     19.0F,
@@ -451,22 +466,22 @@ public final class VehicleWeaponStats {
                     1.0F
             ));
         }
-        // The Leopard 2A7 (design/leopard2/BRIEF.md): the Mk42's 5-inch shells fired flat and fast (Leopard2Entity's
-        // ballistics), one in the breech, loaded in 3.5 s (SBW's YX-100: 70 ticks, stat 109 * 0.64).
+        // The YX-100 (design/yx100/BRIEF.md): the Mk42's 5-inch shells fired flat and fast (Yx100Entity's
+        // ballistics), one in the breech, loaded in 3.5 s (SBW's: 70 ticks, stat 109 * 0.64).
         for (String kind : new String[]{"he", "ap", "cm", "gs"}) {
-            Identifier id = Reference.id("vehicle_leopard2_" + kind);
+            Identifier id = Reference.id("vehicle_yx100_" + kind);
             stats.put(id, new GunStats(id, Reference.id("shell_5in_" + kind), "jeg:magazine", 1, 109, 0, 20,
                     switch (kind) {
                         case "ap" -> 450.0F;
                         case "cm" -> 300.0F;
-                        case "gs" -> 1000.0F;
+                        case "gs" -> 376.0F; // incendiary: 28 fragments of 12 and the burst's 40
                         default -> 250.0F;
                     },
-                    40.0F, 150, true, false, 0.02F, 1, null, null, null, LEOPARD2_LOAD, null, LEOPARD2_LOAD, null, null,
+                    40.0F, 150, true, false, 0.02F, 1, null, null, null, YX100_LOAD, null, YX100_LOAD, null, null,
                     0.2F, 0xFFC040, 1.0F));
         }
-        // The Leopard's FLW 200 weapon station: a 12.7 mm, as the PLZ-05's roof gun.
-        stats.put(Reference.id("vehicle_leopard2_rws"), new GunStats(Reference.id("vehicle_leopard2_rws"), RIFLE_AMMO, "jeg:magazine",
+        // The YX-100's remote weapon station: a 12.7 mm, as the PLZ-05's roof gun.
+        stats.put(Reference.id("vehicle_yx100_rws"), new GunStats(Reference.id("vehicle_yx100_rws"), RIFLE_AMMO, "jeg:magazine",
                 100, 125, 0, 2, 14.0F, 30.0F, 60, false, false, 0.4F, 1, MACHINE_GUN_FIRE, null, MACHINE_GUN_FIRE,
                 null, null, null, null, null, GunStats.STANDARD_BULLET_PROJECTILE_SIZE, 0xFFAA33, 1.5F));
         // The PLZ-05's roof 12.7 mm: about 600 rounds a minute from a 100-round box (8 s to change: stat 125 / 0.64), on
@@ -498,9 +513,22 @@ public final class VehicleWeaponStats {
                 0xFFAA33,
                 1.5F
         ));
+        // The sentry's 7.62 mm (design/sentry/BRIEF.md): fed from the hold, about 600 rounds a minute, as the coax.
+        stats.put(Reference.id("vehicle_sentry_machine_gun"), new GunStats(Reference.id("vehicle_sentry_machine_gun"), RIFLE_AMMO,
+                "jeg:inventory_fed", 0, 0, 0, 2, 8.0F, 24.0F, 60, false, false, 0.5F, 1, MACHINE_GUN_FIRE, null, MACHINE_GUN_FIRE,
+                null, null, null, null, null, GunStats.STANDARD_BULLET_PROJECTILE_SIZE, 0xFFAA33, 1.2F));
+        // The HPJ-11's eleven-barrel 30 mm (design/hpj11/BRIEF.md): belt-fed from the hold, a round a tick once spun up (1,200
+        // rounds a minute; SBW's), 30 blocks a tick, proximity-fuzed against missiles and aircraft (Hpj11Entity).
+        stats.put(Reference.id("vehicle_hpj11_ciws"), new GunStats(Reference.id("vehicle_hpj11_ciws"), AUTOCANNON_SHELL, "jeg:inventory_fed",
+                0, 0, 0, 1, 14.0F, 30.0F, 90, true, false, 0.35F, 1, null, null, null,
+                null, null, null, null, null, 0.16F, 0xFFC700, 2.8F));
+        // The speedboat's bow 12.7 mm (an M2 on a pintle, design/speedboat/BRIEF.md): as the PLZ-05's roof gun.
+        stats.put(Reference.id("vehicle_speedboat_hmg"), new GunStats(Reference.id("vehicle_speedboat_hmg"), RIFLE_AMMO, "jeg:magazine",
+                100, 125, 0, 2, 14.0F, 30.0F, 60, false, false, 0.6F, 1, MACHINE_GUN_FIRE, null, MACHINE_GUN_FIRE,
+                null, null, null, null, null, GunStats.STANDARD_BULLET_PROJECTILE_SIZE, 0xFFAA33, 1.5F));
         // The Type-63's 107 mm rockets (design/type63/BRIEF.md): fired as ShellEntity rockets (Type63Entity), twelve in a
         // ripple 14 ticks apart (all twelve in about 8 s, the real rate), then 30 s for the crew to reload the tubes
-        // from the crate (stat 600 / 0.64).
+        // from the crate in 8 s (stat 250 * 0.64; 30 s until the user's review, 2026-11-18: far too slow to play).
         for (String kind : new String[]{"he", "ap", "cm"}) {
             Identifier id = Reference.id("vehicle_type63_" + kind);
             stats.put(id, new GunStats(
@@ -508,7 +536,7 @@ public final class VehicleWeaponStats {
                     Reference.id("rocket_107mm_" + kind),
                     "jeg:magazine",
                     12,
-                    938,
+                    250,
                     0,
                     14,
                     switch (kind) {
@@ -535,14 +563,14 @@ public final class VehicleWeaponStats {
                     1.0F
             ));
         }
-        // The TOW (design/tow/BRIEF.md): one missile in the tube, a wire-guided round every 7.5 s (SBW's 8 a minute), loaded
-        // from the crate in its hold. The stat is 150 / 0.64 (vehicle reloads run at 0.64, see the Mk42's).
+        // The TOW (design/tow/BRIEF.md): one missile in the tube, loaded from the crate in its hold in 3.75 s (half SBW's
+        // 7.5 s, the user's review, 2026-11-18). The stat is 117 * 0.64 (vehicle reloads run at 0.64, see the Mk42's).
         stats.put(Reference.id("vehicle_tow_missile"), new GunStats(
                 Reference.id("vehicle_tow_missile"),
                 MEDIUM_ANTI_GROUND_MISSILE,
                 "jeg:magazine",
                 1,
-                234,
+                117,
                 0,
                 20,
                 600.0F,
@@ -552,9 +580,9 @@ public final class VehicleWeaponStats {
                 true,
                 0.0F,
                 1,
-                BMP2_MISSILE_FIRE,
+                TOW_LAUNCH,
                 null,
-                BMP2_MISSILE_FIRE,
+                TOW_LAUNCH,
                 ROCKET_RELOAD_START,
                 ROCKET_RELOAD_LOAD,
                 ROCKET_RELOAD_END,

@@ -1,6 +1,7 @@
 {
   "entity_type": "jeg:laser_tower",
   "vehicle_type": "artillery",
+  "mass": 2.0,
   "max_health": 130.0,
   "auto_repair_per_tick": 0.01,
   "auto_repair_cooldown_ticks": 180,

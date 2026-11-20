@@ -61,7 +61,7 @@ public class Type63ClientGameTest implements FabricClientGameTest {
             // 1. Load twelve from the crate.
             this.look(context, 0.0F, -10.0F);
             context.getInput().pressKey(KeyBindings.RELOAD);
-            context.waitTicks(620);
+            context.waitTicks(180);
             int loaded = server.computeOnServer(s -> gun(s).rocketsLoaded());
             int shown = context.computeOnClient(mc -> ((Type63Entity) mc.level.getEntity(this.gunId)).rocketsLoaded());
             check(loaded == 12 && shown == 12, "R must load all twelve tubes (server " + loaded + ", client " + shown + ")");
@@ -129,7 +129,7 @@ public class Type63ClientGameTest implements FabricClientGameTest {
 
             // 4. Full range at 45 degrees.
             context.getInput().pressKey(KeyBindings.RELOAD);
-            context.waitTicks(620);
+            context.waitTicks(180);
             int spare = server.computeOnServer(s -> gun(s).rocketsLoaded());
             check(spare == 1, "the reload must load the crate's last rocket, loaded " + spare);
             // The handwheels lay at 0.5 degrees a tick: 55 degrees up takes 110 ticks.

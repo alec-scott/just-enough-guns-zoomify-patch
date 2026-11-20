@@ -1,6 +1,7 @@
 {
   "entity_type": "jeg:ah6",
   "vehicle_type": "helicopter",
+  "mass": 0.9,
   "max_health": 72.0,
   "auto_repair_per_tick": 0.012,
   "auto_repair_cooldown_ticks": 130,

@@ -132,6 +132,8 @@ public class HeliWeaponSidesClientGameTest implements FabricClientGameTest {
             husk.setSilent(true);
             husk.snapTo(at.x, at.y, at.z, 0.0F, 0.0F);
             level.addFreshEntity(husk);
+            // Since yftm.22 only a player or tagged crew may drive or man a gun.
+            husk.addTag(ttv.migami.jeg.vehicle.ai.EnemyVehicleController.ENEMY_VEHICLE_CREW_TAG);
             husk.startRiding(vehicle, true, true);
         }
         stock(vehicle);

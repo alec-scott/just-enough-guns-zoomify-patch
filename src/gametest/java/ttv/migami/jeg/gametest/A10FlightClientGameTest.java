@@ -129,10 +129,10 @@ public class A10FlightClientGameTest implements FabricClientGameTest {
         Vec3 start = context.computeOnClient(mc -> vehicle(mc).position());
         float health = context.computeOnClient(mc -> vehicle(mc).vehicleHealth());
 
-        // Take-off: full throttle, then lift the nose to about 8 degrees at rotate speed and let it fly off.
+        // Take-off: full throttle, then lift the nose to about 8 degrees at rotate speed and let it fly off. On the ground
+        // the throttle only stays open while W is held, so it is held until the wheels leave the runway.
         context.getInput().holdKey(options -> options.keyUp);
         context.waitTicks(55);
-        context.getInput().releaseKey(options -> options.keyUp);
         Vec3 liftOff = null;
         for (int tick = 1; tick <= 700 && liftOff == null; tick++) {
             State state = this.state(context);
@@ -148,6 +148,7 @@ public class A10FlightClientGameTest implements FabricClientGameTest {
                 liftOff = after.position;
             }
         }
+        context.getInput().releaseKey(options -> options.keyUp);
         if (liftOff == null) {
             this.fail("never left the ground");
             return;
@@ -169,6 +170,22 @@ public class A10FlightClientGameTest implements FabricClientGameTest {
         this.record(context, "hands-off", 60, 0.0D, 0.0D);
         float levelAltitude = (float) this.state(context).altitude;
         this.report.append(String.format("hands-off level flight: alt %.1f after 60 ticks, speed %.2f%n", levelAltitude, this.state(context).speed));
+        // The speed shown against the speed flown (the user's review, 2026-11-19: "the A10 speed counter seems to
+        // incorrectly count the A10 speed"): the HUD's m/s over a few ticks against the distance actually covered.
+        double[] hud = new double[5];
+        Vec3 from = this.state(context).position;
+        for (int tick = 0; tick < hud.length; tick++) {
+            this.holdPitch(context, "speed-check", tick, -2.0F);
+            hud[tick] = context.computeOnClient(mc -> vehicle(mc) == null ? 0.0D
+                    : ttv.migami.jeg.vehicle.client.overlay.VehicleHudOverlay.jetSpeed(vehicle(mc)));
+        }
+        double flown = this.state(context).position.distanceTo(from) * 20.0D / hud.length;
+        double velocity = this.state(context).speed * 20.0D;
+        this.report.append(String.format("speed shown %s m/s; flown %.1f m/s; velocity %.1f m/s%n", java.util.Arrays.toString(
+                java.util.Arrays.stream(hud).map(v -> Math.round(v * 10.0D) / 10.0D).toArray()), flown, velocity));
+        if (Math.abs(hud[hud.length - 1] - flown) > Math.max(3.0D, flown * 0.1D)) {
+            throw new AssertionError(String.format("the HUD shows %.1f m/s while the jet flies %.1f m/s", hud[hud.length - 1], flown));
+        }
 
         // Right turn in the chase view, left turn from the cockpit.
         float headingBefore = this.state(context).yaw;

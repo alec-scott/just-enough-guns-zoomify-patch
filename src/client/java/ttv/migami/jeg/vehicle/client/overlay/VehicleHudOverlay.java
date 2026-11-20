@@ -1,13 +1,15 @@
 package ttv.migami.jeg.vehicle.client.overlay;
 
+import java.util.Locale;
 import net.minecraft.client.CameraType;
 import net.minecraft.client.Minecraft;
-import net.minecraft.core.BlockPos;
+import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.resources.Identifier;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
@@ -18,24 +20,27 @@ import ttv.migami.jeg.Reference;
 import ttv.migami.jeg.client.KeyBindings;
 import ttv.migami.jeg.vehicle.client.VehicleClientState;
 import ttv.migami.jeg.vehicle.data.subdata.VehicleType;
+import ttv.migami.jeg.vehicle.entity.BulldozerEntity;
 import ttv.migami.jeg.vehicle.entity.base.VehicleEntity;
+import ttv.migami.jeg.vehicle.terrain.BulldozerTerrainWork;
+import ttv.migami.jeg.vehicle.util.BulldozerRig;
 import ttv.migami.jeg.vehicle.util.VehicleWeaponStats;
 
+/**
+ * The vehicle HUD. Sights, reticles and markers are drawn at the GUI's own scale where they must line up with the
+ * world; everything that informs (the operator panels, the vehicle card, the crew list, the weapon list, the
+ * instruments and warnings) is an information layer drawn with {@link HudKit} at 80% of it: dark rounded panels, one
+ * clean sans font, smooth icons, state colours only where something needs attention, and keycap hints that fade after
+ * boarding. The layer keeps to the edges: operator panel top left, instruments top right, crew bottom left, weapons
+ * bottom right, and the vehicle card bottom middle (or top middle, or bottom right; see {@link #vehicleInfoAtTop}).
+ */
 public final class VehicleHudOverlay {
     private static final Identifier ARMOR_ICON = Reference.id("textures/overlay/vehicle/base/armor.png");
-    private static final Identifier ENERGY_ICON = Reference.id("textures/overlay/vehicle/base/energy.png");
     private static final Identifier COMPASS = Reference.id("textures/overlay/vehicle/base/compass.png");
-    private static final Identifier DRIVER_ICON = Reference.id("textures/overlay/vehicle/base/driver.png");
-    private static final Identifier PASSENGER_ICON = Reference.id("textures/overlay/vehicle/base/passenger.png");
     private static final Identifier VALUE_BAR = Reference.id("textures/overlay/vehicle/base/value_bar.png");
     private static final Identifier VALUE_FRAME = Reference.id("textures/overlay/vehicle/base/value_frame.png");
     private static final Identifier ROLL_INDICATOR = Reference.id("textures/overlay/vehicle/helicopter/roll_ind.png");
     private static final Identifier LAND_FRAME = Reference.id("textures/overlay/vehicle/land/tv_frame.png");
-    private static final Identifier LAND_BODY = Reference.id("textures/overlay/vehicle/land/body.png");
-    private static final Identifier LAND_LEFT_WHEEL = Reference.id("textures/overlay/vehicle/land/left_wheel.png");
-    private static final Identifier LAND_RIGHT_WHEEL = Reference.id("textures/overlay/vehicle/land/right_wheel.png");
-    private static final Identifier LAND_ENGINE = Reference.id("textures/overlay/vehicle/land/engine.png");
-    private static final Identifier LAND_LINE = Reference.id("textures/overlay/vehicle/land/line.png");
     private static final Identifier CROSSHAIR_GUN = Reference.id("textures/overlay/vehicle/crosshair/common_gun.png");
     private static final Identifier CROSSHAIR_CANNON = Reference.id("textures/overlay/vehicle/crosshair/common_cannon.png");
     private static final Identifier CROSSHAIR_CANNON_ZOOMING = Reference.id("textures/overlay/vehicle/crosshair/common_cannon_zooming.png");
@@ -47,36 +52,19 @@ public final class VehicleHudOverlay {
     private static final Identifier CROSSHAIR_US_APC = Reference.id("textures/overlay/vehicle/crosshair/us_apc.png");
     private static final Identifier WEAPON_ICON_CANNON_20MM = Reference.id("textures/overlay/vehicle/weapon/icons/cannon_20mm.png");
     private static final Identifier WEAPON_ICON_COAX_762 = Reference.id("textures/overlay/vehicle/weapon/icons/gun_7_62mm.png");
-    private static final Identifier WEAPON_SELECTED = Reference.id("textures/overlay/vehicle/weapon/frame/selected.png");
-    private static final int WEAPON_FRAME_WIDTH = 75;
-    /** The frame's right-hand end, kept whole when the box is widened. */
-    private static final int WEAPON_FRAME_CAP = 4;
-    private static final int WEAPON_AMMO_GAP = 3;
-    private static final int WEAPON_AMMO_INSET = 3;
-    private static final int WEAPON_ICON_WIDTH = 75;
-    private static final int WEAPON_ICON_HEIGHT = 16;
+    /** Weapon icon art (white silhouettes, 300x64), drawn at 56x12 in the weapon list. */
     private static final int WEAPON_ICON_TEXTURE_WIDTH = 300;
     private static final int WEAPON_ICON_TEXTURE_HEIGHT = 64;
+    private static final int WEAPON_ICON_W = 56, WEAPON_ICON_H = 12;
     private static final float HELICOPTER_CRITICAL_DAMAGE_WARNING_HEALTH = 20.0F;
-    private static final double HELICOPTER_SAFE_DESCENT_SPEED = 0.35D;
-    private static final Identifier[] WEAPON_FRAMES = {
-            Reference.id("textures/overlay/vehicle/weapon/frame/frame_1.png"),
-            Reference.id("textures/overlay/vehicle/weapon/frame/frame_2.png"),
-            Reference.id("textures/overlay/vehicle/weapon/frame/frame_3.png"),
-            Reference.id("textures/overlay/vehicle/weapon/frame/frame_4.png"),
-            Reference.id("textures/overlay/vehicle/weapon/frame/frame_5.png"),
-            Reference.id("textures/overlay/vehicle/weapon/frame/frame_6.png"),
-            Reference.id("textures/overlay/vehicle/weapon/frame/frame_7.png"),
-            Reference.id("textures/overlay/vehicle/weapon/frame/frame_8.png"),
-            Reference.id("textures/overlay/vehicle/weapon/frame/frame_9.png")
-    };
 
     private VehicleHudOverlay() {}
 
     public static void renderVehicleHud(GuiGraphicsExtractor guiGraphics) {
         Minecraft minecraft = Minecraft.getInstance();
         LocalPlayer player = minecraft.player;
-        if (player == null || !(player.getVehicle() instanceof VehicleEntity vehicle)) {
+        // F1 hides it with the rest of the HUD.
+        if (player == null || minecraft.options.hideGui || !(player.getVehicle() instanceof VehicleEntity vehicle)) {
             return;
         }
         render(guiGraphics, minecraft, vehicle);
@@ -87,21 +75,19 @@ public final class VehicleHudOverlay {
         return player != null && player.getVehicle() instanceof VehicleEntity;
     }
 
+    /** Top of the vehicle card in GUI units when it was last drawn at the bottom middle, else -1. */
+    private static int cardTopGui = -1;
+
     /**
-     * How far to lift the action bar so it sits above the vehicle info panel at the bottom middle (its title is drawn
-     * 12 above the panel's top line, which is 80 or 112 above the bottom; the action bar is 68 above it); 0 when the
-     * panel is in the corner or not shown.
+     * How far to lift the action bar so it sits above the vehicle card at the bottom middle (the action bar's text
+     * spans 72 to 64 above the bottom); 0 when the card is elsewhere or not shown.
      */
     public static int overlayMessageLift() {
         Minecraft minecraft = Minecraft.getInstance();
-        LocalPlayer player = minecraft.player;
-        if (player == null || !(player.getVehicle() instanceof VehicleEntity vehicle) || vehicleInfoInCorner(minecraft, vehicle)
-                || vehicleInfoAtTop(minecraft, vehicle)
-                || isFocusedVehicleSight(vehicle) && vehicle.vehicleData().defaults().vehicleType() != VehicleType.BOAT) {
+        if (cardTopGui < 0 || !(minecraft.player != null && minecraft.player.getVehicle() instanceof VehicleEntity)) {
             return 0;
         }
-        int panelTop = shouldReplaceHotbar(player, vehicle) ? 80 : 112;
-        return panelTop + 24 - 68;
+        return Math.max(0, minecraft.getWindow().getGuiScaledHeight() - 61 - cardTopGui);
     }
 
     public static boolean shouldReplaceHotbar() {
@@ -117,25 +103,24 @@ public final class VehicleHudOverlay {
                 || vehicle.canPassengerUseSelectedVehicleWeapon(player);
     }
 
+    /** The information layer's frame: its graphics, the screen size in HUD units and the scale to GUI units. */
+    private record Layer(GuiGraphicsExtractor g, Minecraft mc, Font font, VehicleEntity vehicle, int width, int height, float scale) {
+        int toGui(int y) {
+            return Math.round(y * this.scale);
+        }
+    }
+
     private static void render(GuiGraphicsExtractor guiGraphics, Minecraft minecraft, VehicleEntity vehicle) {
-        if (vehicle instanceof ttv.migami.jeg.vehicle.entity.BulldozerEntity dozer && vehicle.getControllingPassenger() == minecraft.player) {
-            renderDozerPanel(guiGraphics, minecraft, dozer);
-        }
-        if (vehicle instanceof ttv.migami.jeg.vehicle.entity.SupportVehicleEntity support && vehicle.getControllingPassenger() == minecraft.player) {
-            renderSupportPanel(guiGraphics, minecraft, support);
-        }
-        if (vehicle instanceof ttv.migami.jeg.vehicle.entity.MortarEntity mortar && vehicle.getControllingPassenger() == minecraft.player) {
-            renderMortarPanel(guiGraphics, minecraft, mortar);
-        }
-        if (vehicle instanceof ttv.migami.jeg.vehicle.entity.ShellGunEntity gun && gun.laysGun(minecraft.player)) {
-            renderShellGunPanel(guiGraphics, minecraft, gun);
-        }
+        // Sights and markers first, at the GUI's own scale: they must sit where things are on screen.
         var turretInfo = vehicle.vehicleData().defaults().turret();
-        if (turretInfo.slewLimited() && turretInfo.seatIndex() == vehicle.seatOf(minecraft.player)) {
+        if (turretInfo.slewLimited() && vehicle.turretSeat() == vehicle.seatOf(minecraft.player)) {
             renderBoreMarker(guiGraphics, minecraft, vehicle);
         }
         boolean focusedSight = isFocusedVehicleSight(vehicle);
-        renderLandVehicleStatus(guiGraphics, minecraft, vehicle);
+        if (focusedSight) {
+            renderFocusedSight(guiGraphics, minecraft);
+        }
+        boolean hmd = helicopterHmd(minecraft, vehicle, focusedSight);
         if (vehicle.hasVehicleWeapons() && vehicle.canPassengerUseSelectedVehicleWeapon(minecraft.player)) {
             boolean jetPilot = vehicle.isJet() && vehicle.getControllingPassenger() == minecraft.player;
             // A jet's guns are fixed: its marker sits where the gun points, just below the nose, and banks with the jet. Zoomed (the targeting
@@ -143,225 +128,282 @@ public final class VehicleHudOverlay {
             boolean pod = vehicle.isJetPodView(minecraft.player);
             if (jetPilot && pod) {
                 renderPodCamera(guiGraphics, minecraft, vehicle);
-            } else if (!jetPilot) {
+            } else if (!jetPilot && !hmd) {
+                // In a helicopter's first person the helmet display is the HUD: no reticle over the view (the user's
+                // review, 2026-11-19, "for immersion"); zoomed, the sight is drawn as before.
                 renderReticle(guiGraphics, vehicle);
             }
-            if (jetPilot && !pod) {
+            // From the cockpit the view over the nose is clear, as the helicopters' is (the user's review, 2026-11-19:
+            // "remove crosshair from A10 in first person"); the chase camera keeps the gun marker.
+            if (jetPilot && !pod && !minecraft.options.getCameraType().isFirstPerson()) {
                 renderJetGunMarker(guiGraphics, minecraft, vehicle);
             }
         }
-        renderPassengerInfo(guiGraphics, minecraft, vehicle);
-        renderWeaponSelector(guiGraphics, minecraft, vehicle);
-        if (vehicle.isJet()) {
-            renderJetInstruments(guiGraphics, minecraft, vehicle);
-        } else {
-            renderSpeedIndicator(guiGraphics, minecraft, vehicle);
+        if (hmd) {
+            HelicopterHmd.render(guiGraphics, minecraft, vehicle);
         }
-        renderVehicleWarning(guiGraphics, minecraft, vehicle);
-        boolean showCompactVehicleInfo = !focusedSight || vehicle.vehicleData().defaults().vehicleType() == VehicleType.BOAT;
-        if (!showCompactVehicleInfo) {
-            return;
-        }
-        int width = guiGraphics.guiWidth();
-        // A passenger with their own hands keeps their health, armor and food bars; sit the vehicle's info above them.
-        int y = guiGraphics.guiHeight() - (shouldReplaceHotbar(minecraft.player, vehicle) ? 80 : 112);
-        if (vehicleInfoInCorner(minecraft, vehicle)) {
-            // Everything below is centred on width / 2: this puts it in the bottom right corner.
-            width = 2 * (guiGraphics.guiWidth() - 92);
-            y = guiGraphics.guiHeight() - 44;
-        } else if (vehicleInfoAtTop(minecraft, vehicle)) {
-            y = VEHICLE_INFO_TOP;
-        }
-        float healthRatio = vehicle.maxVehicleHealth() <= 0.0F ? 0.0F : Mth.clamp(vehicle.vehicleHealth() / vehicle.maxVehicleHealth(), 0.0F, 1.0F);
-        int barWidth = 60;
-        int x = width / 2 - barWidth / 2;
 
-        Component title = Component.translatable("entity." + vehicle.vehicleDataId().getNamespace() + "." + vehicle.vehicleDataId().getPath());
-        guiGraphics.text(minecraft.font, title, (width - minecraft.font.width(title)) / 2, y - 12, 0xFFFFFFFF);
-        renderValueBar(guiGraphics, ARMOR_ICON, x - 12, y - 1, healthRatio);
-
-        Component health = Component.translatable("hud.jeg.vehicle.health", Math.round(vehicle.vehicleHealth()), Math.round(vehicle.maxVehicleHealth()));
-        guiGraphics.text(minecraft.font, health, (width - minecraft.font.width(health)) / 2, y + 11, 0xFFE6E6E6);
-        int lineY = y + 22;
-        if (vehicle.maxVehicleEnergy() > 0) {
-            float energyRatio = Mth.clamp((float) vehicle.vehicleEnergy() / (float) vehicle.maxVehicleEnergy(), 0.0F, 1.0F);
-            renderValueBar(guiGraphics, ENERGY_ICON, x - 12, lineY - 1, energyRatio);
-            // A share, not the raw store (a full dozer holds 5,000,000).
-            Component energy = Component.translatable("hud.jeg.vehicle.energy", Math.round(energyRatio * 100));
-            guiGraphics.text(minecraft.font, energy, (width - minecraft.font.width(energy)) / 2, lineY + 8, 0xFF8FC7FF);
-            lineY += 19;
-        }
-        boolean showWeaponInfo = vehicle.hasVehicleWeapons()
-                && vehicle.canPassengerUseSelectedVehicleWeapon(minecraft.player)
-                && (!focusedSight || vehicle.vehicleData().defaults().vehicleType() == VehicleType.BOAT);
-        if (showWeaponInfo) {
-            Identifier selectedWeaponId = vehicle.selectedVehicleWeaponId(minecraft.player);
-            if (selectedWeaponId != null) {
-                Component ammo = vehicleUsesLoadedAmmo(vehicle, minecraft.player)
-                        ? vehicleAmmoComponent(vehicle, minecraft.player)
-                        : Component.translatable("hud.jeg.vehicle.weapon", Component.translatable("item." + selectedWeaponId.getNamespace() + "." + selectedWeaponId.getPath()), String.valueOf(vehicle.selectedVehicleWeaponAmmo(minecraft.player)));
-                if (!vehicle.isJet()) {
-                    // A jet's weapon list (right) already shows each weapon's icon.
-                    // Just left of the line, however long the weapon's name (a fixed spot overlapped long names).
-                    int textLeft = (width - minecraft.font.width(ammo)) / 2;
-                    renderSelectedWeaponIcon(guiGraphics, vehicle, minecraft.player, Math.min(width / 2 - 128, textLeft - WEAPON_ICON_WIDTH - 4), lineY - 4);
-                }
-                guiGraphics.text(minecraft.font, ammo, (width - minecraft.font.width(ammo)) / 2, lineY, 0xFFFFDD88);
-                lineY += 11;
-                if (vehicle.selectedVehicleWeaponReloading(minecraft.player)) {
-                    int reloadSeconds = Math.max(1, Math.ceilDiv(vehicle.selectedVehicleWeaponReloadTicks(minecraft.player), 20));
-                    Component reload = Component.literal(Component.translatable("subtitle.jeg.reload").getString() + " " + reloadSeconds + "s");
-                    guiGraphics.text(minecraft.font, reload, (width - minecraft.font.width(reload)) / 2, lineY, 0xFFFFAA55);
-                    lineY += 11;
-                }
-                if (vehicle.isSelectedVehicleWeaponLockOn(minecraft.player)) {
-                    boolean seeking = VehicleClientState.isRidingVehicle()
-                            && VehicleClientState.vehicleId() == vehicle.getId()
-                            && VehicleClientState.seekDown();
-                    Component lock = seeking
-                            ? Component.translatable(vehicle.hasMissileLock() ? "hud.jeg.vehicle.locked" : "hud.jeg.vehicle.locking")
-                            : Component.translatable("hud.jeg.vehicle.seek_prompt", KeyBindings.VEHICLE_SEEK.getTranslatedKeyMessage());
-                    guiGraphics.text(minecraft.font, lock, (width - minecraft.font.width(lock)) / 2, lineY, seeking ? vehicle.hasMissileLock() ? 0xFFFF5555 : 0xFFFFDD88 : 0xFFB8E0FF);
-                    lineY += 11;
-                }
+        // The information layer.
+        float scale = HudKit.scale(minecraft);
+        var pose = guiGraphics.pose();
+        pose.pushMatrix();
+        pose.scale(scale, scale);
+        Layer layer = new Layer(guiGraphics, minecraft, minecraft.font, vehicle,
+                Mth.floor(guiGraphics.guiWidth() / scale), Mth.floor(guiGraphics.guiHeight() / scale), scale);
+        cardTopGui = -1;
+        try {
+            renderOperatorPanel(layer);
+            renderCrew(layer);
+            renderWeaponList(layer);
+            if (vehicle.isJet()) {
+                renderJetInstruments(layer);
             }
-        }
-        if (showDecoyStatus(vehicle)) {
-            Component decoy = builtInDecoyUsesSmoke(vehicle)
-                    ? Component.translatable("hud.jeg.vehicle.decoy_smoke", KeyBindings.VEHICLE_DEPLOY_DECOY.getTranslatedKeyMessage(), decoyStatus(vehicle))
-                    : Component.translatable("hud.jeg.vehicle.decoy_flare", KeyBindings.VEHICLE_DEPLOY_DECOY.getTranslatedKeyMessage(), decoyStatus(vehicle));
-            guiGraphics.text(minecraft.font, decoy, (width - minecraft.font.width(decoy)) / 2, lineY, 0xFFB8E0FF);
-            lineY += 11;
-        }
-        if (vehicle.isEngineDamaged() || vehicle.isLeftWheelDamaged() || vehicle.isRightWheelDamaged() || vehicle.isTurretDamaged()) {
-            Component damage = Component.translatable("hud.jeg.vehicle.parts_compact");
-            guiGraphics.text(minecraft.font, damage, (width - minecraft.font.width(damage)) / 2, lineY, 0xFFFF7777);
+            renderVehicleWarning(layer);
+            // The status card shows in a helicopter's first person too (2026-11-19: the helmet display's own green
+            // status block in the corner read as a regression from the clean card every other vehicle has).
+            boolean card = !focusedSight || vehicle.vehicleData().defaults().vehicleType() == VehicleType.BOAT;
+            if (card) {
+                renderVehicleCard(layer, focusedSight);
+            }
+        } finally {
+            pose.popMatrix();
         }
     }
 
-    private static void renderValueBar(GuiGraphicsExtractor guiGraphics, Identifier icon, int x, int y, float ratio) {
+    // ---------------------------------------------------------------------------------------------------------------
+    // The vehicle card: name, hull, energy, the selected weapon, decoys, damage.
+
+    private static void renderVehicleCard(Layer l, boolean focusedSight) {
+        Minecraft mc = l.mc();
+        VehicleEntity vehicle = l.vehicle();
+        // Fixed width, so nothing in it moves as a reading changes (the speed card grew from 9.9 to 10.0: review, 2026-11-18).
+        HudPanel panel = new HudPanel(l.font()).minWidth(132);
+        float hull = vehicle.maxVehicleHealth() <= 0.0F ? 0.0F : Mth.clamp(vehicle.vehicleHealth() / vehicle.maxVehicleHealth(), 0.0F, 1.0F);
+        // The vehicle's name heads the card again (the user, 2026-11-19: names should stay in the HUD), its lamp the
+        // hull's state.
+        panel.header(HudKit.health(hull), vehicle.getName(), null);
+        panel.bar(HudKit.ICON_HULL, Component.translatable("hud.jeg.vehicle.hull"), hull, HudKit.health(hull),
+                Component.literal(Math.round(vehicle.vehicleHealth()) + "/" + Math.round(vehicle.maxVehicleHealth())), HudKit.TEXT);
+        if (vehicle.maxVehicleEnergy() > 0) {
+            float energy = Mth.clamp((float) vehicle.vehicleEnergy() / (float) vehicle.maxVehicleEnergy(), 0.0F, 1.0F);
+            // A share, not the raw store (a full dozer holds 5,000,000).
+            panel.bar(HudKit.ICON_ENERGY, Component.translatable("hud.jeg.vehicle.energy_label"), energy,
+                    energy > 0.2F ? HudKit.INFO : HudKit.BAD, Component.literal(Math.round(energy * 100) + "%"), HudKit.TEXT);
+        }
+        if (moves(vehicle) && !vehicle.isJet()) {
+            // Speed in a fixed-width row: the number right-aligned in the card, which never resizes.
+            panel.reading(HudKit.ICON_SPEED, Component.translatable("hud.jeg.vehicle.speed_label"),
+                    Component.literal(String.format(Locale.ROOT, "%.1f ", vehicleSpeedBlocksPerSecond(vehicle)))
+                            .append(Component.translatable("hud.jeg.vehicle.speed_unit").withColor(HudKit.MUTED)), HudKit.TEXT);
+        }
+        boolean showWeaponInfo = vehicle.hasVehicleWeapons()
+                && vehicle.canPassengerUseSelectedVehicleWeapon(mc.player)
+                && (!focusedSight || vehicle.vehicleData().defaults().vehicleType() == VehicleType.BOAT);
+        Identifier selectedWeaponId = showWeaponInfo ? vehicle.selectedVehicleWeaponId(mc.player) : null;
+        if (selectedWeaponId != null) {
+            // The weapon and its rounds are in the weapon list (bottom right); only what changes now is said here.
+            if (vehicle.selectedVehicleWeaponReloading(mc.player)) {
+                int seconds = Math.max(1, Math.ceilDiv(vehicle.selectedVehicleWeaponReloadTicks(mc.player), 20));
+                panel.note(HudKit.ICON_RELOAD, Component.translatable("hud.jeg.vehicle.reloading", seconds), HudKit.WARN);
+            }
+            if (vehicle.isSelectedVehicleWeaponLockOn(mc.player)) {
+                boolean seeking = VehicleClientState.isRidingVehicle()
+                        && VehicleClientState.vehicleId() == vehicle.getId()
+                        && VehicleClientState.seekDown();
+                Component lock = seeking
+                        ? Component.translatable(vehicle.hasMissileLock() ? "hud.jeg.vehicle.locked" : "hud.jeg.vehicle.locking")
+                        : Component.translatable("hud.jeg.vehicle.seek_prompt", HudKit.keyName(KeyBindings.VEHICLE_SEEK));
+                panel.note(HudKit.ICON_TARGET, lock, seeking ? vehicle.hasMissileLock() ? HudKit.BAD : HudKit.WARN : HudKit.INFO);
+            }
+        }
+        if (showDecoyStatus(vehicle)) {
+            boolean ready = vehicle.vehicleDecoyCooldown() == 0;
+            panel.note(HudKit.ICON_DECOY, decoyLine(vehicle), ready ? HudKit.INFO : HudKit.WARN);
+        }
+        if (vehicle instanceof ttv.migami.jeg.vehicle.entity.AutoDefenceEntity defence && !KeyBindings.VEHICLE_TOW.isUnbound()) {
+            // Its automatic mode, with the key that switches it (also a switch on its hold screen).
+            panel.note(HudKit.ICON_TARGET, Component.translatable(defence.automatic() ? "hud.jeg.auto_defence.on" : "hud.jeg.auto_defence.off",
+                    HudKit.keyName(KeyBindings.VEHICLE_TOW)), defence.automatic() ? HudKit.OK : HudKit.INFO);
+        }
+        Component damage = damagedParts(vehicle);
+        if (damage != null) {
+            panel.note(HudKit.ICON_WARN, Component.translatable("hud.jeg.vehicle.damaged", damage), HudKit.BAD);
+        }
+
+        int w = panel.width(), h = panel.height();
+        int x, y;
+        if (vehicleInfoInCorner(mc, vehicle)) {
+            x = l.width() - HudKit.MARGIN - w;
+            y = l.height() - HudKit.MARGIN - h;
+        } else if (helicopterHmd(mc, vehicle, focusedSight)) {
+            // In a helicopter's first person the top middle is the helmet display's heading tape, the middle its speed and
+            // height boxes, the bottom middle the instrument panel: the card takes the crew list's corner, bottom left
+            // (the crew list goes to the top left).
+            x = HudKit.MARGIN;
+            y = Mth.floor((l.g().guiHeight() - CREW_BOTTOM_GUI) / l.scale()) - h;
+        } else if (vehicleInfoAtTop(mc, vehicle)) {
+            x = (l.width() - w) / 2;
+            y = HudKit.MARGIN;
+        } else {
+            // Bottom middle: where the hotbar was (it is hidden for whoever works the vehicle), or above a passenger's own
+            // hotbar and status bars.
+            int bottom = shouldReplaceHotbar(mc.player, vehicle) ? l.height() - HudKit.MARGIN
+                    : Mth.floor((l.g().guiHeight() - 62) / l.scale());
+            x = (l.width() - w) / 2;
+            y = bottom - h;
+            cardTopGui = l.toGui(y);
+        }
+        panel.draw(l.g(), x, y);
+    }
+
+    /** The damaged parts, named, or null when nothing is damaged. */
+    private static Component damagedParts(VehicleEntity vehicle) {
+        java.util.List<Component> parts = new java.util.ArrayList<>();
+        if (vehicle.isEngineDamaged()) parts.add(Component.translatable("hud.jeg.vehicle.part.engine"));
+        if (vehicle.isLeftWheelDamaged()) parts.add(Component.translatable("hud.jeg.vehicle.part.left"));
+        if (vehicle.isRightWheelDamaged()) parts.add(Component.translatable("hud.jeg.vehicle.part.right"));
+        if (vehicle.isTurretDamaged()) parts.add(Component.translatable("hud.jeg.vehicle.part.turret"));
+        if (parts.isEmpty()) return null;
+        MutableComponent out = Component.empty();
+        for (int i = 0; i < parts.size(); i++) {
+            if (i > 0) out.append(" · ");
+            out.append(parts.get(i));
+        }
+        return out;
+    }
+
+    public static void renderArmorValueBar(GuiGraphicsExtractor guiGraphics, int x, int y, float ratio) {
         int filled = Mth.clamp(Math.round(60.0F * ratio), 0, 60);
-        guiGraphics.blit(RenderPipelines.GUI_TEXTURED, icon, x, y, 0, 0, 10, 10, 10, 10);
+        guiGraphics.blit(RenderPipelines.GUI_TEXTURED, ARMOR_ICON, x, y, 0, 0, 10, 10, 10, 10);
         guiGraphics.blit(RenderPipelines.GUI_TEXTURED, VALUE_FRAME, x + 11, y + 2, 0, 0, 60, 6, 120, 12, 120, 12);
         if (filled > 0) {
             guiGraphics.blit(RenderPipelines.GUI_TEXTURED, VALUE_BAR, x + 11, y + 2, 0, 0, filled, 6, 60, 6);
         }
     }
 
-    public static void renderArmorValueBar(GuiGraphicsExtractor guiGraphics, int x, int y, float ratio) {
-        renderValueBar(guiGraphics, ARMOR_ICON, x, y, ratio);
+    // ---------------------------------------------------------------------------------------------------------------
+    // Crew and weapons.
+
+    private static final int CREW_BOTTOM_GUI = 26;
+
+    private static HudPanel crewPanel(Minecraft mc, Font font, VehicleEntity vehicle) {
+        HudPanel panel = new HudPanel(font).minWidth(64);
+        int seats = vehicle.vehicleData().defaults().seats().size();
+        for (int seat = 0; seat < seats; seat++) {
+            Entity passenger = vehicle.passengerForSeat(seat);
+            Component name = passenger == null ? Component.literal("—") : passenger.getName();
+            int colour = passenger == null ? HudKit.FAINT : passenger == mc.player ? HudKit.ACCENT : HudKit.TEXT;
+            panel.value(vehicle.isDriverSeat(seat) ? HudKit.ICON_DRIVER : HudKit.ICON_SEAT, Component.literal(String.valueOf(seat + 1)), name, colour);
+        }
+        return panel;
     }
 
-    private static void renderSelectedWeaponIcon(GuiGraphicsExtractor guiGraphics, VehicleEntity vehicle, Entity passenger, int x, int y) {
-        Identifier selectedWeaponId = vehicle.selectedVehicleWeaponId(passenger);
-        if (selectedWeaponId == null) {
+    /** The crew list, bottom left, clear of the chat input line. */
+    private static void renderCrew(Layer l) {
+        boolean others = l.vehicle().getPassengers().stream().anyMatch(p -> p != l.mc().player);
+        if (!others && hintAlpha(l.mc(), l.vehicle()) <= 0.0F) {
             return;
         }
-        Identifier icon = switch (selectedWeaponId.getPath()) {
-            case "vehicle_20mm_cannon" -> WEAPON_ICON_CANNON_20MM;
-            case "vehicle_30mm_cannon" -> Reference.id("textures/overlay/vehicle/weapon/icons/cannon_30mm.png");
-            case "vehicle_coax_machine_gun", "light_machine_gun" -> WEAPON_ICON_COAX_762;
-            case "vehicle_gau8_cannon" -> Reference.id("textures/overlay/vehicle/weapon/icons/cannon_30mm.png");
-            case "vehicle_agm65_missile" -> Reference.id("textures/overlay/vehicle/weapon/icons/agm_65d.png");
-            case "vehicle_agm65g_missile" -> Reference.id("textures/overlay/vehicle/weapon/icons/agm_65g.png");
-            case "vehicle_70mm_rocket", "vehicle_80mm_rocket" -> Reference.id("textures/overlay/vehicle/weapon/icons/small_rocket.png");
-            case "vehicle_bmp2_missile" -> Reference.id("textures/overlay/vehicle/weapon/icons/missile_9m113.png");
-            case "vehicle_9m120_driver_missile", "vehicle_9m120_passenger_missile" -> Reference.id("textures/overlay/vehicle/weapon/icons/missile_9m120.png");
-            case "vehicle_kh39_missile" -> Reference.id("textures/overlay/vehicle/weapon/icons/kh_39.png");
-            case "vehicle_9m336_missile" -> Reference.id("textures/overlay/vehicle/weapon/icons/ru_9m336.png");
-            default -> null;
-        };
-        if (icon != null) {
-            blitWeaponIcon(guiGraphics, icon, x, y);
+        HudPanel panel = crewPanel(l.mc(), l.font(), l.vehicle());
+        if (helicopterHmd(l.mc(), l.vehicle(), isFocusedVehicleSight(l.vehicle()))) {
+            // Its corner is the vehicle card's in a helicopter's first person.
+            panel.draw(l.g(), HudKit.MARGIN, HudKit.MARGIN);
+            return;
         }
+        int bottom = Mth.floor((l.g().guiHeight() - CREW_BOTTOM_GUI) / l.scale());
+        panel.draw(l.g(), HudKit.MARGIN, bottom - panel.height());
     }
 
-    private static void renderWeaponSelector(GuiGraphicsExtractor guiGraphics, Minecraft minecraft, VehicleEntity vehicle) {
+    private static final int WEAPON_ROW = 15;
+
+    /**
+     * The weapon list, bottom right: each usable weapon's number key, the ammo it takes (as the item), its icon (or
+     * name) and its own ammo count, so what is left of each is clear without switching. The selected one is lit.
+     */
+    private static void renderWeaponList(Layer l) {
+        VehicleEntity vehicle = l.vehicle();
+        Minecraft mc = l.mc();
         if (!hasWeaponSelectorHud(vehicle)) {
             return;
         }
         var weapons = vehicle.vehicleData().defaults().weapons();
-        int selected = vehicle.selectedVehicleWeaponIndex(minecraft.player);
-        int[] usableWeaponIndexes = new int[Math.min(weapons.size(), 9)];
-        int usableWeaponCount = 0;
-        for (int index = 0; index < weapons.size() && usableWeaponCount < usableWeaponIndexes.length; index++) {
-            if (vehicle.canPassengerUseVehicleWeapon(minecraft.player, index)) {
-                usableWeaponIndexes[usableWeaponCount++] = index;
+        int selected = vehicle.selectedVehicleWeaponIndex(mc.player);
+        java.util.List<Integer> usable = new java.util.ArrayList<>();
+        for (int index = 0; index < weapons.size() && usable.size() < 9; index++) {
+            if (vehicle.canPassengerUseVehicleWeapon(mc.player, index)) {
+                usable.add(index);
             }
         }
-        if (usableWeaponCount == 0) {
+        if (usable.isEmpty()) {
             return;
         }
-        int width = guiGraphics.guiWidth();
-        int height = guiGraphics.guiHeight();
-        // Every box is widened by the same amount, enough for the longest ammo count to sit clear of its weapon icon:
-        // "128/512" or a reload countdown used to run over the icon and out of the box.
-        SlotAmmo[] ammo = new SlotAmmo[usableWeaponCount];
-        int extra = 0;
-        for (int displayIndex = 0; displayIndex < usableWeaponCount; displayIndex++) {
-            int index = usableWeaponIndexes[displayIndex];
-            ammo[displayIndex] = slotAmmo(vehicle, index, index == selected);
-            int needed = weaponIconEnd(weapons.get(index).weaponId()) + WEAPON_AMMO_GAP + minecraft.font.width(ammo[displayIndex].label()) + WEAPON_AMMO_INSET;
-            extra = Math.max(extra, needed - WEAPON_FRAME_WIDTH);
+        Font font = l.font();
+        int art = WEAPON_ICON_W, ammoW = 0;
+        SlotAmmo[] ammo = new SlotAmmo[usable.size()];
+        for (int i = 0; i < usable.size(); i++) {
+            int index = usable.get(i);
+            ammo[i] = slotAmmo(vehicle, index, index == selected);
+            ammoW = Math.max(ammoW, HudKit.width(font, Component.literal(ammo[i].label())));
+            if (weaponIcon(weapons.get(index).weaponId()) == null) {
+                art = Math.max(art, HudKit.width(font, weaponName(weapons.get(index).weaponId())));
+            }
         }
-        int frameIndex = 0;
-        for (int displayIndex = usableWeaponCount - 1; displayIndex >= 0; displayIndex--) {
-            int index = usableWeaponIndexes[displayIndex];
-            int x = width - 10 - WEAPON_FRAME_WIDTH - extra;
-            int y = height - frameIndex * 18 - 20;
-            Identifier icon = weaponIcon(weapons.get(index).weaponId());
-            blitWeaponFrame(guiGraphics, WEAPON_FRAMES[Math.min(displayIndex, WEAPON_FRAMES.length - 1)], x, y, extra);
-            if (icon != null) {
-                blitWeaponIcon(guiGraphics, icon, x, y);
-            } else {
-                Component name = Component.translatable("item." + weapons.get(index).weaponId().getNamespace() + "." + weapons.get(index).weaponId().getPath());
-                guiGraphics.text(minecraft.font, name, x + 4, y + 4, 0xFFFFFFFF, false);
+        // Number, ammo item, icon, count.
+        int pad = 5, numberW = 6, itemW = 12;
+        int w = pad + numberW + 3 + itemW + 4 + art + 8 + ammoW + pad;
+        int h = usable.size() * WEAPON_ROW + 4;
+        int x = l.width() - HudKit.MARGIN - w;
+        int y = l.height() - HudKit.MARGIN - h;
+        GuiGraphicsExtractor g = l.g();
+        HudKit.panel(g, x, y, w, h);
+        for (int i = 0; i < usable.size(); i++) {
+            int index = usable.get(i);
+            boolean on = index == selected;
+            int ry = y + 2 + i * WEAPON_ROW;
+            if (on) {
+                g.fill(x + 2, ry, x + w - 2, ry + WEAPON_ROW, HudKit.CHIP);
+                g.fill(x + 2, ry + 2, x + 3, ry + WEAPON_ROW - 2, HudKit.ACCENT);
             }
-            // Every weapon shows its own ammo, so what is left for each ammo type is clear without switching to it.
-            SlotAmmo slotAmmo = ammo[displayIndex];
-            guiGraphics.text(minecraft.font, slotAmmo.label(), width - 10 - WEAPON_AMMO_INSET - minecraft.font.width(slotAmmo.label()), y + 4, slotAmmo.color(), true);
-            if (index == selected) {
-                guiGraphics.blit(RenderPipelines.GUI_TEXTURED, WEAPON_SELECTED, x - 10, y + 4, 0, 0, 8, 8, 8, 8);
-            }
-            // The ammo it takes, as the item: tells apart weapons that share an icon.
+            int ty = ry + (WEAPON_ROW - HudKit.CAP) / 2;
+            int cx = x + pad;
+            HudKit.text(g, font, String.valueOf(index + 1), cx, ty, on ? HudKit.ACCENT : HudKit.FAINT);
+            cx += numberW + 3;
             ItemStack ammoItem = ammoItem(weapons.get(index).ammoId());
             if (!ammoItem.isEmpty()) {
-                guiGraphics.item(ammoItem, x - 30, y);
+                var pose = g.pose();
+                pose.pushMatrix();
+                pose.translate(cx, ry + (WEAPON_ROW - itemW) / 2.0F);
+                pose.scale(itemW / 16.0F, itemW / 16.0F);
+                g.item(ammoItem, 0, 0);
+                pose.popMatrix();
             }
-            frameIndex++;
+            cx += itemW + 4;
+            Identifier icon = weaponIcon(weapons.get(index).weaponId());
+            int tint = on ? HudKit.TEXT : HudKit.MUTED;
+            if (icon != null) {
+                g.blit(RenderPipelines.GUI_TEXTURED, icon, cx, ry + (WEAPON_ROW - WEAPON_ICON_H) / 2, 0, 0, WEAPON_ICON_W, WEAPON_ICON_H,
+                        WEAPON_ICON_TEXTURE_WIDTH, WEAPON_ICON_TEXTURE_HEIGHT, WEAPON_ICON_TEXTURE_WIDTH, WEAPON_ICON_TEXTURE_HEIGHT, tint);
+            } else {
+                HudKit.text(g, font, weaponName(weapons.get(index).weaponId()), cx, ty, tint);
+            }
+            HudKit.rightAligned(g, font, Component.literal(ammo[i].label()), x + w - pad, ty, ammo[i].color());
         }
     }
 
-    /** A weapon box: the frame art is 75 wide; a wider one repeats a strip from its plain right-hand part. */
-    private static void blitWeaponFrame(GuiGraphicsExtractor guiGraphics, Identifier frame, int x, int y, int extra) {
-        if (extra <= 0) {
-            guiGraphics.blit(RenderPipelines.GUI_TEXTURED, frame, x, y, 0, 0, WEAPON_FRAME_WIDTH, 16, WEAPON_FRAME_WIDTH, 16);
-            return;
-        }
-        int left = WEAPON_FRAME_WIDTH - WEAPON_FRAME_CAP;
-        guiGraphics.blit(RenderPipelines.GUI_TEXTURED, frame, x, y, 0, 0, left, 16, WEAPON_FRAME_WIDTH, 16);
-        guiGraphics.blit(RenderPipelines.GUI_TEXTURED, frame, x + left, y, left - 1, 0, extra, 16, 1, 16, WEAPON_FRAME_WIDTH, 16);
-        guiGraphics.blit(RenderPipelines.GUI_TEXTURED, frame, x + left + extra, y, left, 0, WEAPON_FRAME_CAP, 16, WEAPON_FRAME_WIDTH, 16);
-    }
-
-    /** How far across its box (in pixels) a weapon icon reaches; the ammo count starts after it. */
-    private static int weaponIconEnd(Identifier weaponId) {
-        return switch (weaponId.getPath()) {
-            case "vehicle_70mm_rocket", "vehicle_80mm_rocket" -> 62;
-            default -> 48;
-        };
+    private static Component weaponName(Identifier weaponId) {
+        return Component.translatable("item." + weaponId.getNamespace() + "." + weaponId.getPath());
     }
 
     private record SlotAmmo(String label, int color) {}
 
     /**
      * One weapon's ammo: loaded / spare for a magazine weapon, the rounds aboard for a belt-fed one, the seconds left
-     * while it reloads. Red when it has nothing left, gold when selected.
+     * while it reloads. Red when it has nothing left, amber when selected.
      */
     private static SlotAmmo slotAmmo(VehicleEntity vehicle, int slot, boolean selected) {
         var weapons = vehicle.vehicleData().defaults().weapons();
         if (slot < 0 || slot >= weapons.size()) {
-            return new SlotAmmo("", 0xFFFFFFFF);
+            return new SlotAmmo("", HudKit.TEXT);
         }
         var stats = VehicleWeaponStats.get(weapons.get(slot).weaponId());
         boolean magazine = stats != null && stats.usesMagazine() && !stats.isInventoryFed();
@@ -373,10 +415,10 @@ public final class VehicleHudOverlay {
         if (reloadTicks > 0) {
             label = Component.translatable("hud.jeg.vehicle.reloading_short", Math.max(1, Math.ceilDiv(reloadTicks, 20))).getString()
                     + (magazine ? " " + reserve : "");
-            color = 0xFFFFAA55;
+            color = HudKit.WARN;
         } else {
             label = magazine ? loaded + "/" + reserve : String.valueOf(loaded);
-            color = loaded + reserve <= 0 ? 0xFFFF5555 : selected ? 0xFFFFDD88 : 0xFFFFFFFF;
+            color = loaded + reserve <= 0 ? HudKit.BAD : selected ? HudKit.ACCENT : HudKit.TEXT;
         }
         return new SlotAmmo(label, color);
     }
@@ -392,7 +434,9 @@ public final class VehicleHudOverlay {
     private static Identifier weaponIcon(Identifier weaponId) {
         return switch (weaponId.getPath()) {
             case "vehicle_20mm_cannon" -> WEAPON_ICON_CANNON_20MM;
-            case "vehicle_30mm_cannon" -> Reference.id("textures/overlay/vehicle/weapon/icons/cannon_30mm.png");
+            // The 2A42's two feeds told apart at a glance (the user's review, 2026-11-19: "the same turret twice").
+            case "vehicle_30mm_cannon" -> Reference.id("textures/overlay/vehicle/weapon/icons/cannon_30mm_ap.png");
+            case "vehicle_30mm_cannon_he" -> Reference.id("textures/overlay/vehicle/weapon/icons/cannon_30mm_he.png");
             case "vehicle_coax_machine_gun", "light_machine_gun" -> WEAPON_ICON_COAX_762;
             case "vehicle_gau8_cannon" -> Reference.id("textures/overlay/vehicle/weapon/icons/cannon_30mm.png");
             case "vehicle_agm65_missile" -> Reference.id("textures/overlay/vehicle/weapon/icons/agm_65d.png");
@@ -430,11 +474,6 @@ public final class VehicleHudOverlay {
         return stats != null && stats.usesMagazine() && !stats.isInventoryFed();
     }
 
-    private static boolean canManualReloadPrompt(VehicleEntity vehicle) {
-        Entity passenger = Minecraft.getInstance().player;
-        return passenger != null && vehicle.canReloadSelectedVehicleWeapon(passenger) && vehicle.selectedVehicleWeaponAmmo(passenger) < vehicle.selectedVehicleWeaponMagazineSize(passenger);
-    }
-
     private static boolean showDecoyStatus(VehicleEntity vehicle) {
         return vehicle.hasBuiltInDecoy() || vehicle.vehicleFlareAmmo() > 0 || vehicle.vehicleDecoyCooldown() > 0;
     }
@@ -450,24 +489,462 @@ public final class VehicleHudOverlay {
                 : Component.literal(Math.ceilDiv(vehicle.vehicleDecoyCooldown(), 20) + "s");
     }
 
+    /** Whether the vehicle drives, sails or flies at all (a gun on the ground has no speed to show). */
+    private static boolean moves(VehicleEntity vehicle) {
+        return vehicle.vehicleData().defaults().engine().maxForwardSpeed() > 0.0D;
+    }
+
+    /** Each jet's shown speed (m/s) and the tick it was last measured. */
+    private static final java.util.Map<VehicleEntity, double[]> JET_SPEEDS = new java.util.WeakHashMap<>();
+
+    /**
+     * A jet's airspeed, m/s: how far it actually moved over the last tick, eased so a server correction doesn't jolt the
+     * number (the user's review, 2026-11-19: "the A10 speed counter seems to incorrectly count the A10 speed").
+     */
+    public static double jetSpeed(VehicleEntity jet) {
+        double[] shown = JET_SPEEDS.computeIfAbsent(jet, j -> new double[]{j.getDeltaMovement().length() * 20.0D, -1.0D});
+        if (shown[1] != jet.tickCount) {
+            shown[1] = jet.tickCount;
+            double moved = jet.position().distanceTo(new net.minecraft.world.phys.Vec3(jet.xo, jet.yo, jet.zo)) * 20.0D;
+            shown[0] += (moved - shown[0]) * 0.35D;
+        }
+        return shown[0];
+    }
+
     private static double vehicleSpeedBlocksPerSecond(VehicleEntity vehicle) {
         return Math.sqrt(vehicle.distanceToSqr(vehicle.xOld, vehicle.getY(), vehicle.zOld)) * 20.0D;
     }
 
-    private static void renderSpeedIndicator(GuiGraphicsExtractor guiGraphics, Minecraft minecraft, VehicleEntity vehicle) {
-        // m/s, as every vehicle's speed reads (jets included).
-        Component speed = Component.literal(String.format(java.util.Locale.ROOT, "%.1f m/s", vehicleSpeedBlocksPerSecond(vehicle)));
-        int x = guiGraphics.guiWidth() - minecraft.font.width(speed) - 16;
-        int y = 16;
-        guiGraphics.text(minecraft.font, speed, x, y, 0xFF66FF00);
+    // ---------------------------------------------------------------------------------------------------------------
+    // Instruments and warnings.
+
+    /** Ground speed, top right: m/s, as every vehicle's speed reads. */
+    private static void renderSpeed(Layer l) {
+        Font font = l.font();
+        Component value = Component.literal(String.format(Locale.ROOT, "%.1f", vehicleSpeedBlocksPerSecond(l.vehicle())));
+        Component unit = Component.translatable("hud.jeg.vehicle.speed_unit");
+        int w = 5 + 11 + HudKit.width(font, value) + 3 + HudKit.width(font, unit) + 5;
+        int h = HudKit.CAP + 10;
+        int x = l.width() - HudKit.MARGIN - w, y = HudKit.MARGIN;
+        HudKit.panel(l.g(), x, y, w, h);
+        HudKit.icon(l.g(), HudKit.ICON_SPEED, x + 5, y + 5, HudKit.MUTED);
+        HudKit.text(l.g(), font, value, x + 16, y + 5, HudKit.TEXT);
+        HudKit.text(l.g(), font, unit, x + 16 + HudKit.width(font, value) + 3, y + 5, HudKit.MUTED);
+    }
+
+    /** The flaps are out below their speed (AircraftInfo), as the flight model and the renderer have them. */
+    private static boolean flapsOut(VehicleEntity jet) {
+        var aircraft = jet.vehicleData().aircraft();
+        return aircraft.hasFlaps() && jet.getDeltaMovement().length() < aircraft.flapSpeedFactor() * jet.vehicleData().defaults().engine().jetStallSpeed();
     }
 
     /**
-     * The jet's gun marker: where its rounds go, 250 blocks down the gun's bore, which points a little below the nose
-     * (with the jet's own speed on them), drawn where
-     * that point is on screen and turned with the jet's bank against the view. The chase camera lags the jet a little, so
-     * in a turn the marker swings ahead of the screen's centre with the nose.
+     * A jet's instruments, top right: airspeed, height above the ground, throttle and gear (or flaps), the speed brake,
+     * the cruise setting and what the brake key is doing. The pilot also gets a stall or pull-up warning under the
+     * crosshair.
      */
+    private static void renderJetInstruments(Layer l) {
+        Minecraft minecraft = l.mc();
+        VehicleEntity jet = l.vehicle();
+        double speed = jetSpeed(jet);
+        double altitude = jet.exactAltitudeAboveGround();
+        boolean grounded = jet.onGround();
+        float gear = jet.jetGear();
+        boolean pilot = minecraft.player != null && jet.getControllingPassenger() == minecraft.player;
+        HudPanel panel = new HudPanel(l.font()).minWidth(96);
+        // As the vehicle card's speed: the number against the right edge, its unit muted after it (2026-11-19: the jet's
+        // m/s sat loose after the label and the card resized with its digits).
+        panel.reading(HudKit.ICON_SPEED, Component.translatable("hud.jeg.jet.speed"),
+                Component.literal(Math.round(speed) + " ").append(Component.translatable("hud.jeg.vehicle.speed_unit").withColor(HudKit.MUTED)), HudKit.TEXT);
+        panel.reading(HudKit.ICON_ALT, Component.translatable("hud.jeg.jet.altitude"),
+                Component.literal((grounded ? "0" : String.valueOf(Math.round(altitude))) + " ").append(Component.literal("m").withColor(HudKit.MUTED)), HudKit.TEXT);
+        panel.bar(HudKit.ICON_THROTTLE, Component.translatable("hud.jeg.jet.throttle"), jet.jetThrottle(), HudKit.ACCENT,
+                Component.literal(Math.round(jet.jetThrottle() * 100.0F) + "%"), HudKit.TEXT);
+        if (jet.vehicleData().aircraft().fixedGear()) {
+            // Its wheels never move: what it does have, flaps, in their place.
+            boolean out = flapsOut(jet);
+            panel.value(HudKit.ICON_GEAR, Component.translatable("hud.jeg.jet.flaps"),
+                    Component.translatable(out ? "hud.jeg.jet.out" : "hud.jeg.jet.in"), out ? HudKit.WARN : HudKit.TEXT);
+        } else {
+            boolean down = gear >= 0.99F, up = gear <= 0.01F;
+            panel.value(HudKit.ICON_GEAR, Component.translatable("hud.jeg.jet.gear"),
+                    Component.translatable(down ? "hud.jeg.jet.down" : up ? "hud.jeg.jet.up" : "hud.jeg.jet.moving"),
+                    down ? HudKit.OK : up ? HudKit.TEXT : HudKit.WARN);
+        }
+        if (jet.jetSpeedBrake() > 0.05F) {
+            panel.note(HudKit.ICON_WARN, Component.translatable("hud.jeg.jet.speed_brake"), HudKit.WARN);
+        }
+        float cruise = ttv.migami.jeg.vehicle.client.VehicleInputHandler.jetCruiseTarget();
+        if (pilot && cruise >= 0.0F) {
+            panel.note(HudKit.ICON_SPEED, Component.translatable("hud.jeg.jet.cruise", Math.round(cruise * 20.0F)), HudKit.INFO);
+        }
+        if (pilot && KeyBindings.VEHICLE_BRAKE_DESCEND.isDown()) {
+            panel.note(HudKit.ICON_WARN, Component.translatable(grounded ? "hud.jeg.vehicle.jet_wheel_brake" : "hud.jeg.vehicle.jet_airbrake"), HudKit.WARN);
+        }
+        panel.draw(l.g(), l.width() - HudKit.MARGIN - panel.width(), HudKit.MARGIN);
+        if (!pilot) {
+            return;
+        }
+        String warning = null;
+        if (jet.jetPullUpWarning()) {
+            warning = "message.jeg.vehicle.jet_pull_up";
+        } else if (jet.jetStallWarning()) {
+            warning = "message.jeg.vehicle.jet_stall_warning";
+        }
+        if (warning != null) {
+            warningChip(l, Component.translatable(warning), l.height() / 2 + 28, jet.tickCount);
+        }
+    }
+
+    private static void renderVehicleWarning(Layer l) {
+        VehicleEntity vehicle = l.vehicle();
+        if (l.mc().player == null) {
+            return;
+        }
+        String warningKey = vehicle.activeWarningMessageKey();
+        if (warningKey.isEmpty() && vehicle.vehicleData().defaults().vehicleType() == VehicleType.HELICOPTER) {
+            warningKey = helicopterWarningKey(vehicle);
+        }
+        if (warningKey == null || warningKey.isEmpty()) {
+            return;
+        }
+        warningChip(l, Component.translatable(warningKey), l.height() / 2 + 12, vehicle.tickCount);
+    }
+
+    /**
+     * A warning under the crosshair: a red chip with a warning sign, its fill breathing slowly rather than flashing, so it
+     * catches the eye without strobing.
+     */
+    private static void warningChip(Layer l, Component text, int y, int tick) {
+        Font font = l.font();
+        float pulse = 0.5F + 0.5F * Mth.sin(tick * 0.35F);
+        int w = 5 + 11 + HudKit.width(font, text) + 6;
+        int h = HudKit.CAP + 8;
+        int x = (l.width() - w) / 2;
+        int fill = (Math.round(0xB0 + 0x40 * pulse) << 24) | 0xC0322C;
+        HudKit.panel(l.g(), x, y, w, h, fill);
+        HudKit.icon(l.g(), HudKit.ICON_WARN, x + 5, y + 4, 0xFFFFFFFF);
+        HudKit.text(l.g(), font, text, x + 16, y + 4, 0xFFFFFFFF);
+    }
+
+    private static String helicopterWarningKey(VehicleEntity vehicle) {
+        if (vehicle.vehicleHealth() < Math.min(HELICOPTER_CRITICAL_DAMAGE_WARNING_HEALTH, vehicle.maxVehicleHealth())) {
+            return "message.jeg.vehicle.helicopter_critical_damage_warning";
+        }
+        if (vehicle.maxVehicleEnergy() > 0 && vehicle.vehicleEnergy() <= 0) {
+            return "message.jeg.vehicle.helicopter_power_loss_warning";
+        }
+        return null;
+    }
+
+    // ---------------------------------------------------------------------------------------------------------------
+    // Operator panels, top left.
+
+    private static int hintVehicleId = -1;
+    private static long hintStart, hintLastSeen;
+    /** How long the key hints stay after boarding (ticks), then fade over {@link #HINT_FADE}. */
+    private static final int HINT_TICKS = 140, HINT_FADE = 20;
+
+    /** The key hints' opacity: full for a few seconds after boarding (or changing vehicle), then fading out. */
+    private static float hintAlpha(Minecraft mc, VehicleEntity vehicle) {
+        long now = mc.level.getGameTime();
+        if (vehicle.getId() != hintVehicleId || now - hintLastSeen > 20) {
+            hintVehicleId = vehicle.getId();
+            hintStart = now;
+        }
+        hintLastSeen = now;
+        long shown = now - hintStart;
+        return shown < HINT_TICKS ? 1F : Math.max(0F, 1F - (shown - HINT_TICKS) / (float) HINT_FADE);
+    }
+
+    private static void renderOperatorPanel(Layer l) {
+        Minecraft mc = l.mc();
+        VehicleEntity vehicle = l.vehicle();
+        HudPanel panel = null;
+        if (vehicle instanceof BulldozerEntity dozer && vehicle.getControllingPassenger() == mc.player) {
+            panel = dozerPanel(l, dozer);
+        } else if (vehicle instanceof ttv.migami.jeg.vehicle.entity.SupportVehicleEntity support && vehicle.getControllingPassenger() == mc.player) {
+            panel = supportPanel(l, support);
+        } else if (vehicle instanceof ttv.migami.jeg.vehicle.entity.MortarEntity mortar && vehicle.getControllingPassenger() == mc.player) {
+            panel = mortarPanel(l, mortar);
+        } else if (vehicle instanceof ttv.migami.jeg.vehicle.entity.ShellGunEntity gun && gun.laysGun(mc.player)) {
+            panel = shellGunPanel(l, gun);
+        }
+        if (panel != null) {
+            panel.draw(l.g(), HudKit.MARGIN, HudKit.MARGIN);
+        }
+    }
+
+    /** "North", "East"... for a yaw (0 faces south, 90 west). */
+    private static Component compassName(float yaw) {
+        int quarter = Math.floorMod(Math.round(yaw / 90.0F), 4);
+        return Component.translatable(switch (quarter) {
+            case 0 -> "hud.jeg.dir.south";
+            case 1 -> "hud.jeg.dir.west";
+            case 2 -> "hud.jeg.dir.north";
+            default -> "hud.jeg.dir.east";
+        });
+    }
+
+    /**
+     * The dozer operator's panel: work state, blade height (on its scale, the travel band shaded and grade ticked),
+     * load, hold, grade lock, lane lock and the ripper (laying or raised, what is in its bay and how much more of it the
+     * operator carries, which it restocks from). The key hints show for a few seconds after boarding, then fade.
+     */
+    private static HudPanel dozerPanel(Layer l, BulldozerEntity dozer) {
+        Minecraft mc = l.mc();
+        float hints = hintAlpha(mc, dozer);
+        int status = dozer.workStatus();
+        boolean starting = dozer.powered() && !dozer.engineRunning();
+        int lamp = starting ? HudKit.WARN : switch (status) {
+            case BulldozerTerrainWork.WORKING, BulldozerTerrainWork.TREE -> HudKit.OK;
+            case BulldozerTerrainWork.BUSY, BulldozerTerrainWork.SPOIL, BulldozerTerrainWork.RAISED_BLOCKED,
+                 BulldozerTerrainWork.TURN_BLOCKED_RAISED -> HudKit.WARN;
+            case BulldozerTerrainWork.SOLID, BulldozerTerrainWork.PROTECTED, BulldozerTerrainWork.NO_POWER,
+                 BulldozerTerrainWork.TURN_BLOCKED -> HudKit.BAD;
+            default -> HudKit.FAINT;
+        };
+        HudPanel panel = new HudPanel(l.font()).minWidth(132);
+        panel.header(lamp, Component.translatable(starting ? "hud.jeg.dozer.starting" : "hud.jeg.dozer.status_" + status), null);
+
+        float lift = dozer.bladeLift();
+        float min = BulldozerRig.LIFT_MIN, max = BulldozerRig.LIFT_MAX;
+        Component liftValue = lift > BulldozerRig.TRAVEL_LIFT ? Component.translatable("hud.jeg.dozer.travel")
+                : Component.literal((lift >= 0 ? "+" : "") + Math.round(lift) + "°");
+        panel.slider(HudKit.ICON_BLADE, Component.translatable("hud.jeg.dozer.blade"), (lift - min) / (max - min),
+                (BulldozerRig.TRAVEL_LIFT - min) / (max - min), (0 - min) / (max - min), HudKit.ACCENT, liftValue, HudKit.TEXT);
+        float load = dozer.load();
+        panel.bar(HudKit.ICON_LOAD, Component.translatable("hud.jeg.dozer.load"), load, load > .85F ? HudKit.BAD : HudKit.ACCENT,
+                Component.literal(Math.round(Mth.clamp(load, 0, 1) * 100) + "%"), HudKit.TEXT);
+        boolean full = dozer.occupiedCargoSlots() >= dozer.vehicleContainerSlots();
+        panel.bar(HudKit.ICON_HOLD, Component.translatable("hud.jeg.dozer.hold"),
+                dozer.occupiedCargoSlots() / (float) Math.max(1, dozer.vehicleContainerSlots()), full ? HudKit.BAD : 0xFFB4BDC6,
+                Component.literal(dozer.occupiedCargoSlots() + "/" + dozer.vehicleContainerSlots()), full ? HudKit.WARN : HudKit.TEXT);
+
+        boolean cutting = dozer.cutFloor() != BulldozerEntity.NO_FLOOR;
+        panel.value(HudKit.ICON_GRADE, Component.translatable("hud.jeg.dozer.grade"),
+                cutting ? Component.translatable("hud.jeg.dozer.cutting_to", dozer.cutFloor())
+                        : Component.translatable(dozer.gradeAssist() ? "hud.jeg.dozer.on" : "hud.jeg.dozer.off"),
+                cutting ? HudKit.WARN : dozer.gradeAssist() ? HudKit.OK : HudKit.MUTED);
+        Component lane = !dozer.laneLock() ? Component.translatable("hud.jeg.dozer.off")
+                : dozer.laneTurning() ? Component.translatable("hud.jeg.dozer.lane_turning", compassName(dozer.laneYaw()))
+                : Component.translatable("hud.jeg.dozer.lane_on", compassName(dozer.laneYaw()));
+        panel.value(HudKit.ICON_LANE, Component.translatable("hud.jeg.dozer.lane"), lane,
+                !dozer.laneLock() ? HudKit.MUTED : dozer.laneTurning() ? HudKit.WARN : HudKit.OK);
+
+        var paving = dozer.pavingStack();
+        int spare = 0;
+        if (!paving.isEmpty()) {
+            for (ItemStack stack : mc.player.getInventory().getNonEquipmentItems()) {
+                if (stack.is(paving.getItem())) spare += stack.getCount();
+            }
+        }
+        boolean down = dozer.ripperDown();
+        // ▼ shanks down and laying (amber), ▲ raised (grey); then what is in the bay and how much more is carried.
+        MutableComponent ripper = Component.literal(down ? "▼ " : "▲ ");
+        if (paving.isEmpty()) {
+            ripper.append(Component.translatable("hud.jeg.dozer.ripper_none").withColor(down ? HudKit.BAD : HudKit.FAINT));
+        } else {
+            ripper.append(Component.literal(dozer.pavingCount() + " ").append(paving.getHoverName()).withColor(down ? HudKit.TEXT : HudKit.MUTED));
+            if (spare > 0) ripper.append(Component.translatable("hud.jeg.dozer.ripper_spare", spare).withColor(HudKit.FAINT));
+        }
+        panel.value(HudKit.ICON_RIPPER, Component.translatable("hud.jeg.dozer.ripper"), ripper, down ? HudKit.ACCENT : HudKit.MUTED);
+
+        panel.hints(hints,
+                HudPanel.Hint.of(Component.translatable("hud.jeg.hint.blade"), HudKit.keyName(mc.options.keyJump), HudKit.keyName(mc.options.keyShift)),
+                HudPanel.Hint.of(Component.translatable("hud.jeg.hint.grade"), HudKit.keyName(KeyBindings.VEHICLE_DEPLOY_DECOY)),
+                HudPanel.Hint.of(Component.translatable("hud.jeg.hint.lane"), HudKit.keyName(KeyBindings.VEHICLE_SWITCH_WEAPON)));
+        panel.hints(hints,
+                HudPanel.Hint.of(Component.translatable("hud.jeg.hint.ripper"), HudKit.keyName(KeyBindings.RELOAD)),
+                HudPanel.Hint.of(Component.translatable("hud.jeg.hint.horn"), HudKit.keyName(mc.options.keyAttack)));
+        return panel;
+    }
+
+    /**
+     * The mortar gunner's fire-control panel: the drill state, elevation (on its 45-85 degree scale), bearing, the
+     * predicted range and time of flight (MortarAim, against terrain while it is loaded), rounds carried, and the keys.
+     */
+    private static HudPanel mortarPanel(Layer l, ttv.migami.jeg.vehicle.entity.MortarEntity mortar) {
+        Minecraft mc = l.mc();
+        float partial = mc.getDeltaTracker().getGameTimeDeltaPartialTick(true);
+        var prediction = ttv.migami.jeg.vehicle.client.MortarAim.predict(mortar, partial);
+        int rounds = 0;
+        for (int slot = 0; slot < mc.player.getInventory().getContainerSize(); slot++) {
+            var stack = mc.player.getInventory().getItem(slot);
+            if (stack.is(ttv.migami.jeg.init.ModItems.MORTAR_ROUND.get())) {
+                rounds += stack.getCount();
+            }
+        }
+        boolean creative = mc.player.getAbilities().instabuild;
+        Component status;
+        int lamp;
+        if (mortar.settingUp()) {
+            status = Component.translatable("hud.jeg.mortar.status_setup");
+            lamp = HudKit.WARN;
+        } else if (mortar.roundInTube()) {
+            status = Component.translatable("hud.jeg.mortar.status_away");
+            lamp = HudKit.BAD;
+        } else if (mortar.readyInTicks() > 0) {
+            status = Component.translatable("hud.jeg.mortar.status_reload", String.format(Locale.ROOT, "%.1f", mortar.readyInTicks() / 20.0F));
+            lamp = HudKit.WARN;
+        } else if (rounds == 0 && !creative) {
+            status = Component.translatable("message.jeg.mortar.no_rounds");
+            lamp = HudKit.BAD;
+        } else {
+            status = Component.translatable("hud.jeg.mortar.status_ready");
+            lamp = HudKit.OK;
+        }
+        if (mortar.isTurretDamaged()) {
+            status = Component.translatable("hud.jeg.mortar.status_jammed");
+            lamp = HudKit.BAD;
+        }
+        HudPanel panel = new HudPanel(l.font()).minWidth(132);
+        panel.header(lamp, status, Component.translatable("hud.jeg.mortar.title"));
+        float elevation = mortar.elevation(partial);
+        float min = ttv.migami.jeg.vehicle.util.MortarRig.ELEVATION_MIN, max = ttv.migami.jeg.vehicle.util.MortarRig.ELEVATION_MAX;
+        panel.slider(HudKit.ICON_ELEVATION, Component.translatable("hud.jeg.mortar.elevation"), (elevation - min) / (max - min),
+                Float.NaN, Float.NaN, HudKit.ACCENT, Component.literal(String.format(Locale.ROOT, "%.1f°", elevation)), HudKit.TEXT);
+        int bearing = Math.floorMod(Math.round(mortar.getYRot() + 180.0F), 360);
+        panel.value(HudKit.ICON_BEARING, Component.translatable("hud.jeg.mortar.bearing"), Component.literal(bearing + "°"), HudKit.TEXT);
+        panel.value(HudKit.ICON_TARGET, Component.translatable("hud.jeg.mortar.range"),
+                Component.translatable("hud.jeg.mortar.range_value", Math.round(prediction.range()),
+                        String.format(Locale.ROOT, "%.1f", prediction.ticks() / 20.0F)),
+                prediction.assumedLevel() ? HudKit.WARN : HudKit.TEXT);
+        panel.value(HudKit.ICON_AMMO, Component.translatable("hud.jeg.mortar.rounds"),
+                Component.literal(creative ? "∞" : Integer.toString(rounds)), rounds == 0 && !creative ? HudKit.BAD : HudKit.TEXT);
+        if (prediction.assumedLevel()) {
+            panel.note(HudKit.ICON_WARN, Component.translatable("hud.jeg.mortar.assumed"), HudKit.WARN);
+        }
+        float hints = hintAlpha(mc, mortar);
+        panel.hints(hints,
+                HudPanel.Hint.of(Component.translatable("hud.jeg.hint.elevate"), HudKit.keyName(mc.options.keyUp), HudKit.keyName(mc.options.keyDown)),
+                HudPanel.Hint.of(Component.translatable("hud.jeg.hint.traverse"), HudKit.keyName(mc.options.keyLeft), HudKit.keyName(mc.options.keyRight)));
+        panel.hints(hints,
+                HudPanel.Hint.of(Component.translatable("hud.jeg.hint.fire"), HudKit.keyName(KeyBindings.RELOAD), HudKit.keyName(mc.options.keyAttack)));
+        return panel;
+    }
+
+    /**
+     * A shell gun's fire-control panel (the Mk42's, the BL-132's): the shell selected, the gun's elevation (on its own
+     * scale) and bearing, and where a shell fired now lands (ShellGunAim, against terrain while it is loaded). Kept
+     * narrow so the vehicle card at the top middle clears it.
+     */
+    private static HudPanel shellGunPanel(Layer l, ttv.migami.jeg.vehicle.entity.ShellGunEntity gun) {
+        Minecraft mc = l.mc();
+        float partial = mc.getDeltaTracker().getGameTimeDeltaPartialTick(true);
+        var prediction = ttv.migami.jeg.vehicle.client.ShellGunAim.predict(gun, partial);
+        var shell = gun.selectedShell(mc.player);
+        HudPanel panel = new HudPanel(l.font()).minWidth(112);
+        float elevation = gun.elevation(partial);
+        float min = gun.minElevation(), max = gun.maxElevation();
+        panel.slider(HudKit.ICON_ELEVATION, Component.translatable("hud.jeg.mk42.elevation"), (Mth.clamp(elevation, min, max) - min) / (max - min),
+                Float.NaN, Float.NaN, HudKit.ACCENT, Component.literal(String.format(Locale.ROOT, "%.1f°", elevation)), HudKit.TEXT);
+        panel.value(HudKit.ICON_BEARING, Component.translatable("hud.jeg.mk42.bearing"), Component.literal(gun.bearing(partial) + "°"), HudKit.TEXT);
+        panel.value(HudKit.ICON_TARGET, Component.translatable("hud.jeg.mk42.range"),
+                Component.translatable("hud.jeg.mortar.range_value", Math.round(prediction.range()),
+                        String.format(Locale.ROOT, "%.1f", prediction.ticks() / 20.0F)),
+                prediction.assumedLevel() ? HudKit.WARN : HudKit.TEXT);
+        for (var row : gun.panelRows(mc.player, partial)) {
+            panel.value(HudKit.NO_ICON, row.label(), row.value(), row.colour());
+        }
+        if (prediction.assumedLevel()) {
+            panel.note(HudKit.ICON_WARN, Component.translatable("hud.jeg.mk42.assumed"), HudKit.WARN);
+        }
+        var warhead = shell.warhead();
+        boolean dangerClose = !warhead.kinetic() && warhead.dispense() == null
+                && !ttv.migami.jeg.vehicle.projectile.ShellEntity.safeDistance(gun, prediction.impact(), warhead);
+        if (dangerClose) {
+            panel.note(HudKit.ICON_WARN, Component.translatable("hud.jeg.mk42.too_close"), HudKit.BAD);
+        }
+        return panel;
+    }
+
+    /**
+     * The FSV-6 driver's panel: the body's state (packed, deploying, deployed) with its progress, what powers it, the
+     * hold, the tow hitch, the R-hold bar while the key is held, why a deploy or pack-up was refused, and the key hints
+     * for a few seconds after boarding.
+     */
+    private static HudPanel supportPanel(Layer l, ttv.migami.jeg.vehicle.entity.SupportVehicleEntity truck) {
+        Minecraft mc = l.mc();
+        long now = mc.level.getGameTime();
+        float hints = hintAlpha(mc, truck);
+        var status = truck.status();
+        boolean refusal = status != ttv.migami.jeg.vehicle.support.SupportShell.Status.OK && truck.statusAge() < 80;
+        boolean starting = truck.powered() && !truck.engineRunning() && truck.isPacked();
+        float progress = truck.deployProgress();
+        int percent = Math.round(progress * 100);
+        Component state = starting ? Component.translatable("hud.jeg.support.starting")
+                : truck.isDeployed() ? Component.translatable("hud.jeg.support.deployed")
+                : truck.isPacked() ? Component.translatable("hud.jeg.support.packed")
+                : Component.translatable(truck.deployTarget() ? "hud.jeg.support.deploying" : "hud.jeg.support.packing", percent);
+        int lamp = refusal ? HudKit.BAD : starting || truck.isMovingParts() ? HudKit.WARN : truck.isDeployed() ? HudKit.OK : HudKit.FAINT;
+        HudPanel panel = new HudPanel(l.font()).minWidth(132);
+        panel.header(lamp, state, HudKit.TEXT, Component.translatable("hud.jeg.support.title"), truck.isMovingParts() ? progress : Float.NaN);
+        boolean powered = truck.generatorRunning() || truck.engineRunning();
+        panel.value(HudKit.ICON_POWER, Component.translatable("hud.jeg.support.power"),
+                Component.translatable(truck.generatorRunning() ? "hud.jeg.support.generator" : truck.engineRunning() ? "hud.jeg.support.engine" : "hud.jeg.support.off"),
+                powered ? HudKit.OK : HudKit.MUTED);
+        boolean full = truck.occupiedCargoSlots() >= truck.vehicleContainerSlots();
+        panel.bar(HudKit.ICON_HOLD, Component.translatable("hud.jeg.support.hold"),
+                truck.occupiedCargoSlots() / (float) Math.max(1, truck.vehicleContainerSlots()), full ? HudKit.BAD : 0xFFB4BDC6,
+                Component.literal(truck.occupiedCargoSlots() + "/" + truck.vehicleContainerSlots()), full ? HudKit.WARN : HudKit.TEXT);
+        var towed = truck.towedEntityId() >= 0 ? mc.level.getEntity(truck.towedEntityId()) : null;
+        var towable = towed == null ? truck.towCandidate() : null;
+        if (towed != null) {
+            panel.value(HudKit.ICON_TOW, Component.translatable("hud.jeg.support.towing"), towed.getType().getDescription(), HudKit.WARN);
+        }
+        if (truck.holdTicks() > 0) {
+            Component key = HudKit.keyName(KeyBindings.RELOAD);
+            panel.bar(HudKit.ICON_CLOCK, Component.translatable("hud.jeg.support.hold_key", key),
+                    truck.holdTicks() / (float) ttv.migami.jeg.vehicle.entity.SupportVehicleEntity.HOLD_TICKS, HudKit.ACCENT,
+                    Component.empty(), HudKit.TEXT);
+        }
+        if (refusal) {
+            BlockPosText at = new BlockPosText(truck.statusPos());
+            Component refusalText = status == ttv.migami.jeg.vehicle.support.SupportShell.Status.PLAYERS_INSIDE
+                    ? Component.translatable("hud.jeg.support.status.PLAYERS_INSIDE", truck.statusPos().getX())
+                    : Component.translatable("hud.jeg.support.status." + status.name(), at.text());
+            panel.note(HudKit.ICON_WARN, refusalText, HudKit.BAD);
+        }
+        // The tow hitch: always shown while something is in reach or in tow (a pulsing hint), not only after boarding.
+        Component tow = KeyBindings.VEHICLE_TOW.isUnbound() ? null : HudKit.keyName(KeyBindings.VEHICLE_TOW);
+        if (tow != null && towed != null) {
+            panel.hints(1F, HudPanel.Hint.of(Component.translatable("hud.jeg.hint.release_tow"), tow));
+        } else if (tow != null && towable != null) {
+            float pulse = (now / 10) % 2 == 0 ? 1F : 0.65F;
+            panel.hints(pulse, HudPanel.Hint.of(Component.translatable("hud.jeg.hint.hitch", towable.getType().getDescription()), tow));
+        }
+        Component key = HudKit.keyName(KeyBindings.RELOAD);
+        if (truck.isPacked()) {
+            panel.hints(hints, HudPanel.Hint.of(Component.translatable("hud.jeg.hint.deploy"), key),
+                    HudPanel.Hint.of(Component.translatable("hud.jeg.hint.horn"), HudKit.keyName(mc.options.keyAttack)));
+        } else {
+            panel.hints(hints, HudPanel.Hint.of(Component.translatable("hud.jeg.hint.pack"), key));
+        }
+        return panel;
+    }
+
+    private record BlockPosText(net.minecraft.core.BlockPos pos) {
+        String text() {
+            return this.pos.getX() + " " + this.pos.getY() + " " + this.pos.getZ();
+        }
+    }
+
+    // ---------------------------------------------------------------------------------------------------------------
+    // Sights and markers, at the GUI's own scale.
+
+    /** A ground vehicle's zoomed sight: the TV frame, compass strip and roll indicator. */
+    private static void renderFocusedSight(GuiGraphicsExtractor guiGraphics, Minecraft minecraft) {
+        int screenWidth = guiGraphics.guiWidth();
+        int screenHeight = guiGraphics.guiHeight();
+        int addW = (screenWidth / screenHeight) * 48;
+        int addH = (screenWidth / screenHeight) * 27;
+        preciseBlit(guiGraphics, LAND_FRAME, -addW / 2.0F, -addH / 2.0F, screenWidth + addW, screenHeight + addH, 0.0F, 0.0F, 1920.0F, 1080.0F, 1920.0F, 1080.0F);
+        int compassOffset = Mth.floor(128.0F + 64.0F / 45.0F * minecraft.player.getYRot());
+        guiGraphics.blit(RenderPipelines.GUI_TEXTURED, COMPASS, screenWidth / 2 - 128, 10, compassOffset, 0.0F, 256, 16, 1024, 32);
+        guiGraphics.blit(RenderPipelines.GUI_TEXTURED, ROLL_INDICATOR, screenWidth / 2 - 8, 30, 0.0F, 0.0F, 16, 16, 16, 16);
+    }
+
     /**
      * Where a slew-limited gun points now (the Mk42's): the gunner's view leads and the gun follows at its real rate,
      * so this marker, 250 blocks along the bore, shows when the gun has caught up with the crosshair.
@@ -492,9 +969,36 @@ public final class VehicleHudOverlay {
         float tanHalf = (float) Math.tan(Math.toRadians(camera.getFov() * 0.5D));
         float screenX = width * 0.5F + x / (tanHalf * width / height) * width * 0.5F;
         float screenY = height * 0.5F - y / tanHalf * height * 0.5F;
-        preciseBlit(guiGraphics, CROSSHAIR_THIRD_CAMERA, screenX - 12.0F, screenY - 12.0F, 24, 24, 0.0F, 0.0F, 64.0F, 64.0F, 64.0F, 64.0F);
+        // Where the gun points while it slews after the view: its own mark (four corner brackets), never a second copy of
+        // the reticle, and gone once the gun lies on the reticle, so the two never sit on top of each other.
+        if (Math.hypot(screenX - width * 0.5F, screenY - height * 0.5F) < BORE_MARKER_HIDE_PX) {
+            return;
+        }
+        // A ring of dots, labelled: the yellow corner brackets it was meant nothing to the user ("what is the yellow
+        // box?", review 2026-11-18). Drawn in the HUD's own smooth dots and font.
+        float scale = HudKit.scale(minecraft);
+        var pose = guiGraphics.pose();
+        pose.pushMatrix();
+        pose.translate(screenX, screenY);
+        pose.scale(scale, scale);
+        int colour = 0xE0FFD24A;
+        for (int i = 0; i < 12; i++) {
+            double a = i * Math.PI / 6.0D;
+            HudKit.dot(guiGraphics, (int) Math.round(Math.cos(a) * 8.0D) - 1, (int) Math.round(Math.sin(a) * 8.0D) - 1, colour);
+        }
+        HudKit.centred(guiGraphics, minecraft.font, Component.translatable("hud.jeg.vehicle.bore_marker"), 0, 12, colour);
+        pose.popMatrix();
     }
 
+    /** The bore marker is hidden within this many GUI pixels of the screen centre (the gun is on the reticle). */
+    private static final float BORE_MARKER_HIDE_PX = 7.0F;
+
+    /**
+     * The jet's gun marker: where its rounds go, 250 blocks down the gun's bore, which points a little below the nose
+     * (with the jet's own speed on them), drawn where that point is on screen and turned with the jet's bank against the
+     * view. The chase camera lags the jet a little, so in a turn the marker swings ahead of the screen's centre with the
+     * nose.
+     */
     private static void renderJetGunMarker(GuiGraphicsExtractor guiGraphics, Minecraft minecraft, VehicleEntity jet) {
         float partialTick = minecraft.getDeltaTracker().getGameTimeDeltaPartialTick(false);
         net.minecraft.client.Camera camera = minecraft.gameRenderer.getMainCamera();
@@ -530,88 +1034,6 @@ public final class VehicleHudOverlay {
         pose.rotate(bank * Mth.DEG_TO_RAD);
         preciseBlit(guiGraphics, CROSSHAIR_THIRD_CAMERA, -12.0F, -12.0F, 24, 24, 0.0F, 0.0F, 64.0F, 64.0F, 64.0F, 64.0F);
         pose.popMatrix();
-    }
-
-    /**
-     * A jet's instruments, top right: airspeed, height above the ground, throttle and gear, plus what the brake key is
-     * doing. The pilot also gets a flashing stall or pull-up warning under the crosshair.
-     */
-    private static void renderJetInstruments(GuiGraphicsExtractor guiGraphics, Minecraft minecraft, VehicleEntity jet) {
-        double speed = jet.getDeltaMovement().length() * 20.0D;
-        double altitude = jet.exactAltitudeAboveGround();
-        boolean grounded = jet.onGround();
-        float gear = jet.jetGear();
-        java.util.List<Component> lines = new java.util.ArrayList<>(java.util.List.of(
-                Component.translatable("hud.jeg.vehicle.jet_speed", Math.round(speed)),
-                Component.translatable("hud.jeg.vehicle.jet_altitude", grounded ? "0" : String.valueOf(Math.round(altitude))),
-                Component.translatable("hud.jeg.vehicle.jet_throttle", Math.round(jet.jetThrottle() * 100.0F)),
-                Component.translatable(gear >= 0.99F ? "hud.jeg.vehicle.jet_gear_down" : gear <= 0.01F ? "hud.jeg.vehicle.jet_gear_up" : "hud.jeg.vehicle.jet_gear_moving")
-        ));
-        if (jet.jetSpeedBrake() > 0.05F) {
-            lines.add(Component.translatable("hud.jeg.vehicle.jet_speed_brake"));
-        }
-        int y = 16;
-        for (Component line : lines) {
-            guiGraphics.text(minecraft.font, line, guiGraphics.guiWidth() - minecraft.font.width(line) - 16, y, 0xFF66FF00);
-            y += 11;
-        }
-        float cruise = ttv.migami.jeg.vehicle.client.VehicleInputHandler.jetCruiseTarget();
-        if (minecraft.player != null && jet.getControllingPassenger() == minecraft.player && cruise >= 0.0F) {
-            Component line = Component.translatable("hud.jeg.vehicle.jet_cruise", Math.round(cruise * 20.0F));
-            guiGraphics.text(minecraft.font, line, guiGraphics.guiWidth() - minecraft.font.width(line) - 16, y, 0xFF66CCFF);
-            y += 11;
-        }
-        if (minecraft.player != null && jet.getControllingPassenger() == minecraft.player
-                && ttv.migami.jeg.client.KeyBindings.VEHICLE_BRAKE_DESCEND.isDown()) {
-            Component brake = Component.translatable(grounded ? "hud.jeg.vehicle.jet_wheel_brake" : "hud.jeg.vehicle.jet_airbrake");
-            guiGraphics.text(minecraft.font, brake, guiGraphics.guiWidth() - minecraft.font.width(brake) - 16, y, 0xFFFFDD88);
-        }
-        if (minecraft.player == null || jet.getControllingPassenger() != minecraft.player) {
-            return;
-        }
-        String warning = null;
-        if (jet.jetPullUpWarning()) {
-            warning = "message.jeg.vehicle.jet_pull_up";
-        } else if (jet.jetStallWarning()) {
-            warning = "message.jeg.vehicle.jet_stall_warning";
-        }
-        if (warning != null) {
-            Component text = Component.translatable(warning);
-            int color = (jet.tickCount / 5) % 2 == 0 ? 0xFFFF2222 : 0xFFFFAA00;
-            guiGraphics.text(minecraft.font, text, (guiGraphics.guiWidth() - minecraft.font.width(text)) / 2, guiGraphics.guiHeight() / 2 + 20, color);
-        }
-    }
-
-    private static void renderVehicleWarning(GuiGraphicsExtractor guiGraphics, Minecraft minecraft, VehicleEntity vehicle) {
-        if (minecraft.player == null) {
-            return;
-        }
-        String warningKey = vehicle.activeWarningMessageKey();
-        if (warningKey.isEmpty() && vehicle.vehicleData().defaults().vehicleType() == VehicleType.HELICOPTER) {
-            warningKey = helicopterWarningKey(vehicle);
-        }
-        if (warningKey == null || warningKey.isEmpty()) {
-            return;
-        }
-        Component warning = Component.translatable(warningKey);
-        int color = (vehicle.tickCount / 10) % 2 == 0 ? 0xFFFF2222 : 0xFF7F0000;
-        int x = (guiGraphics.guiWidth() - minecraft.font.width(warning)) / 2;
-        int y = guiGraphics.guiHeight() / 2 + 9;
-        guiGraphics.text(minecraft.font, warning, x, y, color);
-    }
-
-    private static String helicopterWarningKey(VehicleEntity vehicle) {
-        if (vehicle.vehicleHealth() < Math.min(HELICOPTER_CRITICAL_DAMAGE_WARNING_HEALTH, vehicle.maxVehicleHealth())) {
-            return "message.jeg.vehicle.helicopter_critical_damage_warning";
-        }
-        if (vehicle.maxVehicleEnergy() > 0 && vehicle.vehicleEnergy() <= 0) {
-            return "message.jeg.vehicle.helicopter_power_loss_warning";
-        }
-        return null;
-    }
-
-    private static void blitWeaponIcon(GuiGraphicsExtractor guiGraphics, Identifier icon, int x, int y) {
-        guiGraphics.blit(RenderPipelines.GUI_TEXTURED, icon, x, y, 0, 0, WEAPON_ICON_WIDTH, WEAPON_ICON_HEIGHT, WEAPON_ICON_TEXTURE_WIDTH, WEAPON_ICON_TEXTURE_HEIGHT, WEAPON_ICON_TEXTURE_WIDTH, WEAPON_ICON_TEXTURE_HEIGHT);
     }
 
     private static final int POD_TEXT = 0xFFE4EEE4;
@@ -702,21 +1124,21 @@ public final class VehicleHudOverlay {
         podText(guiGraphics, font, "REC", left + 7, top);
         podText(guiGraphics, font, "EO/IR  WHT", left, top + 11);
         double zoom = Math.tan(Math.toRadians(minecraft.options.fov().get() * 0.5D)) / Math.tan(Math.toRadians(camera.getFov() * 0.5D));
-        podText(guiGraphics, font, String.format(java.util.Locale.ROOT, "ZOOM %.1fx", Math.max(1.0D, zoom)), left, top + 22);
+        podText(guiGraphics, font, String.format(Locale.ROOT, "ZOOM %.1fx", Math.max(1.0D, zoom)), left, top + 22);
         // Top centre: heading, with a tick under it.
         int heading = Math.floorMod(Math.round(yaw + 180.0F), 360);
-        String headingText = String.format(java.util.Locale.ROOT, "HDG %03d", heading);
+        String headingText = String.format(Locale.ROOT, "HDG %03d", heading);
         podText(guiGraphics, font, headingText, cx - font.width(headingText) / 2, top);
         guiGraphics.fill(cx, top + 11, cx + 1, top + 16, POD_LINE);
         // Left of centre: where the pod points from the jet's nose.
         float azimuth = Mth.wrapDegrees(yaw - jet.getYRot());
-        podText(guiGraphics, font, String.format(java.util.Locale.ROOT, "AZ %+04d", Math.round(azimuth)), left, cy - 11);
-        podText(guiGraphics, font, String.format(java.util.Locale.ROOT, "EL %+03d", Math.round(-pitch)), left, cy + 1);
+        podText(guiGraphics, font, String.format(Locale.ROOT, "AZ %+04d", Math.round(azimuth)), left, cy - 11);
+        podText(guiGraphics, font, String.format(Locale.ROOT, "EL %+03d", Math.round(-pitch)), left, cy + 1);
         // Under the crosshair: range to, and position of, what it is on.
-        String range = ground ? String.format(java.util.Locale.ROOT, "RNG %d m", Math.round(eye.distanceTo(point))) : "RNG ----";
+        String range = ground ? String.format(Locale.ROOT, "RNG %d m", Math.round(eye.distanceTo(point))) : "RNG ----";
         podText(guiGraphics, font, range, cx - font.width(range) / 2, cy + box + 6);
         if (ground) {
-            String position = String.format(java.util.Locale.ROOT, "TGT %d / %d / %d", Math.round(point.x), Math.round(point.y), Math.round(point.z));
+            String position = String.format(Locale.ROOT, "TGT %d / %d / %d", Math.round(point.x), Math.round(point.y), Math.round(point.z));
             podText(guiGraphics, font, position, cx - font.width(position) / 2, cy + box + 17);
         }
         if (tracking) {
@@ -726,7 +1148,7 @@ public final class VehicleHudOverlay {
         }
     }
 
-    private static void podText(GuiGraphicsExtractor guiGraphics, net.minecraft.client.gui.Font font, String text, int x, int y) {
+    private static void podText(GuiGraphicsExtractor guiGraphics, Font font, String text, int x, int y) {
         guiGraphics.text(font, Component.literal(text), x, y, POD_TEXT);
     }
 
@@ -745,7 +1167,7 @@ public final class VehicleHudOverlay {
     }
 
     private static void renderReticle(GuiGraphicsExtractor guiGraphics, VehicleEntity vehicle) {
-        if (vehicle instanceof ttv.migami.jeg.vehicle.entity.BulldozerEntity) {
+        if (vehicle instanceof BulldozerEntity) {
             return;
         }
         int size = Math.min(guiGraphics.guiWidth(), guiGraphics.guiHeight());
@@ -794,497 +1216,24 @@ public final class VehicleHudOverlay {
         return CROSSHAIR_GUN;
     }
 
-    private static void renderPassengerInfo(GuiGraphicsExtractor guiGraphics, Minecraft minecraft, VehicleEntity vehicle) {
-        int seatCount = vehicle.vehicleData().defaults().seats().size();
-        int screenHeight = guiGraphics.guiHeight();
-        for (int seat = seatCount - 1; seat >= 0; seat--) {
-            int row = seatCount - 1 - seat;
-            int y = screenHeight - 35 - row * 12;
-            Entity passenger = vehicle.passengerForSeat(seat);
-            Component name = passenger == null ? Component.literal("---") : passenger.getName();
-            String number = "[" + (seat + 1) + "]";
-            guiGraphics.text(minecraft.font, number, 25 - minecraft.font.width(number), y, 0xFF66FF00);
-            guiGraphics.blit(RenderPipelines.GUI_TEXTURED, seat == 0 ? DRIVER_ICON : PASSENGER_ICON, 30, y, 0.0F, 0.0F, 8, 8, 8, 8);
-            guiGraphics.text(minecraft.font, name, 42, y, passenger == null ? 0xFF4F8740 : 0xFF66FF00);
-        }
-    }
-
-    private static int dozerHintId = -1;
-    private static long dozerHintStart, dozerLastSeen;
-    /** How long the key hints stay after boarding (ticks), then fade over {@link #DOZER_HINT_FADE}. */
-    private static final int DOZER_HINT_TICKS = 140, DOZER_HINT_FADE = 20;
-    private static final float DOZER_PANEL_SCALE = .75F;
+    // ---------------------------------------------------------------------------------------------------------------
+    // Placement and shared readings.
 
     /**
-     * The dozer operator's panel, drawn at three-quarter size: work status, blade height, load, grade lock and hold, and
-     * the ripper while it is down. The key hints show for a few seconds after boarding, then fade.
-     */
-    private static void renderDozerPanel(GuiGraphicsExtractor g, Minecraft mc, ttv.migami.jeg.vehicle.entity.BulldozerEntity dozer) {
-        long now = mc.level.getGameTime();
-        if (dozer.getId() != dozerHintId || now - dozerLastSeen > 20) {
-            dozerHintId = dozer.getId();
-            dozerHintStart = now;
-        }
-        dozerLastSeen = now;
-        long shown = now - dozerHintStart;
-        float hints = shown < DOZER_HINT_TICKS ? 1F : Math.max(0F, 1F - (shown - DOZER_HINT_TICKS) / (float) DOZER_HINT_FADE);
-        boolean ripperLine = dozer.ripperDown();
-        int rows = 5 + (ripperLine ? 1 : 0) + (hints > .05F ? 2 : 0);
-        var pose = g.pose();
-        pose.pushMatrix();
-        // About three-quarter size, snapped so each font pixel is a whole number of screen pixels: a plain .75 scale
-        // smears the text at GUI scale 3 (2.25 pixels per font pixel).
-        int guiScale = Math.max(1, mc.getWindow().getGuiScale());
-        float scale = Math.max(1, Math.round(guiScale * DOZER_PANEL_SCALE)) / (float) guiScale;
-        pose.scale(scale, scale);
-        int x = 10, y = 10, row = 11;
-        int status = dozer.workStatus();
-        // Two columns: names on the left, readings from one shared column, the panel as wide as its widest line.
-        boolean cutting = dozer.cutFloor() != ttv.migami.jeg.vehicle.entity.BulldozerEntity.NO_FLOOR;
-        Component bladeName = Component.translatable("hud.jeg.dozer.blade"), loadName = Component.translatable("hud.jeg.dozer.load"),
-                holdName = Component.translatable("hud.jeg.dozer.hold"), gradeName = Component.translatable("hud.jeg.dozer.grade"),
-                ripperName = Component.translatable("hud.jeg.dozer.ripper");
-        Component gradeValue = cutting ? Component.translatable("hud.jeg.dozer.cutting_to", dozer.cutFloor())
-                : Component.translatable(dozer.gradeAssist() ? "hud.jeg.dozer.on" : "hud.jeg.dozer.off");
-        Component holdValue = Component.literal(dozer.occupiedCargoSlots() + "/" + dozer.vehicleContainerSlots());
-        var paving = dozer.pavingStack();
-        Component ripperValue = paving.isEmpty() ? Component.translatable("hud.jeg.dozer.ripper_empty")
-                : Component.literal(dozer.pavingCount() + " ").append(paving.getHoverName());
-        int names = Math.max(Math.max(mc.font.width(bladeName), mc.font.width(loadName)),
-                Math.max(Math.max(mc.font.width(holdName), mc.font.width(gradeName)), ripperLine ? mc.font.width(ripperName) : 0));
-        int bx = x + names + 8, bw = 62;
-        int w = Math.max(128, bx - x + bw + 6 + Math.max(mc.font.width(holdValue), mc.font.width("+" + Math.round(ttv.migami.jeg.vehicle.util.BulldozerRig.LIFT_MAX) + "°")));
-        w = Math.max(w, bx - x + mc.font.width(gradeValue));
-        if (ripperLine) w = Math.max(w, bx - x + mc.font.width(ripperValue));
-        Component controls = Component.translatable("hud.jeg.dozer.controls", mc.options.keyJump.getTranslatedKeyMessage(),
-                mc.options.keyShift.getTranslatedKeyMessage(), KeyBindings.VEHICLE_DEPLOY_DECOY.getTranslatedKeyMessage());
-        Component controls2 = Component.translatable("hud.jeg.dozer.controls2", KeyBindings.RELOAD.getTranslatedKeyMessage(),
-                mc.options.keyAttack.getTranslatedKeyMessage());
-        if (hints > .05F) w = Math.max(w, Math.max(mc.font.width(controls), mc.font.width(controls2)));
-        boolean starting = dozer.powered() && !dozer.engineRunning();
-        int light = starting ? 0xFFE0B040 : switch (status) {
-            case ttv.migami.jeg.vehicle.terrain.BulldozerTerrainWork.WORKING, ttv.migami.jeg.vehicle.terrain.BulldozerTerrainWork.TREE -> 0xFF6BD36B;
-            case ttv.migami.jeg.vehicle.terrain.BulldozerTerrainWork.BUSY, ttv.migami.jeg.vehicle.terrain.BulldozerTerrainWork.SPOIL,
-                 ttv.migami.jeg.vehicle.terrain.BulldozerTerrainWork.RAISED_BLOCKED,
-                 ttv.migami.jeg.vehicle.terrain.BulldozerTerrainWork.TURN_BLOCKED_RAISED -> 0xFFE0B040;
-            case ttv.migami.jeg.vehicle.terrain.BulldozerTerrainWork.SOLID, ttv.migami.jeg.vehicle.terrain.BulldozerTerrainWork.PROTECTED,
-                 ttv.migami.jeg.vehicle.terrain.BulldozerTerrainWork.NO_POWER,
-                 ttv.migami.jeg.vehicle.terrain.BulldozerTerrainWork.TURN_BLOCKED -> 0xFFE05A40;
-            default -> 0xFF8C9490;
-        };
-        g.fill(x - 4, y - 4, x + w + 4, y + row * rows - 1, 0x88101414);
-        g.fill(x - 4, y - 4, x + w + 4, y - 3, 0xFFD6A024);
-        g.fill(x, y + 2, x + 5, y + 7, light);
-        Component state = Component.translatable(starting ? "hud.jeg.dozer.starting" : "hud.jeg.dozer.status_" + status);
-        g.text(mc.font, state, x + 9, y, 0xFFECE3C4);
-        y += row;
-        float lift = dozer.bladeLift();
-        float min = ttv.migami.jeg.vehicle.util.BulldozerRig.LIFT_MIN, max = ttv.migami.jeg.vehicle.util.BulldozerRig.LIFT_MAX;
-        g.text(mc.font, bladeName, x, y, 0xFFB9B39E);
-        g.fill(bx, y + 3, bx + bw, y + 5, 0xFF3A3F3D);
-        int travel = bx + Math.round(bw * (ttv.migami.jeg.vehicle.util.BulldozerRig.TRAVEL_LIFT - min) / (max - min));
-        g.fill(travel, y + 3, bx + bw, y + 5, 0xFF5E6A78);
-        int grade = bx + Math.round(bw * (0 - min) / (max - min));
-        g.fill(grade, y + 1, grade + 1, y + 7, 0xFF8C9490);
-        int marker = bx + Math.round(bw * (lift - min) / (max - min));
-        g.fill(marker - 1, y, marker + 2, y + 8, 0xFFD6A024);
-        String label = lift > ttv.migami.jeg.vehicle.util.BulldozerRig.TRAVEL_LIFT ? Component.translatable("hud.jeg.dozer.travel").getString()
-                : (lift >= 0 ? "+" : "") + Math.round(lift) + "°";
-        g.text(mc.font, Component.literal(label), bx + bw + 5, y, 0xFFECE3C4);
-        y += row;
-        g.text(mc.font, loadName, x, y, 0xFFB9B39E);
-        g.fill(bx, y + 3, bx + bw, y + 5, 0xFF3A3F3D);
-        float load = dozer.load();
-        g.fill(bx, y + 2, bx + Math.round(bw * load), y + 6, load > .85F ? 0xFFE05A40 : 0xFFD6A024);
-        y += row;
-        boolean full = dozer.occupiedCargoSlots() >= dozer.vehicleContainerSlots();
-        g.text(mc.font, holdName, x, y, 0xFFB9B39E);
-        g.fill(bx, y + 3, bx + bw, y + 5, 0xFF3A3F3D);
-        float filled = dozer.occupiedCargoSlots() / (float) Math.max(1, dozer.vehicleContainerSlots());
-        g.fill(bx, y + 2, bx + Math.round(bw * filled), y + 6, full ? 0xFFE05A40 : 0xFF8C9490);
-        g.text(mc.font, holdValue, bx + bw + 5, y, full ? 0xFFE0B040 : 0xFFECE3C4);
-        y += row;
-        g.text(mc.font, gradeName, x, y, 0xFFB9B39E);
-        g.text(mc.font, gradeValue, bx, y, cutting ? 0xFFE0B040 : dozer.gradeAssist() ? 0xFF6BD36B : 0xFFECE3C4);
-        y += row;
-        if (ripperLine) {
-            g.text(mc.font, ripperName, x, y, 0xFFB9B39E);
-            g.text(mc.font, ripperValue, bx, y, paving.isEmpty() ? 0xFFE05A40 : 0xFFE0B040);
-            y += row;
-        }
-        if (hints > .05F) {
-            int colour = ((int) (hints * 255) << 24) | 0x8C9490;
-            g.text(mc.font, controls, x, y, colour);
-            y += row;
-            g.text(mc.font, controls2, x, y, colour);
-        }
-        pose.popMatrix();
-    }
-
-    /**
-     * The mortar gunner's fire-control panel, in the dozer panel's style: the drill state, elevation (on its 45-85
-     * degree scale), bearing, the predicted range and time of flight (MortarAim, against terrain while it is loaded),
-     * rounds carried, and the keys.
-     */
-    private static void renderMortarPanel(GuiGraphicsExtractor g, Minecraft mc, ttv.migami.jeg.vehicle.entity.MortarEntity mortar) {
-        float partial = mc.getDeltaTracker().getGameTimeDeltaPartialTick(true);
-        var prediction = ttv.migami.jeg.vehicle.client.MortarAim.predict(mortar, partial);
-        int rounds = 0;
-        for (int slot = 0; slot < mc.player.getInventory().getContainerSize(); slot++) {
-            var stack = mc.player.getInventory().getItem(slot);
-            if (stack.is(ttv.migami.jeg.init.ModItems.MORTAR_ROUND.get())) {
-                rounds += stack.getCount();
-            }
-        }
-        boolean creative = mc.player.getAbilities().instabuild;
-        var pose = g.pose();
-        pose.pushMatrix();
-        int guiScale = Math.max(1, mc.getWindow().getGuiScale());
-        float scale = Math.max(1, Math.round(guiScale * DOZER_PANEL_SCALE)) / (float) guiScale;
-        pose.scale(scale, scale);
-        int x = 10, y = 10, row = 11;
-        Component status;
-        int light;
-        if (mortar.settingUp()) {
-            status = Component.translatable("hud.jeg.mortar.status_setup");
-            light = 0xFFE0B040;
-        } else if (mortar.roundInTube()) {
-            status = Component.translatable("hud.jeg.mortar.status_away");
-            light = 0xFFE05A40;
-        } else if (mortar.readyInTicks() > 0) {
-            status = Component.translatable("hud.jeg.mortar.status_reload", String.format(java.util.Locale.ROOT, "%.1f", mortar.readyInTicks() / 20.0F));
-            light = 0xFFE0B040;
-        } else if (rounds == 0 && !creative) {
-            status = Component.translatable("message.jeg.mortar.no_rounds");
-            light = 0xFFE05A40;
-        } else {
-            status = Component.translatable("hud.jeg.mortar.status_ready");
-            light = 0xFF6BD36B;
-        }
-        if (mortar.isTurretDamaged()) {
-            status = Component.translatable("hud.jeg.mortar.status_jammed");
-            light = 0xFFE05A40;
-        }
-        Component elevationName = Component.translatable("hud.jeg.mortar.elevation");
-        Component bearingName = Component.translatable("hud.jeg.mortar.bearing");
-        Component rangeName = Component.translatable("hud.jeg.mortar.range");
-        Component roundsName = Component.translatable("hud.jeg.mortar.rounds");
-        int bearing = Math.floorMod(Math.round(mortar.getYRot() + 180.0F), 360);
-        Component rangeValue = Component.translatable("hud.jeg.mortar.range_value", Math.round(prediction.range()),
-                String.format(java.util.Locale.ROOT, "%.1f", prediction.ticks() / 20.0F));
-        Component controls = Component.translatable("hud.jeg.mortar.controls", mc.options.keyUp.getTranslatedKeyMessage(),
-                mc.options.keyDown.getTranslatedKeyMessage(), mc.options.keyLeft.getTranslatedKeyMessage(), mc.options.keyRight.getTranslatedKeyMessage());
-        Component controls2 = Component.translatable("hud.jeg.mortar.controls2", KeyBindings.RELOAD.getTranslatedKeyMessage(),
-                mc.options.keyAttack.getTranslatedKeyMessage());
-        Component assumed = Component.translatable("hud.jeg.mortar.assumed");
-        int names = Math.max(Math.max(mc.font.width(elevationName), mc.font.width(bearingName)), Math.max(mc.font.width(rangeName), mc.font.width(roundsName)));
-        int bx = x + names + 8, bw = 62;
-        int w = Math.max(150, bx - x + bw + 6 + mc.font.width("85.0°"));
-        w = Math.max(w, Math.max(mc.font.width(controls), mc.font.width(controls2)));
-        w = Math.max(w, bx - x + mc.font.width(rangeValue));
-        w = Math.max(w, mc.font.width(Component.translatable("hud.jeg.mortar.title")) + 9 + 8 + mc.font.width(status));
-        if (prediction.assumedLevel()) {
-            w = Math.max(w, mc.font.width(assumed));
-        }
-        int rows = 7 + (prediction.assumedLevel() ? 1 : 0);
-        g.fill(x - 4, y - 4, x + w + 4, y + row * rows - 1, 0x88101414);
-        g.fill(x - 4, y - 4, x + w + 4, y - 3, 0xFFD6A024);
-        g.fill(x, y + 2, x + 5, y + 7, light);
-        Component title = Component.translatable("hud.jeg.mortar.title");
-        g.text(mc.font, title, x + 9, y, 0xFFECE3C4);
-        g.text(mc.font, status, x + 9 + mc.font.width(title) + 8, y, 0xFFB9B39E);
-        y += row;
-        float elevation = mortar.elevation(partial);
-        float min = ttv.migami.jeg.vehicle.util.MortarRig.ELEVATION_MIN, max = ttv.migami.jeg.vehicle.util.MortarRig.ELEVATION_MAX;
-        g.text(mc.font, elevationName, x, y, 0xFFB9B39E);
-        g.fill(bx, y + 3, bx + bw, y + 5, 0xFF3A3F3D);
-        int marker = bx + Math.round(bw * (elevation - min) / (max - min));
-        g.fill(marker - 1, y, marker + 2, y + 8, 0xFFD6A024);
-        g.text(mc.font, Component.literal(String.format(java.util.Locale.ROOT, "%.1f°", elevation)), bx + bw + 5, y, 0xFFECE3C4);
-        y += row;
-        g.text(mc.font, bearingName, x, y, 0xFFB9B39E);
-        g.text(mc.font, Component.literal(bearing + "°"), bx, y, 0xFFECE3C4);
-        y += row;
-        g.text(mc.font, rangeName, x, y, 0xFFB9B39E);
-        g.text(mc.font, rangeValue, bx, y, prediction.assumedLevel() ? 0xFFE0B040 : 0xFFECE3C4);
-        y += row;
-        if (prediction.assumedLevel()) {
-            g.text(mc.font, assumed, x, y, 0xFFE0B040);
-            y += row;
-        }
-        g.text(mc.font, roundsName, x, y, 0xFFB9B39E);
-        g.text(mc.font, Component.literal(creative ? "∞" : Integer.toString(rounds)), bx, y, rounds == 0 && !creative ? 0xFFE05A40 : 0xFFECE3C4);
-        y += row;
-        g.text(mc.font, controls, x, y, 0xFF8C9490);
-        y += row;
-        g.text(mc.font, controls2, x, y, 0xFF8C9490);
-        pose.popMatrix();
-    }
-
-    /**
-     * A shell gun's fire-control panel (the Mk42's, the BL-132's), in the mortar panel's style: the shell selected,
-     * the gun's elevation (on its own scale) and bearing, and where a shell fired now lands (ShellGunAim, against
-     * terrain while it is loaded). The weapon list shows the drum and the hold as for every vehicle gun.
-     */
-    private static void renderShellGunPanel(GuiGraphicsExtractor g, Minecraft mc, ttv.migami.jeg.vehicle.entity.ShellGunEntity gun) {
-        float partial = mc.getDeltaTracker().getGameTimeDeltaPartialTick(true);
-        var prediction = ttv.migami.jeg.vehicle.client.ShellGunAim.predict(gun, partial);
-        var shell = gun.selectedShell(mc.player);
-        var pose = g.pose();
-        pose.pushMatrix();
-        int guiScale = Math.max(1, mc.getWindow().getGuiScale());
-        float scale = Math.max(1, Math.round(guiScale * DOZER_PANEL_SCALE)) / (float) guiScale;
-        pose.scale(scale, scale);
-        int x = 10, y = 10, row = 11;
-        Component shellName = Component.translatable("hud.jeg.mk42.shell");
-        Component elevationName = Component.translatable("hud.jeg.mk42.elevation");
-        Component bearingName = Component.translatable("hud.jeg.mk42.bearing");
-        Component rangeName = Component.translatable("hud.jeg.mk42.range");
-        Component shellValue = Component.translatable(shell.hudName());
-        Component rangeValue = Component.translatable("hud.jeg.mortar.range_value", Math.round(prediction.range()),
-                String.format(java.util.Locale.ROOT, "%.1f", prediction.ticks() / 20.0F));
-        Component assumed = Component.translatable("hud.jeg.mk42.assumed");
-        Component title = Component.translatable(gun.hudTitle());
-        int names = Math.max(Math.max(mc.font.width(elevationName), mc.font.width(bearingName)),
-                Math.max(mc.font.width(rangeName), mc.font.width(shellName)));
-        // Narrow (about 140 wide), so the vehicle info at the top middle clears it (vehicleInfoAtTop).
-        int bx = x + names + 8, bw = 46;
-        int w = Math.max(120, bx - x + bw + 6 + mc.font.width("-15.0°"));
-        w = Math.max(w, bx - x + mc.font.width(rangeValue));
-        w = Math.max(w, mc.font.width(title));
-        if (prediction.assumedLevel()) {
-            w = Math.max(w, mc.font.width(assumed));
-        }
-        var warhead = shell.warhead();
-        boolean dangerClose = !warhead.kinetic() && warhead.dispense() == null
-                && !ttv.migami.jeg.vehicle.projectile.ShellEntity.safeDistance(gun, prediction.impact(), warhead);
-        Component dud = Component.translatable("hud.jeg.mk42.too_close");
-        if (dangerClose) {
-            w = Math.max(w, mc.font.width(dud));
-        }
-        var extra = gun.panelRows(mc.player, partial);
-        int extraNames = 0;
-        for (var r : extra) {
-            extraNames = Math.max(extraNames, mc.font.width(r.label()));
-        }
-        int ex = x + extraNames + 8;
-        for (var r : extra) {
-            w = Math.max(w, ex - x + mc.font.width(r.value()));
-        }
-        int rows = 5 + (prediction.assumedLevel() ? 1 : 0) + (dangerClose ? 1 : 0) + extra.size();
-        g.fill(x - 4, y - 4, x + w + 4, y + row * rows - 1, 0x88101414);
-        g.fill(x - 4, y - 4, x + w + 4, y - 3, 0xFFD6A024);
-        g.fill(x, y + 2, x + 5, y + 7, gun.isTurretDamaged() ? 0xFFE05A40 : 0xFF6BD36B);
-        g.text(mc.font, title, x + 9, y, 0xFFECE3C4);
-        y += row;
-        g.text(mc.font, shellName, x, y, 0xFFB9B39E);
-        g.text(mc.font, shellValue, bx, y, 0xFFECE3C4);
-        y += row;
-        float elevation = gun.elevation(partial);
-        float min = gun.minElevation(), max = gun.maxElevation();
-        g.text(mc.font, elevationName, x, y, 0xFFB9B39E);
-        g.fill(bx, y + 3, bx + bw, y + 5, 0xFF3A3F3D);
-        int marker = bx + Math.round(bw * (Mth.clamp(elevation, min, max) - min) / (max - min));
-        g.fill(marker - 1, y, marker + 2, y + 8, 0xFFD6A024);
-        g.text(mc.font, Component.literal(String.format(java.util.Locale.ROOT, "%.1f°", elevation)), bx + bw + 5, y, 0xFFECE3C4);
-        y += row;
-        g.text(mc.font, bearingName, x, y, 0xFFB9B39E);
-        g.text(mc.font, Component.literal(gun.bearing(partial) + "°"), bx, y, 0xFFECE3C4);
-        y += row;
-        g.text(mc.font, rangeName, x, y, 0xFFB9B39E);
-        g.text(mc.font, rangeValue, bx, y, prediction.assumedLevel() ? 0xFFE0B040 : 0xFFECE3C4);
-        y += row;
-        if (prediction.assumedLevel()) {
-            g.text(mc.font, assumed, x, y, 0xFFE0B040);
-            y += row;
-        }
-        if (dangerClose) {
-            g.text(mc.font, dud, x, y, 0xFFE05A40);
-            y += row;
-        }
-        for (var r : extra) {
-            g.text(mc.font, r.label(), x, y, 0xFFB9B39E);
-            g.text(mc.font, r.value(), ex, y, r.colour());
-            y += row;
-        }
-        pose.popMatrix();
-    }
-
-    private static int supportHintId = -1;
-    private static long supportHintStart, supportLastSeen;
-
-    /**
-     * The FSV-6 driver's panel, three-quarter size like the dozer's: the body's state (packed, deploying, deployed),
-     * what powers it, the hold, the R-hold bar while the key is held, why a deploy or pack-up was refused, and the key
-     * hints for a few seconds after boarding.
-     */
-    private static void renderSupportPanel(GuiGraphicsExtractor g, Minecraft mc, ttv.migami.jeg.vehicle.entity.SupportVehicleEntity truck) {
-        long now = mc.level.getGameTime();
-        if (truck.getId() != supportHintId || now - supportLastSeen > 20) {
-            supportHintId = truck.getId();
-            supportHintStart = now;
-        }
-        supportLastSeen = now;
-        long shown = now - supportHintStart;
-        float hints = shown < DOZER_HINT_TICKS ? 1F : Math.max(0F, 1F - (shown - DOZER_HINT_TICKS) / (float) DOZER_HINT_FADE);
-        var status = truck.status();
-        boolean refusal = status != ttv.migami.jeg.vehicle.support.SupportShell.Status.OK && truck.statusAge() < 80;
-        boolean holding = truck.holdTicks() > 0;
-        var towed = truck.towedEntityId() >= 0 ? mc.level.getEntity(truck.towedEntityId()) : null;
-        var towable = towed == null ? truck.towCandidate() : null;
-        Component towKey = KeyBindings.VEHICLE_TOW.getTranslatedKeyMessage();
-        Component towRow = towed != null ? Component.translatable("hud.jeg.support.tow_release", towKey)
-                : towable != null ? Component.translatable("hud.jeg.support.tow_ready", towKey, towable.getType().getDescription()) : null;
-        int rows = 3 + (towed != null ? 1 : 0) + (towRow != null ? 1 : 0) + (holding ? 1 : 0) + (refusal ? 1 : 0) + (hints > .05F ? 1 : 0);
-        var pose = g.pose();
-        pose.pushMatrix();
-        int guiScale = Math.max(1, mc.getWindow().getGuiScale());
-        float scale = Math.max(1, Math.round(guiScale * DOZER_PANEL_SCALE)) / (float) guiScale;
-        pose.scale(scale, scale);
-        int x = 10, y = 10, row = 11;
-        float progress = truck.deployProgress();
-        int percent = Math.round(progress * 100);
-        boolean starting = truck.powered() && !truck.engineRunning() && truck.isPacked();
-        Component state = starting ? Component.translatable("hud.jeg.support.starting")
-                : truck.isDeployed() ? Component.translatable("hud.jeg.support.deployed")
-                : truck.isPacked() ? Component.translatable("hud.jeg.support.packed")
-                : Component.translatable(truck.deployTarget() ? "hud.jeg.support.deploying" : "hud.jeg.support.packing", percent);
-        Component powerName = Component.translatable("hud.jeg.support.power"), holdName = Component.translatable("hud.jeg.support.hold");
-        Component powerValue = Component.translatable(truck.generatorRunning() ? "hud.jeg.support.generator"
-                : truck.engineRunning() ? "hud.jeg.support.engine" : "hud.jeg.support.off");
-        Component holdValue = Component.literal(truck.occupiedCargoSlots() + "/" + truck.vehicleContainerSlots());
-        Component key = KeyBindings.RELOAD.getTranslatedKeyMessage();
-        Component controls = truck.isPacked()
-                ? Component.translatable("hud.jeg.support.controls_packed", key, mc.options.keyAttack.getTranslatedKeyMessage())
-                : Component.translatable("hud.jeg.support.controls_deployed", key);
-        BlockPos at = truck.statusPos();
-        Component refusalText = status == ttv.migami.jeg.vehicle.support.SupportShell.Status.PLAYERS_INSIDE
-                ? Component.translatable("hud.jeg.support.status.PLAYERS_INSIDE", at.getX())
-                : Component.translatable("hud.jeg.support.status." + status.name(), at.getX() + " " + at.getY() + " " + at.getZ());
-        int names = Math.max(mc.font.width(powerName), mc.font.width(holdName));
-        int bx = x + names + 8, bw = 62;
-        int w = Math.max(128, bx - x + bw + 6 + mc.font.width(holdValue));
-        w = Math.max(w, 9 + mc.font.width(state));
-        w = Math.max(w, bx - x + mc.font.width(powerValue));
-        if (refusal) w = Math.max(w, mc.font.width(refusalText));
-        if (towRow != null) w = Math.max(w, mc.font.width(towRow) + 9);
-        if (hints > .05F) w = Math.max(w, mc.font.width(controls));
-        int light = refusal ? 0xFFE05A40 : starting || truck.isMovingParts() ? 0xFFE0B040 : truck.isDeployed() ? 0xFF6BD36B : 0xFF8C9490;
-        g.fill(x - 4, y - 4, x + w + 4, y + row * rows - 1, 0x88101414);
-        g.fill(x - 4, y - 4, x + w + 4, y - 3, 0xFF7A8A50);
-        g.fill(x, y + 2, x + 5, y + 7, light);
-        g.text(mc.font, state, x + 9, y, 0xFFECE3C4);
-        if (truck.isMovingParts()) {
-            int bar = x + 9 + mc.font.width(state) + 6;
-            int barEnd = x + w;
-            if (barEnd - bar > 12) {
-                g.fill(bar, y + 3, barEnd, y + 5, 0xFF3A3F3D);
-                g.fill(bar, y + 2, bar + Math.round((barEnd - bar) * progress), y + 6, 0xFFE0B040);
-            }
-        }
-        y += row;
-        g.text(mc.font, powerName, x, y, 0xFFB9B39E);
-        g.text(mc.font, powerValue, bx, y, truck.generatorRunning() || truck.engineRunning() ? 0xFF6BD36B : 0xFF8C9490);
-        y += row;
-        boolean full = truck.occupiedCargoSlots() >= truck.vehicleContainerSlots();
-        g.text(mc.font, holdName, x, y, 0xFFB9B39E);
-        g.fill(bx, y + 3, bx + bw, y + 5, 0xFF3A3F3D);
-        float filled = truck.occupiedCargoSlots() / (float) Math.max(1, truck.vehicleContainerSlots());
-        g.fill(bx, y + 2, bx + Math.round(bw * filled), y + 6, full ? 0xFFE05A40 : 0xFF8C9490);
-        g.text(mc.font, holdValue, bx + bw + 5, y, full ? 0xFFE0B040 : 0xFFECE3C4);
-        y += row;
-        if (towed != null) {
-            g.text(mc.font, Component.translatable("hud.jeg.support.towing"), x, y, 0xFFB9B39E);
-            g.text(mc.font, towed.getType().getDescription(), bx, y, 0xFFE0B040);
-            y += row;
-        }
-        if (towRow != null) {
-            // A vehicle within reach of the hitch (a pulsing amber lamp), or the key to drop the one in tow.
-            boolean pulse = towed == null && (now / 10) % 2 == 0;
-            g.fill(x, y + 2, x + 5, y + 7, towed != null ? 0xFF8C9490 : pulse ? 0xFFE0B040 : 0xFF6A5520);
-            g.text(mc.font, towRow, x + 9, y, towed != null ? 0xFFB9B39E : 0xFFE0B040);
-            y += row;
-        }
-        if (holding) {
-            Component holdKey = Component.translatable("hud.jeg.support.hold_key", key);
-            g.text(mc.font, holdKey, x, y, 0xFFE0B040);
-            g.fill(bx, y + 3, bx + bw, y + 5, 0xFF3A3F3D);
-            g.fill(bx, y + 2, bx + Math.round(bw * truck.holdTicks() / (float) ttv.migami.jeg.vehicle.entity.SupportVehicleEntity.HOLD_TICKS), y + 6, 0xFFE0B040);
-            y += row;
-        }
-        if (refusal) {
-            g.text(mc.font, refusalText, x, y, 0xFFE05A40);
-            y += row;
-        }
-        if (hints > .05F) {
-            g.text(mc.font, controls, x, y, ((int) (hints * 255) << 24) | 0x8C9490);
-        }
-        pose.popMatrix();
-    }
-
-    private static void renderLandVehicleStatus(GuiGraphicsExtractor guiGraphics, Minecraft minecraft, VehicleEntity vehicle) {
-        boolean focusedSight = isFocusedVehicleSight(vehicle);
-        if (vehicle.vehicleData().defaults().vehicleType() != VehicleType.LAND && !focusedSight) {
-            return;
-        }
-
-        if (focusedSight) {
-            int screenWidth = guiGraphics.guiWidth();
-            int screenHeight = guiGraphics.guiHeight();
-            int addW = (screenWidth / screenHeight) * 48;
-            int addH = (screenWidth / screenHeight) * 27;
-            preciseBlit(guiGraphics, LAND_FRAME, -addW / 2.0F, -addH / 2.0F, screenWidth + addW, screenHeight + addH, 0.0F, 0.0F, 1920.0F, 1080.0F, 1920.0F, 1080.0F);
-            int compassOffset = Mth.floor(128.0F + 64.0F / 45.0F * minecraft.player.getYRot());
-            guiGraphics.blit(RenderPipelines.GUI_TEXTURED, COMPASS, screenWidth / 2 - 128, 10, compassOffset, 0.0F, 256, 16, 1024, 32);
-            guiGraphics.blit(RenderPipelines.GUI_TEXTURED, ROLL_INDICATOR, screenWidth / 2 - 8, 30, 0.0F, 0.0F, 16, 16, 16, 16);
-        }
-
-        if (vehicle.vehicleData().defaults().vehicleType() != VehicleType.LAND) {
-            return;
-        }
-
-        int x = guiGraphics.guiWidth() / 2 + 96;
-        int y = guiGraphics.guiHeight() - 72;
-        if (vehicleInfoInCorner(minecraft, vehicle)) {
-            // The lower middle is the FSV-6's dashboard or the dozer's blade: the damage diagram sits left of the vehicle
-            // info (moved to the bottom right, see render), without the divider line.
-            x = guiGraphics.guiWidth() - 200;
-            y = guiGraphics.guiHeight() - 40;
-        } else if (vehicleInfoAtTop(minecraft, vehicle)) {
-            // Beside the vehicle info at the top middle, without the divider line.
-            y = VEHICLE_INFO_TOP - 6;
-        } else {
-            guiGraphics.blit(RenderPipelines.GUI_TEXTURED, LAND_LINE, guiGraphics.guiWidth() / 2 - 64, guiGraphics.guiHeight() - 56, 0.0F, 0.0F, 128, 1, 128, 1);
-        }
-        blitVehiclePart(guiGraphics, LAND_BODY, x, y, vehicle.vehicleHealth() <= vehicle.maxVehicleHealth() * 0.35F);
-        blitVehiclePart(guiGraphics, LAND_LEFT_WHEEL, x, y, vehicle.isLeftWheelDamaged());
-        blitVehiclePart(guiGraphics, LAND_RIGHT_WHEEL, x, y, vehicle.isRightWheelDamaged());
-        blitVehiclePart(guiGraphics, LAND_ENGINE, x, y, vehicle.isEngineDamaged());
-        if (vehicle.isTurretDamaged()) {
-            guiGraphics.fill(x + 16, y + 1, x + 17, y + 17, 0xFFFF4033);
-        }
-    }
-
-    /**
-     * The vehicle info (name, hull, energy, damage diagram) leaves the lower middle of the screen where that is the work:
-     * the FSV-6's dashboard in its cab, and the dozer's blade from the seat (in F5, the machine itself).
+     * The vehicle card leaves the lower middle of the screen where that is the work: the FSV-6's dashboard in its cab,
+     * the dozer's blade from the seat (in F5, the machine itself), the mortar's baseplate. These have their own panel at
+     * the top left and no weapon list in the bottom right corner, so they use that corner in every view.
      */
     private static boolean vehicleInfoInCorner(Minecraft minecraft, VehicleEntity vehicle) {
-        // These have their own panel at the top left (which the top middle would run into) and no weapon list in the
-        // bottom right corner, so they use that corner in every view. The mortar's gunner looks down past the
-        // baseplate, where the middle placement covered the view (MortarClientGameTest screenshot).
         return vehicle instanceof ttv.migami.jeg.vehicle.entity.SupportVehicleEntity
-                || vehicle instanceof ttv.migami.jeg.vehicle.entity.BulldozerEntity
+                || vehicle instanceof BulldozerEntity
                 || vehicle instanceof ttv.migami.jeg.vehicle.entity.MortarEntity;
     }
 
-    /** Top line of the vehicle info when it is drawn at the top middle (its title sits 12 above). */
-    private static final int VEHICLE_INFO_TOP = 26;
-
     /**
-     * The vehicle info goes to the top middle (open sky) where the lower middle is the vehicle: in a chase view (F5) it
+     * The vehicle card goes to the top middle (open sky) where the lower middle is the vehicle: in a chase view (F5) it
      * covered the vehicle itself, and from an aircraft's seat it covered the cockpit's live instruments. The bottom
-     * corners already hold the seat list and the weapon list.
+     * corners already hold the crew list and the weapon list.
      */
     private static boolean vehicleInfoAtTop(Minecraft minecraft, VehicleEntity vehicle) {
         if (vehicleInfoInCorner(minecraft, vehicle)) return false;
@@ -1296,16 +1245,43 @@ public final class VehicleHudOverlay {
                 || vehicle instanceof ttv.migami.jeg.vehicle.entity.TowEntity;
     }
 
-    private static boolean hasApcWeaponHud(VehicleEntity vehicle) {
-        return vehicle.hasFocusedDriverSightHud();
+    /**
+     * From a helicopter's seat in first person (not through a zoomed sight), the vehicle info is a helmet display
+     * ({@link HelicopterHmd}) around the reticle rather than the card, which sat over the windscreen.
+     */
+    private static boolean helicopterHmd(Minecraft minecraft, VehicleEntity vehicle, boolean focusedSight) {
+        return vehicle.vehicleData().defaults().vehicleType() == VehicleType.HELICOPTER
+                && minecraft.options.getCameraType().isFirstPerson() && !focusedSight;
+    }
+
+    /** The selected weapon and its ammo, as the card words it, for the helmet display. */
+    static Component selectedWeaponLine(VehicleEntity vehicle, Entity passenger) {
+        Identifier selectedWeaponId = vehicle.selectedVehicleWeaponId(passenger);
+        if (selectedWeaponId == null) {
+            return null;
+        }
+        return vehicleUsesLoadedAmmo(vehicle, passenger)
+                ? vehicleAmmoComponent(vehicle, passenger)
+                : Component.translatable("hud.jeg.vehicle.weapon", Component.translatable("item." + selectedWeaponId.getNamespace() + "." + selectedWeaponId.getPath()),
+                String.valueOf(vehicle.selectedVehicleWeaponAmmo(passenger)));
+    }
+
+    static Component decoyLine(VehicleEntity vehicle) {
+        if (!showDecoyStatus(vehicle)) {
+            return null;
+        }
+        return builtInDecoyUsesSmoke(vehicle)
+                ? Component.translatable("hud.jeg.vehicle.decoy_smoke", HudKit.keyName(KeyBindings.VEHICLE_DEPLOY_DECOY), decoyStatus(vehicle))
+                : Component.translatable("hud.jeg.vehicle.decoy_flare", HudKit.keyName(KeyBindings.VEHICLE_DEPLOY_DECOY), decoyStatus(vehicle));
+    }
+
+    static double speedMetresPerSecond(VehicleEntity vehicle) {
+        return vehicleSpeedBlocksPerSecond(vehicle);
     }
 
     private static boolean hasWeaponSelectorHud(VehicleEntity vehicle) {
-        return vehicle.hasVehicleWeapons() && (hasApcWeaponHud(vehicle) || vehicle.vehicleData().defaults().weapons().size() > 1 || vehicle.vehicleData().defaults().vehicleType() == VehicleType.BOAT);
-    }
-
-    private static boolean hasApcFocusedSightFrame(VehicleEntity vehicle) {
-        return vehicle.hasFocusedDriverSightHud();
+        return vehicle.hasVehicleWeapons() && (vehicle.hasFocusedDriverSightHud() || vehicle.vehicleData().defaults().weapons().size() > 1
+                || vehicle.vehicleData().defaults().vehicleType() == VehicleType.BOAT);
     }
 
     private static boolean isFocusedVehicleSight(VehicleEntity vehicle) {
@@ -1320,9 +1296,5 @@ public final class VehicleHudOverlay {
 
     private static void preciseBlit(GuiGraphicsExtractor guiGraphics, Identifier texture, float x, float y, float width, float height, float uOffset, float vOffset, float uWidth, float vHeight, float textureWidth, float textureHeight) {
         guiGraphics.blit(RenderPipelines.GUI_TEXTURED, texture, Math.round(x), Math.round(y), uOffset, vOffset, Math.round(width), Math.round(height), Math.round(textureWidth), Math.round(textureHeight), Math.round(textureWidth), Math.round(textureHeight));
-    }
-
-    private static void blitVehiclePart(GuiGraphicsExtractor guiGraphics, Identifier texture, int x, int y, boolean damaged) {
-        guiGraphics.blit(RenderPipelines.GUI_TEXTURED, texture, x, y, 0.0F, 0.0F, 32, 32, 32, 32);
     }
 }

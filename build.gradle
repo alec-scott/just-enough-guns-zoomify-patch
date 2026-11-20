@@ -127,6 +127,11 @@ tasks.matching { it.name == "runPackClient" }.configureEach {
             fallingTree.parentFile.mkdirs()
             fallingTree.text = file("src/gametest/resources/pack-config/fallingtree.json").text
         }
+        // Streams Reflowing as the server runs it (also left alone once it exists).
+        def streams = new File(runDir, "config/streamsreflowing.properties")
+        if (!streams.exists()) {
+            streams.text = file("src/gametest/resources/pack-config/streamsreflowing.properties").text
+        }
         setLines(new File(runDir, "options.txt"), ":",
                 [resourcePacks: "[\"vanilla\",\"fabric\"," + packResourcePacks.keySet().collect { "\"file/" + it + "\"" }.join(",") + "]"])
     }
@@ -219,6 +224,8 @@ if (withPack) {
             "carryon"              : "maven.modrinth:joEfVgkn:ISFd6ie5", // 2.10.0
             // Gameplay the bulldozer works with: whole trees fall when the blade fells one.
             "fallingtree"          : "maven.modrinth:Fb4jn8m6:YpsBfAWL", // 26.1.2-25
+            // Water: the speedboat runs on the server's rivers, lakes and flowing water.
+            "streamsreflowing"     : "maven.modrinth:oLS8HdJ1:3EeBrHL8", // 2.15.0
     ]
     // MaLiLib's test.MixinSharedConstants sets vanilla's SharedConstants.IS_RUNNING_IN_IDE whenever it sees a dev launch
     // (fabric.development, Fabric's dev launch injector), which switches on Mojang's dev-only render-pass validation
@@ -257,6 +264,16 @@ if (withPack) {
                 def config = file("build/run/clientGameTest/config/fallingtree.json")
                 config.parentFile.mkdirs()
                 config.text = file("src/gametest/resources/pack-config/fallingtree.json").text
+            }
+        }
+    }
+    if (!packExclude.contains("streamsreflowing")) {
+        // The server's Streams Reflowing settings (no stream current; vanilla flowing water pushes boats).
+        tasks.named("runClientGameTest") {
+            doFirst {
+                def config = file("build/run/clientGameTest/config/streamsreflowing.properties")
+                config.parentFile.mkdirs()
+                config.text = file("src/gametest/resources/pack-config/streamsreflowing.properties").text
             }
         }
     }

@@ -66,9 +66,22 @@ watched entity is moved by interpolation earlier in the tick; it is now measured
 - Heard the aircraft way (`GroundVehicleAudio`, far tracks; `GroundVehicleSoundClientGameTest`), and every gun on the
   long-range path with reports (`VehicleGunReachClientGameTest`). Real start, stop and cab recordings are still to find.
 
+## Finalisation (2026-11-17, design/READINESS.md)
+
+- **Road speed** set for the brief's 56 km/h (`max_forward_speed` 1.356; 47 km/h was measured at 1.138).
+- **Weight (`"mass"` 35 t):** slow to wind up and to stop, rocks on its suspension braking and pulling away; the crew
+  feels the rumble and the rock (not through a zoomed sight). The turret's electric drive and the gun's elevation are
+  heard while they move; heavy brakes; a knock landing from a drop.
+- **Sound:** a real diesel start (CC0, DAVESTALKER) with the loops winding up as it catches, a real shutdown (roboroo,
+  lowered); muffled versions in the cab.
+- **Destroyed:** cooks off and burns as a charred hulk.
+- **Sandbox:** in the ArmourTest world (the "no sandbox" note above is stale).
+- Played: boarded, drove flat out on a heading, third person; the passenger seats ride the turret as before.
+
 ## Not covered yet
 
-- Listening: the engine loops (derived from SBW's engine take), the report and the loader are unchecked by ear.
+- **Listen:** `engine_start`, `engine_stop` (and `_cab`), `movement/traverse`, `movement/elevation`,
+  `movement/brake_heavy`, `movement/bump`; and listening: the engine loops (derived from SBW's engine take), the report and the loader are unchecked by ear.
 - An observer's spyglass mark at range (the howitzer's limit applies: 512 blocks); the high arcs; AP, cluster and
   grapeshot fired from it; the roof gun's rounds at range.
 - Hitboxes shot at; the enemy AI; swimming (it doesn't); climbing at `up_step` 1.25.

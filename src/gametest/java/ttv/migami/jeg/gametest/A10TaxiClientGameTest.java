@@ -53,6 +53,7 @@ public class A10TaxiClientGameTest implements FabricClientGameTest {
             server.runCommand("forceload add -112 -16 32 176");
             context.waitTicks(10);
             this.idleHolds(context, server, report, failures);
+            this.throttleOnlyWhileHeld(context, server, report, failures);
             for (double[] run : RUNS) {
                 double speed = run[0];
                 String jetId = server.computeOnServer(minecraftServer -> {
@@ -65,6 +66,8 @@ public class A10TaxiClientGameTest implements FabricClientGameTest {
                     pilot.setSilent(true);
                     pilot.snapTo(jet.getX(), jet.getY(), jet.getZ(), 0.0F, 0.0F);
                     level.addFreshEntity(pilot);
+                    // Since yftm.22 only a player or tagged crew may drive or man a gun.
+                    pilot.addTag(ttv.migami.jeg.vehicle.ai.EnemyVehicleController.ENEMY_VEHICLE_CREW_TAG);
                     pilot.startRiding(jet, true, true);
                     return jet.getUUID().toString();
                 });
@@ -129,6 +132,8 @@ public class A10TaxiClientGameTest implements FabricClientGameTest {
             pilot.setSilent(true);
             pilot.snapTo(jet.getX(), jet.getY(), jet.getZ(), 0.0F, 0.0F);
             level.addFreshEntity(pilot);
+            // Since yftm.22 only a player or tagged crew may drive or man a gun.
+            pilot.addTag(ttv.migami.jeg.vehicle.ai.EnemyVehicleController.ENEMY_VEHICLE_CREW_TAG);
             pilot.startRiding(jet, true, true);
             return jet.getUUID().toString();
         });
@@ -162,6 +167,74 @@ public class A10TaxiClientGameTest implements FabricClientGameTest {
         }
         if (Math.abs(moved) > 0.5D) {
             failures.append(String.format(Locale.ROOT, "creeps forward at idle with the throttle closed (%.2f blocks)%n", moved));
+        }
+        server.runOnServer(minecraftServer -> {
+            var entity = minecraftServer.overworld().getEntity(UUID.fromString(jetId));
+            entity.getPassengers().forEach(passenger -> passenger.discard());
+            entity.discard();
+        });
+        context.waitTicks(2);
+    }
+
+    /**
+     * On the ground the throttle is held, not set (the user's request, 2026-11-17): W held for three seconds gets the jet
+     * rolling; let go, the throttle comes back to idle within half a second and the jet gains no more speed.
+     */
+    private void throttleOnlyWhileHeld(ClientGameTestContext context, TestServerContext server, StringBuilder report, StringBuilder failures) {
+        String jetId = server.computeOnServer(minecraftServer -> {
+            var level = minecraftServer.overworld();
+            VehicleEntity jet = ModEntities.A10.get().create(level, EntitySpawnReason.COMMAND);
+            jet.snapTo(0.5D, -60.0D, 0.5D, 0.0F, 0.0F);
+            level.addFreshEntity(jet);
+            var pilot = EntityType.HUSK.create(level, EntitySpawnReason.COMMAND);
+            pilot.setNoAi(true);
+            pilot.setSilent(true);
+            pilot.snapTo(jet.getX(), jet.getY(), jet.getZ(), 0.0F, 0.0F);
+            level.addFreshEntity(pilot);
+            // Since yftm.22 only a player or tagged crew may drive or man a gun.
+            pilot.addTag(ttv.migami.jeg.vehicle.ai.EnemyVehicleController.ENEMY_VEHICLE_CREW_TAG);
+            pilot.startRiding(jet, true, true);
+            return jet.getUUID().toString();
+        });
+        // Engines to idle first (about six seconds from cold), then W for three seconds, then hands off for five.
+        double[] atRelease = new double[1];
+        double[] throttleAfter = new double[1];
+        double[] fastestAfter = {0.0D};
+        double[] endSpeed = new double[1];
+        for (int tick = 0; tick < 280; tick++) {
+            boolean forward = tick >= 120 && tick < 180;
+            int at = tick;
+            server.runOnServer(minecraftServer -> {
+                if (minecraftServer.overworld().getEntity(UUID.fromString(jetId)) instanceof VehicleEntity jet) {
+                    jet.setAiVehicleInput(new VehicleInput(forward, false, false, false, false, false, false, false, false, false,
+                            false, false, -1, false, false, 0.0F, 0.0F));
+                    double speed = jet.getDeltaMovement().horizontalDistance();
+                    if (at == 180) {
+                        atRelease[0] = speed;
+                    }
+                    if (at == 190) {
+                        throttleAfter[0] = jet.jetThrottle();
+                    }
+                    if (at > 190) {
+                        // The engines take a moment to spool down; from half a second on the jet must not speed up.
+                        fastestAfter[0] = Math.max(fastestAfter[0], speed);
+                    }
+                    endSpeed[0] = speed;
+                }
+            });
+            context.waitTick();
+        }
+        report.append(String.format(Locale.ROOT, "W held 3 s: %.0f km/h at release; throttle %.2f half a second later; fastest after %.0f km/h, %.0f km/h after 5 s%n",
+                atRelease[0] * 72.0D, throttleAfter[0], fastestAfter[0] * 72.0D, endSpeed[0] * 72.0D));
+        if (atRelease[0] < 0.05D) {
+            failures.append(String.format(Locale.ROOT, "W held for 3 seconds barely moved the jet (%.3f blocks a tick)%n", atRelease[0]));
+        }
+        if (throttleAfter[0] > 0.01D) {
+            failures.append(String.format(Locale.ROOT, "the throttle stayed open on the ground after W was let go (%.2f)%n", throttleAfter[0]));
+        }
+        if (fastestAfter[0] > atRelease[0] + 0.02D || endSpeed[0] >= atRelease[0]) {
+            failures.append(String.format(Locale.ROOT, "kept speeding up on the ground after W was let go (%.3f at release, %.3f after)%n",
+                    atRelease[0], fastestAfter[0]));
         }
         server.runOnServer(minecraftServer -> {
             var entity = minecraftServer.overworld().getEntity(UUID.fromString(jetId));

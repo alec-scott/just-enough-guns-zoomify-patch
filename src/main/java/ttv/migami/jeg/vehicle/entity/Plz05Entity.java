@@ -58,7 +58,7 @@ public final class Plz05Entity extends ShellGunEntity implements FireMissions.Gu
             new Shell(HE_WEAPON, Mk42Entity.HE, "hud.jeg.shell.he_proximity"),
             new Shell(AP_WEAPON, Mk42Entity.AP, "hud.jeg.shell.ap"),
             new Shell(CM_WEAPON, Mk42Entity.CM, "hud.jeg.shell.cluster"),
-            new Shell(GS_WEAPON, Mk42Entity.GRAPESHOT, "hud.jeg.shell.grapeshot"));
+            new Shell(GS_WEAPON, Mk42Entity.INCENDIARY, "hud.jeg.shell.incendiary"));
     /** How far an observer's mark reaches this gun: its top charge's range and some. */
     public static final double OBSERVER_REACH = 6500.0D;
     /** The hull must have been still (under this many blocks a tick) for a few ticks before the gun fires. */

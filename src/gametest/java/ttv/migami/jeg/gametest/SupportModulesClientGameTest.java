@@ -148,16 +148,16 @@ public class SupportModulesClientGameTest implements FabricClientGameTest {
                     BlockState state = level.getBlockState(placed.pos());
                     if (state.getBlock() instanceof BedBlock) beds++;
                     if (state.getBlock() instanceof VehicleShellBlock && state.getValue(VehicleShellBlock.KIND) == VehicleShellBlock.Kind.ROOM
-                            && state.getValue(VehicleShellBlock.LIGHT) == 15) lit++;
+                            && state.getValue(VehicleShellBlock.LIGHT) > 0) lit++;
                 }
                 for (BlockPos lamp : SupportShell.lampCells(truck.position(), truck.getYRot())) {
                     if (level.getBlockState(lamp).getBlock() instanceof VehicleShellBlock) lamps++;
                 }
-                out.append(", bed cells ").append(beds).append(", room cells lit 15: ").append(lit).append(", camp lamps ").append(lamps);
+                out.append(", bed cells ").append(beds).append(", lamp-lit room cells: ").append(lit).append(", camp lamps ").append(lamps);
                 return out.toString();
             });
             LOG.info("[support-modules] {}", deployed);
-            if (!deployed.contains("bed cells 4") || deployed.contains("lit 15: 0") || deployed.endsWith("lamps 0")) {
+            if (!deployed.contains("bed cells 4") || deployed.contains("lamp-lit room cells: 0") || deployed.endsWith("lamps 0")) {
                 failures.append("deployed room wrong: ").append(deployed).append('\n');
             }
 

@@ -48,10 +48,55 @@ Found while writing the raid test:
 - Heard the aircraft way (`GroundVehicleAudio`, far tracks; `GroundVehicleSoundClientGameTest`), and every gun on the
   long-range path with reports (`VehicleGunReachClientGameTest`). Real start, stop and cab recordings are still to find.
 
+## Finalisation (2026-11-17, design/READINESS.md)
+
+- **Gunner's seat** (seat 8 on the HUD, index 7, in the turret): takes the 30 mm, coax and ATGM from the driver
+  (`"fallback_seat": 0`); alone, the driver keeps them. Only a player or enemy crew mans it: a mob carried there leaves
+  the gun with the driver. The enemy AI still crews seat 0 and fires through the fallback (`EnemyVehicleRaid` passes).
+  The seat panel in the hold names it "Gunner".
+- **Passengers at the firing ports:** each squad seat's eye sits at its port (1.45 up, just outside the hull side), and
+  the view turns only outward (left ports -140° to -40°, right ports 40° to 140°, the rear door all round), so they
+  look out, and may fire their own weapons, through it. Before, the eye sat inside the side armour.
+- **Rear doors** swing open on their outer hinges while someone boards or leaves (`VehicleDoors`,
+  `swingAboutHinge`; SBW's pivots sit mid-door). Played: shut, mid-swing and open from directly behind.
+- **Passengers inside are not drawn** for anyone (`EntityRendererHiddenPassengerMixin`): a mob passenger was drawn
+  through the roof, and other players would have been.
+- **Swims** (`"amphibious"`): floats with its waterline 1.25 blocks up, makes way at 7 km/h steered by the tracks, a
+  bow wave and wake, no ATGM afloat (the 30 mm still fires), and hauls itself up a shelving bank.
+- **Dual-feed 30 mm:** slot 1 is AP (as before: pierces 9.8, a small blast), slot 4 the new HE belt
+  (`vehicle_30mm_cannon_he`: pierces 3.2, bursts 16 damage over 4.5 blocks, orange tracer), both from the hold's
+  autocannon shells.
+- **Muzzle smoke:** the autocannons (20 and 30 mm) now throw a short flash and a puff that clears between rounds; the
+  big gun's 38-tick cloud had filled the gunner's sight.
+- **Sound:** a real diesel start and shutdown (CC0, roboroo), the loops winding up when it catches; muffled versions
+  in the cab. The cab loop itself is still a filtered exterior take (no CC0 interior recording exists).
+- **Destroyed:** cooks off, goes up and burns as a charred hulk (`GroundWreck`), no longer vanishing.
+- **Road speed** 59 km/h played flat out (brief 65; `max_forward_speed` 1.321), was 33.
+- **Weight (`"mass"` 14 t):** winds up and stops more slowly than the LAV-150, faster than the tanks; squats pulling
+  away, dives braking (seen played at 6 m/s), rolls out of turns; the crew feels the rumble and rock (not through the
+  gunner's sight). Every movement sounds: the turret's electric drive and the gun's elevation while they move, the
+  heavy brakes, a knock landing from a drop, a splash driving into water (`VehicleFeel`).
+- **Passenger port cameras** moved outside the hull (their seats stay inside): played, seat 2 looks out of the left
+  side at the LAV-150 parked beside it.
+
+| Test (`-PwithPack`) | Result |
+| --- | --- |
+| `Bmp2SwimClientGameTest` (new) | passes: afloat 139 ticks at 6.7 km/h, waterline within 0.15 of the surface, ATGM refused afloat, 30 mm allowed, out on the far bank |
+| `GroundVehicleSoundClientGameTest` | passes: start on boarding, loops silent while cranking, stop on leaving, no second start when a running vehicle returns into range |
+| `GroundWreckClientGameTest` (new) | passes: cooks off, burns, throws out its cargo, stays upright in place, breaks apart |
+| `EnemyVehicleRaidClientGameTest` | passes with the gunner's seat: closes to 58, lays on the player, fires |
+
 ## Not covered yet
 
-- The passengers' outward view (SBW's firing ports face sideways; jegn seats have no orientation), the gunner's seat
-  taking the gun from the driver, swimming, dual-feed 30 mm, long-range rounds for the 30 mm and coax, the rear doors
-  and hatches opening, ground-vehicle audio, lights, damage states.
+- **Listen:** `engine_start`, `engine_stop` (and `_cab`), the 30 mm HE, `movement/traverse`, `movement/elevation`,
+  `movement/brake_heavy`, `movement/bump`, `movement/splash`.
 - The tracks seen moving on the BMP-2 itself (the shared driver is pinned by `Plz05ClientGameTest`).
-- Night view, the dedicated server, multiplayer.
+- The dedicated server, multiplayer (a second player's view of the doors, hidden passengers and the bow wave).
+
+## Texture pass (2026-11-19, the user's review R7)
+
+`design/ground-vehicles/detail_texture.py` re-weathers the texture from the model: it is enlarged (the original paint
+kept texel for texel) and each texel is shaded by where it sits on the hull: panel seams and worn edges, bolt heads
+round big panels, mottled paint, grime run down from top edges, dust on top faces, mud low down. The untouched texture
+is `texture_base.png` here (re-run the script to tune; it never stacks), the before/after `review-texture.png`. Seen in
+the pack (Photon) by day from close; not yet looked at under every paint colour.

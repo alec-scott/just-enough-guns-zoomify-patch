@@ -1,0 +1,25 @@
+{
+  "result_vehicle": "jeg:yx100",
+  "ingredients": [
+    {
+      "item": "minecraft:iron_ingot",
+      "count": 64
+    },
+    {
+      "item": "minecraft:iron_block",
+      "count": 8
+    },
+    {
+      "item": "minecraft:copper_ingot",
+      "count": 24
+    },
+    {
+      "item": "minecraft:redstone",
+      "count": 20
+    },
+    {
+      "item": "minecraft:green_dye",
+      "count": 4
+    }
+  ]
+}

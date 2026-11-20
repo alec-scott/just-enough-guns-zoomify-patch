@@ -190,3 +190,11 @@ when circling it; the bipod on the ground at every elevation), camera.
 3. **Scale.** The refit brings the tube to real size (0.815 of SBW's). Keep, or use SBW's size?
 4. **Obtaining it.** Crafted at the vehicle assembling table as an item, deployed from the hand (no container), and
    rounds crafted there too. OK?
+
+## Finalisation (2026-11-18, design/READINESS.md)
+
+Released in yftm.21. `MortarClientGameTest` passes with `-PwithPack` after the fleet-wide changes of 2026-11-17/18
+(the new HUD; `"mass"` 0.06 t as tow load). Played (mcpfabric, pack client, midnight): from the seat the panel
+(elevation, bearing, range and time of flight, rounds), its keycap hints and the warning when the target area is not
+loaded ("ground taken as level") read clearly in the dark. Sounds: SBW's mortar recordings (used with permission);
+**listen** to `vehicle/mortar/fire`, `fire_distant`, `load`.

@@ -1,0 +1,83 @@
+{
+  "model": "jeg:entity/vehicle/sentry",
+  "units_per_block": 16,
+  "front": "-Z in the model, +Z in vehicle data",
+  "reference": "remote weapon station on a tripod (Kongsberg Protector / SGR-A1 class), 7.62 mm",
+  "turret_origin": [
+    0.0,
+    1.3125,
+    0.0
+  ],
+  "trunnion": [
+    0.0,
+    1.8125,
+    0.0
+  ],
+  "barrel_offset_from_turret": [
+    0.0,
+    0.5,
+    0.0
+  ],
+  "muzzle_rest": [
+    0.0,
+    1.8125,
+    1.375
+  ],
+  "camera_eye": [
+    -0.2344,
+    2.075,
+    0.0625
+  ],
+  "elevation_degrees": [
+    -30.0,
+    60.0
+  ],
+  "model_bounds": [
+    [
+      -0.7861,
+      0.0,
+      1.3775
+    ],
+    [
+      0.7861,
+      2.15,
+      -0.625
+    ]
+  ],
+  "hitbox": [
+    {
+      "part": "body",
+      "covers": "tripod",
+      "x": 0.0,
+      "y": 0.9375,
+      "z": 0.1692,
+      "half_width": 0.7861,
+      "half_height": 0.9375,
+      "half_depth": 0.6808
+    },
+    {
+      "part": "turret",
+      "covers": "head",
+      "x": 0.0,
+      "y": 1.6069,
+      "z": -0.0484,
+      "half_width": 0.3281,
+      "half_height": 0.2994,
+      "half_depth": 0.3141,
+      "follows": "turret"
+    },
+    {
+      "part": "turret",
+      "covers": "gun, camera and ammunition",
+      "x": -0.0153,
+      "y": 1.8562,
+      "z": 0.3762,
+      "half_width": 0.3466,
+      "half_height": 0.2937,
+      "half_depth": 1.0012,
+      "follows": "barrel"
+    }
+  ],
+  "bones": 14,
+  "cuboids": 125
+}

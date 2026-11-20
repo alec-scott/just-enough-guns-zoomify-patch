@@ -14,7 +14,7 @@ courtesy. These are adapted sound-design assets.
 | generator, generator_distant | Diesel Power Generator.flac | [qubodup, 189896](https://freesound.org/people/qubodup/sounds/189896/) | The shelter's generator; loop, and a low-passed distant version |
 | slide_motor | Electric motor engine start stop | [kentspublicdomain, 476943](https://freesound.org/people/kentspublicdomain/sounds/476943/) | The slide-outs' drive motor; loop |
 | horn, horn_distant | Truck Horn | [danlucaz, 513741](https://freesound.org/people/danlucaz/sounds/513741/) | A real truck horn's steady tone, looped while held; and a band-limited distant version |
-| air_brake | synthesized | — | The parking brake's valve click and air release as it starts to deploy |
+| air_brake | Hydraulic Truck Brakes | [Filmscore, 823069](https://freesound.org/people/Filmscore/sounds/823069/) | A real truck's air brakes releasing: the shared `vehicle/movement/brake` (see `../movement/CREDITS.md`), played as the parking brake sets before deploying (it replaces a synthesized hiss, 2026-11-17) |
 | ramp_clank | Large Metal Lift Door Opening.wav | [lolamadeus, 161228](https://freesound.org/people/lolamadeus/sounds/161228/) | The ramp landing and closing |
 
 In game the running engine loops drift slowly in pitch and level, so they never sound like the same loop twice.
@@ -22,7 +22,7 @@ In game the running engine loops drift slowly in pitch and level, so they never 
 No asset carries a human voice. The earlier truck-interior, bus air-brake and distant-truck recordings had people
 talking in them and are no longer used.
 
-The jacks use the BD-40's hydraulic pump and valve recordings and the reversing alarm its synthesized beeper (see
+While driving, the tyres are the LAV-150's gravel recording (`../tyres/CREDITS.md`) and the service brakes the same air brakes. The jacks use the BD-40's hydraulic pump and valve recordings and the reversing alarm its synthesized beeper (see
 `../bulldozer/CREDITS.md`).
 
 License: [CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/).

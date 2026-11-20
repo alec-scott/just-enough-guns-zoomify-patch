@@ -38,7 +38,7 @@ public final class VehicleSoundHelper {
             Map.entry("lav150", Reference.id("vehicle.lav150.engine")),
             Map.entry("mi28", Reference.id("vehicle.mi28.engine")),
             Map.entry("plz05", Reference.id("vehicle.plz05.engine")),
-            Map.entry("leopard2", Reference.id("vehicle.leopard2.engine")),
+            Map.entry("yx100", Reference.id("vehicle.yx100.engine")),
             Map.entry("speedboat", Reference.id("vehicle.speedboat.engine")),
             Map.entry("tom6", Reference.id("vehicle.tom6.engine"))
     );
@@ -68,6 +68,12 @@ public final class VehicleSoundHelper {
     public static boolean isJetGun(VehicleEntity vehicle, VehicleWeaponInfo weapon) {
         String weaponPath = weapon.weaponId().getPath();
         return vehicle.isJet() && !weapon.guided() && !weaponPath.contains("rocket") && !weaponPath.contains("missile");
+    }
+
+    /** A jet's own sound only ({@code vehicle.<id>.<name>}), with no A-10 fallback: the A-10's spoken warnings. */
+    public static SoundEvent jetOwnSound(VehicleEntity vehicle, String name) {
+        DeferredHolder<SoundEvent, SoundEvent> sound = ModSounds.ALL.get(Reference.id("vehicle." + vehicle.vehicleDataId().getPath() + "." + name));
+        return sound == null ? null : sound.get();
     }
 
     /** A jet's own sound: {@code vehicle.<id>.<name>}, falling back to the A-10's; null if neither exists. */

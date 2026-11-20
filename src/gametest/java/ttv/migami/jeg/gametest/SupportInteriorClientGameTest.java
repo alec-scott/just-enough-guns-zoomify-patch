@@ -74,7 +74,9 @@ public class SupportInteriorClientGameTest implements FabricClientGameTest {
             server.runOnServer(s -> player(s).startRiding(truck(s), true, true));
             context.waitTicks(SupportVehicleEntity.START_TICKS + 5);
             context.getInput().holdKey(options -> options.keyUp);
-            context.waitTicks(20);
+            // A turning circle is a low-speed figure: steer from a crawl. Since the FSV-6 pulls away 2.8 times harder
+            // (2026-11-18), 20 ticks of throttle had it at 52 km/h before the turn, where no truck turns at full lock.
+            context.waitTicks(8);
             context.getInput().holdKey(options -> options.keyLeft);
             context.waitTicks(10);
             double[] a = server.computeOnServer(s -> new double[]{truck(s).getX(), truck(s).getZ(), truck(s).getYRot()});
@@ -110,6 +112,9 @@ public class SupportInteriorClientGameTest implements FabricClientGameTest {
                 SupportVehicleEntity truck = truck(s);
                 truck.setDeltaMovement(Vec3.ZERO);
                 truck.snapTo(truck.getX(), G, truck.getZ(), 0, 0);
+                // The player got off beside the truck at its old heading; squared up, that spot can be where a slide-out
+                // goes (a deploy refused IN_THE_WAY, rightly). Stand clear behind it, as a player would.
+                player(s).teleportTo(truck.getX(), G, truck.getZ() - 9.0D);
             });
             context.waitTicks(10);
             String deploy = server.computeOnServer(s -> { truck(s).setDeltaMovement(Vec3.ZERO); return truck(s).requestDeploy(player(s)).name(); });
@@ -155,7 +160,9 @@ public class SupportInteriorClientGameTest implements FabricClientGameTest {
                     blockLight(truck(s), new SupportRig.ShellCell(1, 0, 1, SupportRig.Cell.ROOM, 0)),
                     blockLight(truck(s), new SupportRig.ShellCell(2, 4, 1, SupportRig.Cell.ROOM, 0))});
             LOG.info("[support-interior] measured light: under the lamp {}, front of aisle {}, back of aisle {}", measured[0], measured[1], measured[2]);
-            if (lampLit != 14) failures.append("the cell under the lamp gives ").append(lampLit).append(" for a lantern, not 14\n");
+            // A lantern (15) is capped to a soft level under the lamp (SupportShell.ROOM_LAMP_MAX; 14 was blown out under Photon).
+            if (lampLit != SupportShell.ROOM_LAMP_MAX) failures.append("the cell under the lamp gives ").append(lampLit)
+                    .append(" for a lantern, not ").append(SupportShell.ROOM_LAMP_MAX).append('\n');
             if (measured[1] >= measured[0] || measured[2] >= measured[0] || measured[1] < 8 || measured[2] < 8) {
                 failures.append("the room's light must fall off from the lamp but stay lit: ").append(java.util.Arrays.toString(measured)).append('\n');
             }

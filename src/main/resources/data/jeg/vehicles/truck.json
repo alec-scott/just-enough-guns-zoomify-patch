@@ -1,6 +1,7 @@
 {
   "entity_type": "jeg:truck",
   "vehicle_type": "land",
+  "mass": 15.0,
   "max_health": 280.0,
   "auto_repair_per_tick": 0.012,
   "auto_repair_cooldown_ticks": 120,
@@ -12,7 +13,7 @@
     {"index": 0, "x": 0.625, "y": 1.0, "z": 2.875, "driver": true, "enclosed": true, "hide_passenger": false, "ban_hand": true, "min_pitch": -60.0, "max_pitch": 60.0, "min_yaw": -110.0, "max_yaw": 110.0},
     {"index": 1, "x": -0.625, "y": 1.0, "z": 2.875, "driver": false, "enclosed": true, "hide_passenger": false, "ban_hand": false, "min_pitch": -60.0, "max_pitch": 60.0, "min_yaw": -110.0, "max_yaw": 110.0}
   ],
-  "engine": {"type": "wheel", "acceleration": 0.01, "max_forward_speed": 1.3, "max_reverse_speed": 0.45, "friction": 0.82, "steering_speed": 0.18, "energy_cost_rate": 64},
+  "engine": {"type": "wheel", "acceleration": 0.028, "max_forward_speed": 1.70, "max_reverse_speed": 0.45, "friction": 0.82, "steering_speed": 0.21, "energy_cost_rate": 64},
   "third_person_camera": {"x": 0.0, "y": 1.6, "z": -11.5},
   "dismount": {"x": 1.6, "y": 0.1, "z": 2.875},
   "collision_level": "none",
@@ -34,8 +35,8 @@
     {"part": "main_engine", "x": 0.0000, "y": 1.7812, "z": 3.0312, "half_width": 1.2812, "half_height": 1.2812, "half_depth": 1.1250},
     {"part": "body", "x": -0.0469, "y": 0.5312, "z": -0.0156, "half_width": 1.3094, "half_height": 0.3187, "half_depth": 3.8906},
     {"part": "body", "x": 0.0000, "y": 2.0000, "z": -1.0000, "half_width": 1.2688, "half_height": 1.1500, "half_depth": 2.7687},
-    {"part": "module", "x": 1.6262, "y": 1.9825, "z": -1.0000, "half_width": 0.6262, "half_height": 1.0200, "half_depth": 2.5250},
-    {"part": "module", "x": -1.6262, "y": 1.9825, "z": -1.0000, "half_width": 0.6262, "half_height": 1.0200, "half_depth": 2.5250}
+    {"part": "module", "x": 1.6262, "y": 1.9825, "z": -1.0000, "half_width": 0.6262, "half_height": 1.0200, "half_depth": 2.6187},
+    {"part": "module", "x": -1.6262, "y": 1.9825, "z": -1.0000, "half_width": 0.6262, "half_height": 1.0200, "half_depth": 2.6187}
   ],
   "weapons": [],
   "has_decoy": false,

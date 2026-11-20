@@ -163,6 +163,16 @@ public final class SupportVehicleEntity extends VehicleEntity {
     /** The towed vehicle's entity id, or -1. */
     public int towedEntityId() { return this.entityData.get(TOWED); }
 
+    /** The truck's own mass plus the load on the hitch (its {@code "mass"}): towing a gun or a hull costs pull. */
+    @Override
+    public double drivenMass() {
+        double own = super.drivenMass();
+        int towedId = this.towedEntityId();
+        if (Double.isNaN(own) || towedId < 0 || !(this.level().getEntity(towedId) instanceof VehicleEntity towed)) return own;
+        double load = towed.vehicleData().mass();
+        return Double.isNaN(load) || load <= 0.0D ? own : own + load;
+    }
+
     /** The roof beacon's pyramid level (from the mineral rack) and chosen effect (vanilla's encoding), for the console. */
     public int beaconLevelForDisplay() { return this.entityData.get(BEACON_LEVEL); }
     public int beaconEffectForDisplay() { return this.entityData.get(BEACON_EFFECT); }
@@ -266,6 +276,7 @@ public final class SupportVehicleEntity extends VehicleEntity {
         }
         if (this.level().isClientSide()) {
             this.tickPresentation();
+            this.noteClientTow();
             return;
         }
         this.entityData.set(STATUS_AGE, Math.min(10000, this.statusAge() + 1));
@@ -590,6 +601,97 @@ public final class SupportVehicleEntity extends VehicleEntity {
         this.entityData.set(TOWED, -1);
     }
 
+    /** Where a towed vehicle stands (x and z; y is its own) and which way it faces. */
+    public record TowPose(Vec3 position, float yaw) {}
+
+    /**
+     * The tow's geometry, shared by the server (which moves the towed vehicle) and the client (which draws it): with
+     * the truck at {@code truckAt} facing {@code truckYaw} and the towed vehicle at {@code towedAt}, the towed vehicle
+     * stands a bar's length from the pintle along the line from it to the pintle, facing along that line. Null when the
+     * two are on top of each other.
+     */
+    @org.jetbrains.annotations.Nullable
+    public TowPose towPose(VehicleEntity towed, Vec3 towedAt, Vec3 truckAt, float truckYaw) {
+        Vec3 pintle = SupportRig.world(truckAt, truckYaw, PINTLE.x, PINTLE.y, PINTLE.z);
+        Vec3 toPintle = new Vec3(pintle.x - towedAt.x, 0, pintle.z - towedAt.z);
+        double distance = toPintle.length();
+        if (distance < 1.0E-3) return null;
+        Vec3 dir = toPintle.scale(1 / distance);
+        Vec3 eye = towed.towEye();
+        if (eye != null) {
+            // Towed by its tow eye (a gun's trail): the eye sits a bar's length behind the pintle, the gun trailing
+            // away from it, so it faces away from the truck.
+            double reach = Math.sqrt(eye.x * eye.x + eye.z * eye.z);
+            Vec3 target = pintle.subtract(dir.scale(TOW_BAR_EYE + reach));
+            return new TowPose(new Vec3(target.x, towedAt.y, target.z), (float) (Mth.atan2(dir.x, -dir.z) * Mth.RAD_TO_DEG));
+        }
+        double nose = towed.getBbWidth() * .5 + .4;
+        Vec3 target = pintle.subtract(dir.scale(nose + TOW_BAR));
+        return new TowPose(new Vec3(target.x, towedAt.y, target.z), (float) (Mth.atan2(-dir.x, dir.z) * Mth.RAD_TO_DEG));
+    }
+
+    /** On a client: which truck has which vehicle on its hitch (the towed vehicle's id), as the trucks last ticked. */
+    private static final java.util.Map<Integer, SupportVehicleEntity> CLIENT_TOWS = new java.util.HashMap<>();
+
+    /** On a client: the truck towing {@code towed}, or null. Its renderer draws it from the truck's smooth position. */
+    @org.jetbrains.annotations.Nullable
+    public static SupportVehicleEntity clientTower(VehicleEntity towed) {
+        SupportVehicleEntity truck = CLIENT_TOWS.get(towed.getId());
+        if (truck == null) return null;
+        if (truck.isRemoved() || truck.level() != towed.level() || truck.towedEntityId() != towed.getId()) {
+            CLIENT_TOWS.remove(towed.getId());
+            return null;
+        }
+        return truck;
+    }
+
+    /**
+     * On a client: a vehicle on an FSV-6's hitch, placed where the tow puts it from the truck's smooth (interpolated)
+     * position this frame, not where the server last sent it. The server moves it once a tick and the client eases
+     * between packets, so behind a truck the driver moves smoothly it lagged a step and jumped, and the tow bar stretched
+     * and snapped (the user, 2026-11-19: "can the vehicle being towed by the FSV not be glitchy and jumpy but smooth").
+     * Its renderer and the tow bar draw it here; its height stays its own (it rides the ground). Null when nothing tows it.
+     */
+    @org.jetbrains.annotations.Nullable
+    public static TowPose clientTowPose(VehicleEntity towed, float partialTick) {
+        SupportVehicleEntity truck = clientTower(towed);
+        if (truck == null) return null;
+        return truck.towPose(towed, towed.getPosition(partialTick), truck.getPosition(partialTick),
+                Mth.rotLerp(partialTick, truck.yRotO, truck.getYRot()));
+    }
+
+    /** On a client: the trucks whose room is out (deployed past the slide-outs), as they last ticked. */
+    private static final java.util.Set<SupportVehicleEntity> CLIENT_ROOMS = java.util.Collections.newSetFromMap(new java.util.WeakHashMap<>());
+
+    /**
+     * On a client: whether a point is inside, or within {@code margin} blocks of, a deployed FSV-6's room (floor to roof,
+     * slide-out wall to slide-out wall, front wall to back). Smoke puffs carry no collision, so the blast renderer hides
+     * those that come in through the floor or walls.
+     */
+    public static boolean insideClientRoom(double x, double y, double z, double margin) {
+        if (CLIENT_ROOMS.isEmpty()) return false;
+        double m = margin * 16.0;
+        for (SupportVehicleEntity truck : CLIENT_ROOMS) {
+            if (truck.isRemoved() || !truck.isDeployed()) continue;
+            Vec3 f = SupportRig.forward(truck.getYRot());
+            double dx = (x - truck.getX()) * 16.0, dz = (z - truck.getZ()) * 16.0, my = (y - truck.getY()) * 16.0;
+            double mx = f.z * dx - f.x * dz, mz = -f.x * dx - f.z * dz;
+            if (Math.abs(mx) <= SupportRig.INTERIOR_X + 2.0 + m && my >= SupportRig.FLOOR_Y - 2.0 - m && my <= SupportRig.ROOF_TOP + m
+                    && mz >= SupportRig.INTERIOR_FRONT - 4.0 - m && mz <= SupportRig.INTERIOR_REAR + 4.0 + m) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private void noteClientTow() {
+        if (this.isDeployed()) CLIENT_ROOMS.add(this);
+        else CLIENT_ROOMS.remove(this);
+        CLIENT_TOWS.values().removeIf(truck -> truck == this || truck.isRemoved());
+        int towed = this.towedEntityId();
+        if (towed >= 0) CLIENT_TOWS.put(towed, this);
+    }
+
     /** The towed vehicle's nose follows the pintle at the tow bar's length, turning to point at it; gravity and terrain act on it. */
     private void tickTow(ServerLevel level) {
         if (this.towedId == null) return;
@@ -600,29 +702,14 @@ public final class SupportVehicleEntity extends VehicleEntity {
         }
         if (towed.getId() != this.towedEntityId()) this.entityData.set(TOWED, towed.getId());
         Vec3 pintle = SupportRig.world(this, PINTLE.x, PINTLE.y, PINTLE.z);
-        Vec3 toPintle = new Vec3(pintle.x - towed.getX(), 0, pintle.z - towed.getZ());
-        double distance = toPintle.length();
-        if (distance > 16) {
+        if (new Vec3(pintle.x - towed.getX(), 0, pintle.z - towed.getZ()).length() > 16) {
             this.releaseTow();
             return;
         }
-        if (distance < 1.0E-3) return;
-        Vec3 dir = toPintle.scale(1 / distance);
-        Vec3 eye = towed.towEye();
-        Vec3 target;
-        float yaw;
-        if (eye != null) {
-            // Towed by its tow eye (a gun's trail): the eye sits a bar's length behind the pintle, the gun trailing
-            // away from it, so it faces away from the truck.
-            double reach = Math.sqrt(eye.x * eye.x + eye.z * eye.z);
-            target = pintle.subtract(dir.scale(TOW_BAR_EYE + reach));
-            yaw = (float) (Mth.atan2(dir.x, -dir.z) * Mth.RAD_TO_DEG);
-        } else {
-            double nose = towed.getBbWidth() * .5 + .4;
-            target = pintle.subtract(dir.scale(nose + TOW_BAR));
-            yaw = (float) (Mth.atan2(-dir.x, dir.z) * Mth.RAD_TO_DEG);
-        }
-        towed.setYRot(yaw);
+        TowPose pose = towPose(towed, towed.position(), this.position(), this.getYRot());
+        if (pose == null) return;
+        towed.setYRot(pose.yaw());
+        Vec3 target = pose.position();
         Vec3 move = new Vec3(target.x - towed.getX(), Math.min(0, towed.getDeltaMovement().y) - .08, target.z - towed.getZ());
         towed.move(net.minecraft.world.entity.MoverType.SELF, move);
         towed.setDeltaMovement(this.getDeltaMovement().x, towed.getDeltaMovement().y, this.getDeltaMovement().z);
@@ -699,14 +786,17 @@ public final class SupportVehicleEntity extends VehicleEntity {
         this.steer += (steerTarget - this.steer) * .2F;
         if (this.engineRunning() && this.tickCount % Math.max(2, 8 - 4 * Math.abs(this.landInput().forwardAxis())) == 0) {
             Vec3 stack = SupportRig.world(this, SupportRig.EXHAUST_TIP.x, SupportRig.EXHAUST_TIP.y, SupportRig.EXHAUST_TIP.z);
-            this.level().addParticle(ParticleTypes.SMOKE, stack.x, stack.y, stack.z, 0, .06, 0);
+            ttv.migami.jeg.vehicle.effect.SmokeFx.emit(this.level(), stack, new Vec3(0, .06, 0), ttv.migami.jeg.vehicle.effect.SmokeFx.GREY, 0.3F);
         } else if (this.powered() && this.powerAge() < START_TICKS && this.powerAge() > 8 && this.tickCount % 2 == 0) {
             Vec3 stack = SupportRig.world(this, SupportRig.EXHAUST_TIP.x, SupportRig.EXHAUST_TIP.y, SupportRig.EXHAUST_TIP.z);
-            this.level().addParticle(ParticleTypes.LARGE_SMOKE, stack.x, stack.y, stack.z, 0, .08, 0);
+            ttv.migami.jeg.vehicle.effect.SmokeFx.emit(this.level(), stack, new Vec3(0, .08, 0), ttv.migami.jeg.vehicle.effect.SmokeFx.DARK, 0.45F);
         }
         if (this.generatorRunning() && this.tickCount % 10 == 0) {
-            Vec3 gen = SupportRig.world(this, SupportRig.GENERATOR_EXHAUST.x, SupportRig.GENERATOR_EXHAUST.y, SupportRig.GENERATOR_EXHAUST.z);
-            this.level().addParticle(ParticleTypes.SMOKE, gen.x, gen.y, gen.z, 0, .02, 0);
+            // The generator vents sideways, out from under the slide-out and clear of its wall (its stack under the floor
+            // sent the smoke up through the room, the user's report of 2026-11-19); RoomSmoke hides any that drifts in.
+            Vec3 gen = SupportRig.world(this, SupportRig.GENERATOR_OUTLET.x, SupportRig.GENERATOR_OUTLET.y, SupportRig.GENERATOR_OUTLET.z);
+            Vec3 out = SupportRig.world(Vec3.ZERO, this.getYRot(), -16.0, 0.0, 0.0).scale(0.08);
+            ttv.migami.jeg.vehicle.effect.SmokeFx.emit(this.level(), gen, out.add(0, .015, 0), ttv.migami.jeg.vehicle.effect.SmokeFx.GREY, 0.22F);
         }
     }
 

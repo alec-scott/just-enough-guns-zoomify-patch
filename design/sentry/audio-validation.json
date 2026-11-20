@@ -1,0 +1,27 @@
+{
+  "gun/sentry/fire.ogg": {
+    "s": 0.75,
+    "peak": 0.905
+  },
+  "gun/sentry/fire_distant.ogg": {
+    "s": 1.65,
+    "peak": 0.614
+  },
+  "gun/sentry/fire_interior.ogg": {
+    "s": 0.75,
+    "peak": 0.738
+  },
+  "sentry/dry_fire.ogg": {
+    "s": 0.31,
+    "peak": 0.632
+  },
+  "sentry/auto_on.ogg": {
+    "s": 0.45,
+    "peak": 0.442
+  },
+  "sentry/auto_off.ogg": {
+    "s": 0.45,
+    "peak": 0.438
+  },
+  "negev_last_shot_at_s": 1.349
+}

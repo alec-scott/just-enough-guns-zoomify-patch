@@ -63,7 +63,6 @@ public class Mk42ClientGameTest implements FabricClientGameTest {
             this.damage(context, server);
             this.proximity(context, server);
             this.cluster(context, server);
-            this.grapeshot(context, server);
             LOGGER.info("[mk42] COMPLETE");
         } catch (Throwable failure) {
             LOGGER.error("[mk42] FAILED: {}", failure.getMessage());
@@ -128,7 +127,11 @@ public class Mk42ClientGameTest implements FabricClientGameTest {
         context.waitTicks(30);
         float pitch = server.computeOnServer(s -> gun(s).turretPitch());
         LOGGER.info("[mk42] elevation after 20 ticks {}, after 50 {}", -halfway, -pitch);
-        check(Math.abs(-halfway - 25.0F) < 3.0F, "the gun must elevate at 25 deg/s (about 25 degrees in 20 ticks), at " + -halfway);
+        // Since the review of 2026-11-18 every powered mount spins up to its rate over TURRET_SPIN_UP_TICKS and brakes onto
+        // its aim (R2): 20 ticks at 25 deg/s is 25 degrees less half the spin-up's worth, about 18.75.
+        float expected = 1.25F * (20.0F - ttv.migami.jeg.vehicle.entity.base.VehicleEntity.TURRET_SPIN_UP_TICKS * 0.5F);
+        check(Math.abs(-halfway - expected) < 3.0F, "the gun must elevate at 25 deg/s after its spin-up (about " + expected
+                + " degrees in 20 ticks), at " + -halfway);
         check(Math.abs(pitch + 45.0F) < 1.0F, "the gun must reach the gunner's 45 degrees, at " + pitch);
         context.runOnClient(mc -> mc.player.setYRot(90.0F));
         context.waitTicks(20);
@@ -136,7 +139,9 @@ public class Mk42ClientGameTest implements FabricClientGameTest {
         context.waitTicks(40);
         float trainedAll = server.computeOnServer(s -> Math.abs(gun(s).turretYaw()));
         LOGGER.info("[mk42] train after 20 ticks {}, after 60 {}", trained, trainedAll);
-        check(Math.abs(trained - 40.0F) < 4.0F, "the gun must train at 40 deg/s (about 40 degrees in 20 ticks), at " + trained);
+        float trainExpected = 2.0F * (20.0F - ttv.migami.jeg.vehicle.entity.base.VehicleEntity.TURRET_SPIN_UP_TICKS * 0.5F);
+        check(Math.abs(trained - trainExpected) < 4.0F, "the gun must train at 40 deg/s after its spin-up (about " + trainExpected
+                + " degrees in 20 ticks), at " + trained);
         check(Math.abs(trainedAll - 90.0F) < 1.0F, "the gun must reach the gunner's bearing, at " + trainedAll);
         context.takeScreenshot("mk42_bore_marker");
         context.runOnClient(mc -> mc.player.setYRot(0.0F));
@@ -367,37 +372,6 @@ public class Mk42ClientGameTest implements FabricClientGameTest {
         LOGGER.info("[mk42] cluster: {} bomblets in the air at once, 9 targets took {} in all", most, taken);
         check(most == 18, "a cluster shell must break into 18 bomblets, saw " + most);
         check(taken > 150.0F, "the bomblets must cover the target area (9 targets 3 blocks apart), took " + taken + " in all");
-    }
-
-    /** Grapeshot breaks up at the muzzle into 36 pellets; a target 30 blocks out takes several of them. */
-    private void grapeshot(ClientGameTestContext context, TestServerContext server) {
-        double x = 160.5D;
-        server.runCommand(String.format(Locale.ROOT, "summon minecraft:husk %.1f -60 30.5 {NoAI:1b,PersistenceRequired:1b,Health:2000f,Tags:[\"mk42_gs\"],attributes:[{id:\"minecraft:max_health\",base:2000d}]}", x));
-        context.waitTicks(5);
-        float before = health(server, "mk42_gs");
-        int[] pellets = new int[1];
-        server.runOnServer(s -> {
-            var level = s.overworld();
-            ShellEntity shell = new ShellEntity(ModEntities.CANNON_SHELL.get(), level, s.getPlayerList().getPlayers().get(0), gun(s),
-                    new Vec3(x, -59.0D, 0.5D), new Vec3(0.0D, 0.0D, 15.0D), Mk42Entity.BALLISTICS, Mk42Entity.GRAPESHOT);
-            shell.tickCount = 5;
-            level.addFreshEntity(shell);
-        });
-        context.waitTick();
-        pellets[0] = server.computeOnServer(s -> {
-            int n = 0;
-            for (var entity : s.overworld().getAllEntities()) {
-                if (entity instanceof ShellEntity shell && shell.warhead() == Mk42Entity.PELLET) {
-                    n++;
-                }
-            }
-            return n;
-        });
-        context.waitTicks(20);
-        float taken = before - health(server, "mk42_gs");
-        LOGGER.info("[mk42] grapeshot: {} pellets, target 30 blocks out took {} ({} pellets' worth)", pellets[0], taken, taken / Mk42Entity.PELLET.directHitDamage());
-        check(pellets[0] >= 30, "grapeshot must break into 36 pellets at the muzzle, saw " + pellets[0]);
-        check(taken > 2.0F * Mk42Entity.PELLET.directHitDamage(), "a target 30 blocks out must take several pellets, took " + taken);
     }
 
     private Mk42Entity gun(MinecraftServer server) {

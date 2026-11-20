@@ -28,18 +28,20 @@ import ttv.migami.jeg.vehicle.util.SupportRig;
 public final class SupportAudio {
     private static final Map<Integer, Group> GROUPS = new HashMap<>();
     private static final String[] LOOPS = {"engine_idle", "engine_load", "engine_cab", "engine_distant", "generator", "generator_distant",
-            "hydraulic", "slide_motor", "reverse", "horn"};
+            "hydraulic", "slide_motor", "reverse", "horn", "tyres"};
     private static final double SOUND_SPEED = 343.0D / 20.0D;
     private static final int HISTORY = 40;
     // Loudness before distance: a medium truck diesel, well under the bulldozer working (1.6) and the A-10 (2.5).
     private static final float ENGINE_IDLE_LOUDNESS = .8F, ENGINE_WORK_LOUDNESS = 1.4F, GENERATOR_LOUDNESS = .25F;
     private static final float HYDRAULIC_LOUDNESS = .5F, MOTOR_LOUDNESS = .45F, ALARM_LOUDNESS = .9F, HORN_LOUDNESS = 2.2F;
+    /** Six big tyres on gravel and dirt (the LAV-150's recording), by how fast the truck rolls on the ground. */
+    private static final float TYRE_LOUDNESS = .8F;
     private static final float ONE_SHOT_LOUDNESS = 1.1F, CLANK_LOUDNESS = 1.0F;
 
     private SupportAudio() {}
 
     private record State(Vec3 position, Vec3 motion, float rpm, boolean engine, boolean generator, boolean hydraulic, boolean motor,
-                         boolean reversing, boolean horn, float startup) {}
+                         boolean reversing, boolean horn, float startup, float roll) {}
 
     private static final class Group {
         final SupportVehicleEntity entity;
@@ -47,7 +49,7 @@ public final class SupportAudio {
         final List<Layer> shots = new ArrayList<>();
         final ArrayDeque<State> history = new ArrayDeque<>();
         boolean wasPowered, wasDeploying, wasJacks;
-        float gain = 1, rpm, lastDoors = -1;
+        float gain = 1, rpm, lastDoors = -1, roll;
         Group(SupportVehicleEntity entity) { this.entity = entity; }
 
         State heard(double distance) {
@@ -119,10 +121,12 @@ public final class SupportAudio {
             float progress = truck.deployProgress();
             boolean jacks = truck.isMovingParts() && (progress < SupportRig.JACKS_END || progress > SupportRig.DOORS_END);
             boolean motor = truck.isMovingParts() && progress >= SupportRig.JACKS_END && progress <= SupportRig.SLIDES_END;
+            // The tyres by road speed (about 0.9 blocks a tick flat out), only while they touch the ground.
+            group.roll = Mth.lerp(.3F, group.roll, truck.onGround() ? Mth.clamp(speed / .9F, 0, 1) : 0);
             boolean reversing = truck.engineRunning() && truck.wheelTravel(1) - truck.wheelTravel(0) < -.01F;
             group.history.addFirst(new State(truck.position(), truck.getDeltaMovement(), group.rpm, truck.engineRunning(),
                     truck.generatorRunning(), jacks, motor, reversing, truck.hornOn(),
-                    Mth.clamp((truck.powerAge() - (SupportVehicleEntity.START_TICKS - 12)) / 14F, 0, 1)));
+                    Mth.clamp((truck.powerAge() - (SupportVehicleEntity.START_TICKS - 12)) / 14F, 0, 1), group.roll));
             while (group.history.size() > HISTORY) group.history.removeLast();
             if (active && group.layers.isEmpty()) {
                 for (String name : LOOPS) {
@@ -202,7 +206,7 @@ public final class SupportAudio {
         final float drift1 = (float) (Math.random() * 6.3), drift2 = (float) (Math.random() * 6.3), drift3 = (float) (Math.random() * 6.3);
 
         Layer(Group group, String kind, boolean loop, float loudness, int lifetime) {
-            super(ModSounds.ALL.get(Reference.id("vehicle.truck." + kind)).get(),
+            super(ModSounds.ALL.get(Reference.id(kind.equals("tyres") ? "vehicle.tyres.gravel" : "vehicle.truck." + kind)).get(),
                     kind.equals("horn") ? SoundSource.PLAYERS : SoundSource.AMBIENT, SoundInstance.createUnseededRandom());
             this.group = group;
             this.kind = kind;
@@ -256,6 +260,7 @@ public final class SupportAudio {
                 case "slide_motor" -> s.motor() ? level(inside, .2F, MOTOR_LOUDNESS, distance) * near : 0;
                 case "reverse" -> s.reversing() ? level(inside, .08F, ALARM_LOUDNESS, distance) : 0;
                 case "horn" -> s.horn() ? level(inside, .5F, HORN_LOUDNESS, distance) : 0;
+                case "tyres" -> level(inside, inCab ? .1F : .24F, TYRE_LOUDNESS, distance) * Math.min(1, s.roll() * 1.3F) * near;
                 default -> 0;
             };
             if (this.kind.startsWith("engine")) target *= s.startup();
@@ -276,6 +281,7 @@ public final class SupportAudio {
                 case "engine_load" -> .82F + rpm * .3F;
                 case "engine_cab" -> .9F + rpm * .3F;
                 case "engine_distant" -> .9F + rpm * .2F;
+                case "tyres" -> .8F + s.roll() * .3F;
                 default -> 1F;
             };
         }

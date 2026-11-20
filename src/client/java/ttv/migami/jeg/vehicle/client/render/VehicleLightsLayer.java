@@ -39,6 +39,14 @@ import ttv.migami.jeg.vehicle.entity.base.VehicleEntity;
  */
 final class VehicleLightsLayer<T extends VehicleEntity> extends GeoRenderLayer<T, Void, VehicleRenderState> {
     private static final Identifier GLOW = Identifier.fromNamespaceAndPath("jeg", "textures/effect/light_glow.png");
+    /**
+     * The glow under a shader pack: a soft halo whose colour fades with its alpha (premultiplied). The packs take the
+     * colour as emitted light, so the plain glow, white to its rim, showed as a hard white or coloured disc: the Mi-28's
+     * wingtip and tail lamps, the AH-6's, the A-10's tail lamp and the bush plane's (the user's review, 2026-11-19).
+     */
+    private static final Identifier GLOW_SOFT = Identifier.fromNamespaceAndPath("jeg", "textures/effect/light_glow_soft.png");
+    /** Under a shader pack the halo is dimmer: the pack's bloom spreads it. */
+    private static final float SHADER_GLOW_ALPHA = 0.6F;
     private static final Identifier BEAM = Identifier.fromNamespaceAndPath("jeg", "textures/effect/light_beam.png");
     private static final Identifier POOL = Identifier.fromNamespaceAndPath("jeg", "textures/effect/light_pool.png");
     /** The drawn pool's strength under a shader pack with no dynamic lights to light the ground instead. */
@@ -51,6 +59,18 @@ final class VehicleLightsLayer<T extends VehicleEntity> extends GeoRenderLayer<T
      */
     private static final float SPILL_GAIN = 1.8F;
     private static final float COCKPIT_GAIN = 3.0F;
+    /**
+     * An aircraft's instrument light on its cockpit, under a shader pack: the spill is drawn additive, which the pack
+     * takes as emissive and blooms (the AH-6's windscreen pillar glowed lime and the Mi-28's frame orange, 2026-11-17).
+     */
+    private static final float SHADER_COCKPIT_SPILL = 0.3F;
+    /**
+     * The FSV-6 room lamp's wash: under a shader pack it is halved (it is drawn additive, which the pack blooms: the room
+     * read blown-out warm, 2026-11-17), and it wraps only a little onto faces turned away from the lamp, so it fills the
+     * room without tinting the outside of the walls.
+     */
+    private static final float SHADER_ROOM_SPILL = 0.5F;
+    private static final float ROOM_SPILL_WRAP = 0.12F;
 
     VehicleLightsLayer(GeoRenderer<T, Void, VehicleRenderState> renderer) {
         super(renderer);
@@ -75,6 +95,9 @@ final class VehicleLightsLayer<T extends VehicleEntity> extends GeoRenderLayer<T
         Quaternionf facing = new Quaternionf(camera.orientation);
         Matrix4f model = new Matrix4f(passInfo.getModelRenderMatrixState());
         float cameraDistance = model.transformPosition(new Vector3f()).length();
+        boolean aircraft = vehicle.isJet()
+                || vehicle.vehicleData().defaults().vehicleType() == ttv.migami.jeg.vehicle.data.subdata.VehicleType.HELICOPTER;
+        boolean shaders = ttv.migami.jeg.client.compat.ShaderPacks.inUse();
 
         // Each light's glow and the light it casts, in the camera-relative frame the model is drawn in.
         List<Glow> glows = new ArrayList<>();
@@ -86,8 +109,22 @@ final class VehicleLightsLayer<T extends VehicleEntity> extends GeoRenderLayer<T
             float b = (light.colour() & 0xFF) / 255.0F;
             if (light.kind() == AircraftLights.Kind.COCKPIT) {
                 float level = COCKPIT_GAIN * (occupant ? 0.6F : 1.0F);
+                if (aircraft) {
+                    // Instrument light shows on the cockpit only once it is dark: by day the sun drowns it, and drawn
+                    // anyway it painted the AH-6's pillar lime at noon. (The FSV-6's room lamp lights a closed room by
+                    // day too, so it keeps its level.)
+                    level *= AircraftLights.nightSwitch(partialTick) * (shaders ? SHADER_COCKPIT_SPILL : 1.0F);
+                    if (level <= 0.01F) {
+                        continue;
+                    }
+                }
+                float wrap = 0.4F;
+                if (vehicle instanceof ttv.migami.jeg.vehicle.entity.SupportVehicleEntity) {
+                    level *= shaders ? SHADER_ROOM_SPILL : 1.0F;
+                    wrap = ROOM_SPILL_WRAP;
+                }
                 // Instrument light falls mostly forward and down, but bounces round a small cockpit: wrap it.
-                spills.add(new float[]{at.x, at.y, at.z, r, g, b, light.spill() * level, light.spillRadius() * 1.25F, 0.4F});
+                spills.add(new float[]{at.x, at.y, at.z, r, g, b, light.spill() * level, light.spillRadius() * 1.25F, wrap});
                 continue;
             }
             float flash = AircraftLights.flash(vehicle, light, seconds, seed);
@@ -98,8 +135,14 @@ final class VehicleLightsLayer<T extends VehicleEntity> extends GeoRenderLayer<T
                 // Lamps around an open seat face away from the operator: no glare, and no spill on the canopy beside them.
                 continue;
             }
-            float shown = flash;
-            float size = light.size() * (0.55F + 0.45F * flash);
+            float shown = flash * lampFacing(vehicle, light, at, model, aircraft);
+            if (shown <= 0.002F) {
+                continue;
+            }
+            // A road lamp keeps its size and only brightens (tail to brake, off to reversing): shrunk with its level, the
+            // tail glow looked tiny beside the lit one (the user's review, 2026-11-18).
+            boolean roadLamp = light.kind() == AircraftLights.Kind.BRAKE || light.kind() == AircraftLights.Kind.REVERSE;
+            float size = light.size() * (roadLamp ? 1.0F : 0.55F + 0.45F * flash);
             if (occupant) {
                 shown *= openSeat ? 0.3F : light.kind() == AircraftLights.Kind.STROBE ? 0.25F : 0.5F;
                 size *= 0.7F;
@@ -188,31 +231,45 @@ final class VehicleLightsLayer<T extends VehicleEntity> extends GeoRenderLayer<T
             // spinning light, which closes into a ring once the rotor is up to speed.
             float turn = Math.abs(vehicle.propellerRot(1.0F) - vehicle.propellerRot(0.0F));
             float tipAlpha = occupant ? 0.45F : 0.9F;
-            collector.order(2).submitCustomGeometry(modelPose, RenderTypes.eyes(GLOW),
-                    (pose, buffer) -> rotorTips(passInfo, pose, buffer, tips, turn, facing, tipAlpha));
+            collector.order(2).submitCustomGeometry(modelPose, shaders ? RenderTypes.entityTranslucentEmissive(GLOW_SOFT) : RenderTypes.eyes(GLOW),
+                    (pose, buffer) -> rotorTips(passInfo, pose, buffer, tips, turn, facing, shaders ? tipAlpha * SHADER_GLOW_ALPHA : tipAlpha));
         }
         if (!glows.isEmpty() || beam != null) {
             Beam lensBeam = beam;
-            collector.order(2).submitCustomGeometry(identity, RenderTypes.eyes(GLOW), (pose, buffer) -> {
+            // Under a shader pack (Iris) the eyes type cut the glow's soft edge into a hard disc, a bare white bulb (the
+            // AH-6, Mi-28 and A-10 at night, the user's review, 2026-11-18): the translucent emissive type keeps the
+            // falloff and still blooms. The lamps also light what is round them (LambDynamicLightsCompat).
+            var glowType = shaders ? RenderTypes.entityTranslucentEmissive(GLOW_SOFT) : RenderTypes.eyes(GLOW);
+            float glowAlpha = shaders ? SHADER_GLOW_ALPHA : 1.0F;
+            collector.order(2).submitCustomGeometry(identity, glowType, (pose, buffer) -> {
                 for (Glow glow : glows) {
-                    glow(buffer, facing, glow.at, glow.size, glow.r, glow.g, glow.b, glow.alpha, glow.pullForward);
+                    glow(buffer, facing, glow.at, glow.size, glow.r, glow.g, glow.b, glow.alpha * glowAlpha, glow.pullForward);
                 }
                 if (lensBeam != null && !openSeat && set.searchlight().lensGlow()) {
-                    glow(buffer, facing, lensBeam.lens, lensBeam.lensSize, lensBeam.r, lensBeam.g, lensBeam.b,
-                            lensBeam.lensAlpha, !occupant);
+                    // Under a shader pack the glare is smaller and fainter: the pack's bloom makes the rest, and full size
+                    // it was a white ball under the nose (the user's review, 2026-11-19).
+                    float lensSize = shaders ? lensBeam.lensSize * 0.45F : lensBeam.lensSize;
+                    glow(buffer, facing, lensBeam.lens, lensSize, lensBeam.r, lensBeam.g, lensBeam.b,
+                            lensBeam.lensAlpha * glowAlpha, !occupant);
                 }
             });
         }
         if (beam != null) {
             Beam shaft = beam;
-            if (!occupant && shaft.shaftAlpha > 0.003F) {
+            // No shaft for a pair of headlamps (no lens glow of its own): the beam is modelled from one point between the
+            // lamps, so its strip floated off the grille as a white sliver from the side (the FSV-6 at night, 2026-11-17).
+            // The ground pool and the lamps' own glows show the headlights.
+            // Only an aircraft's searchlight shows its shaft: a ground vehicle's drawn beam read as a hand-drawn shape and
+            // flickered as the hull rocked (the BD-40, the user's review, 2026-11-18); its light on the ground shows it.
+            // Under a shader pack the drawn shaft is bloomed into a hard white stick (the AH-6's, 2026-11-19); there the
+            // beam lights the ground for real (LambDynamicLights) and the air shows no shaft.
+            if (!occupant && aircraft && !shaders && shaft.shaftAlpha > 0.003F && set.searchlight().lensGlow()) {
                 collector.order(2).submitCustomGeometry(identity, RenderTypes.eyes(BEAM),
                         (pose, buffer) -> shaft(buffer, shaft));
             }
             // Under a shader pack the drawn pool is bloomed into a hard white blob (the FSV-6's headlights at night on
             // yftm). There the ground is lit for real by LambDynamicLights (LambDynamicLightsCompat), so the drawn pool
             // is left out; without that mod it is kept but faint enough not to blow out.
-            boolean shaders = ttv.migami.jeg.client.compat.ShaderPacks.inUse();
             if (shaft.hit != null && !(shaders && ttv.migami.jeg.client.compat.ShaderPacks.dynamicLights())) {
                 if (shaders) {
                     shaft.poolAlpha *= SHADER_POOL_ALPHA;
@@ -224,6 +281,34 @@ final class VehicleLightsLayer<T extends VehicleEntity> extends GeoRenderLayer<T
     }
 
     private record Glow(Vector3f at, float size, float r, float g, float b, float alpha, boolean pullForward) {
+    }
+
+    /** White lamps (headlamps, work lights) on a land vehicle's or gun's hull. */
+    private static final int HEADLAMP_WHITE = 0xFFF2DC;
+
+    /**
+     * How much of a land vehicle's headlamp or tail lamp glow shows from where the camera is: a lamp shines one way, ahead
+     * for a lamp in the front half, astern for one in the back half and for brake and reversing lamps. From behind it the
+     * lens is out of sight: the LAV-150's headlamps glowed as balls above their cages in the driver's view (the user's
+     * report, 2026-11-19). Navigation lights, beacons and aircraft lights show all round.
+     */
+    private static float lampFacing(VehicleEntity vehicle, AircraftLights.PointLight light, Vector3f at, Matrix4f model, boolean aircraft) {
+        if (aircraft || vehicle.vehicleData().defaults().vehicleType() == ttv.migami.jeg.vehicle.data.subdata.VehicleType.BOAT) {
+            return 1.0F;
+        }
+        boolean road = light.kind() == AircraftLights.Kind.BRAKE || light.kind() == AircraftLights.Kind.REVERSE;
+        boolean headlamp = light.kind() == AircraftLights.Kind.POSITION && light.colour() == HEADLAMP_WHITE;
+        if (!road && !headlamp) {
+            return 1.0F;
+        }
+        float ahead = road || light.z() > 0.0F ? 1.0F : -1.0F;
+        Vector3f shines = model.transformDirection(new Vector3f(0.0F, 0.0F, ahead), new Vector3f());
+        if (shines.lengthSquared() < 1.0E-6F || at.lengthSquared() < 1.0E-6F) {
+            return 1.0F;
+        }
+        float facing = -new Vector3f(at).normalize().dot(shines.normalize());
+        float t = Mth.clamp((facing + 0.15F) / 0.45F, 0.0F, 1.0F);
+        return t * t * (3.0F - 2.0F * t);
     }
 
     /** Each blade's tip light, smeared along its arc by {@code turn} (radians a tick) about the hub. */

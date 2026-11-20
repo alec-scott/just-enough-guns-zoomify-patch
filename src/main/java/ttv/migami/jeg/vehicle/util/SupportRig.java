@@ -31,6 +31,9 @@ public final class SupportRig {
     public static final Vec3 SEAT_DRIVER = new Vec3(10, 16, -46);
     public static final Vec3 EXHAUST_TIP = new Vec3(-18, 54, -29);
     public static final Vec3 GENERATOR_EXHAUST = new Vec3(-21, 8, -6);
+    /** Where the generator's smoke comes out: its pipe runs out under the slide-out and vents sideways, just outside the
+     * deployed wall's foot, blown outward (model px). */
+    public static final Vec3 GENERATOR_OUTLET = new Vec3(-INTERIOR_X - 4, 6, -6);
     public static final Vec3 MAST_FLOODLIGHTS = new Vec3(14, 103.9, -20);
 
     /** Deploy stages as fractions of the whole sequence: jacks, slide-outs, doors and awning, mast raise, mast and beacon. */

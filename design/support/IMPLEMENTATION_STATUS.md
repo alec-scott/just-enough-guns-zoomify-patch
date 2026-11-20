@@ -3,6 +3,39 @@
 2026-11-15. All runs below used `-PwithPack` (Minecraft 26.1.2, loader 0.20.1, the pack's client mods and shaders
 subset in `build.gradle`) in a singleplayer world.
 
+## Finalisation (2026-11-17, design/READINESS.md)
+
+- **Weight (`"mass"` 15 t) and road speed:** its acceleration was a third of the armour's (0.01): flat out it took
+  95 ticks to reach 80% of top, slower than the 55 t YX-100 (63), and the mass rescale had cut its top speed to
+  58 km/h. Now 0.028 and `max_forward_speed` 1.70: 80% of top in 37 ticks (LAV-150 28, YX-100 63), 76 km/h flat out
+  (the README's 21 m/s), stops in 28 ticks. Squats 0.8° pulling away and dives 1.7° braking (`VehicleFeel`).
+- **Sound:**
+  - The tyres: six big tyres on gravel by road speed, in the cab muffled (`SupportAudio` "tyres", the LAV-150's
+    recording).
+  - The parking brake that sets as it starts to deploy is now a real truck's air brakes (Filmscore, CC0, the shared
+    `vehicle/movement/brake`) instead of a synthesized hiss. The service brakes on a hard stop are the same
+    recording (`VehicleFeel`).
+- **The tow bar is drawn** (`SupportTowBarLayer`): an A-frame from the pintle to the nose of a vehicle in tow, or a short
+  drawbar to a gun's tow eye. Before, the towed vehicle followed 1.6 blocks behind with nothing between.
+- **Destroyed:** it already burned as a wreck (its shell removed if it was deployed); unchanged.
+- **A load on the hitch weighs on the drive** (2026-11-18, `drivenMass`): the truck's 15 t plus the towed vehicle's
+  `"mass"`, so it pulls away, brakes and turns slower with a howitzer (2.1 t) or a LAV-150 (9.9 t) behind it, and much
+  slower with a Mk42 (63 t); top speed unchanged. Its own suspension keeps the truck's mass.
+
+| Test (`-PwithPack`) | Result |
+| --- | --- |
+| `VehicleWeightClientGameTest` (FSV-6 added) | passes: 80% of top in 37 ticks, 1.052 blocks a tick, stopped in 28; squat -0.83°, dive 1.65°; brakes heard; tyres 0.24 at speed |
+| `SupportTowClientGameTest` | passes: hitched by the tow key, followed 80.7 blocks, 2.67 from the pintle; drive inertia 0.694 towing the LAV (0.894 alone, suspension unchanged); the tow bar shot from the side; released; on foot both ways |
+
+Played (mcpfabric, pack client, ArmourTest copy, 2026-11-18): found deployed with the generator running (as the
+sandbox saved it), held R: "Packing up 86%" with the header's progress line and a "Hold R" bar, packed. Drove south
+from the cab: 21 m/s (76 km/h) on the speedometer, the tachometer and lamps lit; 270 blocks in a straight line. Chase
+view: exhaust puffs; braking lit the high brake lamp. At midnight the headlights throw their pool ahead (seen from the
+cab), the gauges glow and the tail lamp shows.
+
+Not covered yet: **listen** to `tyres/gravel` on the truck, `movement/brake` as the parking brake; the tow bar seen
+from the side in game (it is built from the hitch geometry; look at it while towing the LAV-150 and the howitzer).
+
 ## Fourth review (2026-11-15)
 
 | Feedback | Change | Checked by |

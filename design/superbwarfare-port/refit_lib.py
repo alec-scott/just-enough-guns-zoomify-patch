@@ -361,6 +361,50 @@ def links_posed(geo, side, path, rest, travel_px, links):
 
 # ---------------------------------------------------------------- checks
 
+def strip_transparent(geo, texture):
+    """Drop faces whose texture rectangle is fully transparent, then cubes left with no face."""
+    geo = copy.deepcopy(geo)
+    desc = geo["minecraft:geometry"][0]["description"]
+    alpha = np.asarray(texture.convert("RGBA"))[..., 3]
+    kx, ky = texture.size[0] / desc["texture_width"], texture.size[1] / desc["texture_height"]
+    dropped = 0
+    for b in bones_of(geo):
+        kept = []
+        for c in b.get("cubes", []):
+            faces = {}
+            for face, f in c["uv"].items():
+                (u, v), (w, h) = f["uv"], f["uv_size"]
+                x0, x1 = sorted((u * kx, (u + w) * kx))
+                y0, y1 = sorted((v * ky, (v + h) * ky))
+                x0, y0 = max(0, int(math.floor(x0))), max(0, int(math.floor(y0)))
+                x1, y1 = min(alpha.shape[1], max(int(math.ceil(x1)), x0 + 1)), min(alpha.shape[0], max(int(math.ceil(y1)), y0 + 1))
+                if (alpha[y0:y1, x0:x1] > 127).any():
+                    faces[face] = f
+                else:
+                    dropped += 1
+            if faces:
+                c["uv"] = faces
+                kept.append(c)
+        if "cubes" in b:
+            b["cubes"] = kept
+            if not kept:
+                del b["cubes"]
+    return geo, dropped
+
+
+def renders_alike(geo_a, geo_b, texture, views=((35, 25), (0, 0), (90, 0))):
+    """True when two geometries draw the same pixels, as the game draws them (fully transparent faces show nothing)."""
+    for yaw, pitch in views:
+        out = []
+        for geo in (geo_a, geo_b):
+            q, ts, _, _ = render_geo.load_quads(geo)
+            out.append(np.asarray(render_geo.render(render_geo.visible(q, texture, ts), texture, ts, yaw, pitch)))
+        if not np.array_equal(*out):
+            return False
+    return True
+
+
+
 def render_identical(geo_a, geo_b, texture, views=((35, 25), (0, 0), (90, 0))):
     """True when two geometries draw the same pixels (used to prove a UV rewrite is lossless)."""
     for yaw, pitch in views:
@@ -375,3 +419,199 @@ def render_identical(geo_a, geo_b, texture, views=((35, 25), (0, 0), (90, 0))):
 
 def angle_of(v):
     return math.degrees(math.atan2(v[1], math.hypot(v[0], v[2])))
+
+
+def silhouette_icon(geo, texture, path, pose=None, width=256, height=64):
+    """The vehicle creator's selection icon, in the style of SBW's: a light grey side view, nose to the left as theirs,
+    on a transparent 256 x 64 strip, faces lit by how much they face the viewer and up."""
+    from PIL import Image, ImageDraw
+    quads, _ = posed_quads(geo, pose, texture)
+    scale = 4
+    image = Image.new("RGBA", (width * scale, height * scale), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(image)
+    pts = np.concatenate([q[2] for q in quads])
+    lo, hi = pts.min(0), pts.max(0)
+    k = min((width - 16) * scale / max(1e-6, hi[2] - lo[2]), (height - 8) * scale / max(1e-6, hi[1] - lo[1]))
+    faces = []
+    for _, _, corners, _ in quads:
+        n = np.cross(corners[1] - corners[0], corners[2] - corners[0])
+        length = np.linalg.norm(n)
+        if length < 1e-9:
+            continue
+        n = n / length
+        tone = int(186 + 50 * max(0.0, abs(n[0])) * 0.6 + 50 * max(0.0, n[1]) * 0.8)
+        poly = [(width * scale / 2 + (p[2] - (lo[2] + hi[2]) / 2) * k, height * scale - 4 * scale - (p[1] - lo[1]) * k)
+                for p in corners]
+        faces.append((corners[:, 0].mean(), poly, (min(255, tone),) * 3 + (255,)))
+    faces.sort(key=lambda f: -f[0])  # far side (positive X, the vehicle's left in file space) first
+    for _, poly, colour in faces:
+        draw.polygon(poly, fill=colour)
+    icon = image.resize((width, height), Image.Resampling.LANCZOS)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    icon.save(path)
+
+
+# ---------------------------------------------------------------- unique UVs for our own generators
+# Our generators (sentry, bush plane, howitzer) first textured every cube from one 16-px tile per material, so every face
+# of a material showed the same flat swatch and nothing could be weathered per panel (the fleet's model and texture
+# review, 2026-11-19). bake_unique gives every face its own texels, at {texels} a model pixel, filled with its material,
+# so the detail pass (design/ground-vehicles/detail_texture.detail_image) can seam, wear and dirty each panel.
+
+FACE_SIZE = {"north": (0, 1), "south": (0, 1), "east": (2, 1), "west": (2, 1), "up": (0, 2), "down": (0, 2)}
+
+
+def bake_unique(bones, materials, texels=4, width=None, seed=7, fill=None, boost=None):
+    """Rewrite each cube's UV in {bones} (generator bone dicts whose cubes carry "_material") to a unique rectangle per
+    face. Returns (uv_size, faces, base): the atlas size in UV units (for the geometry's texture_width/height), one entry
+    per face {bone, cube, face, material, size (px), rect (texels x0, y0, x1, y1)}, and the base texture (each face its
+    material's colour, a faint grain), {texels} texels a UV unit. {boost} {material: k} gives that material's faces k
+    times the texel density (their UV rectangle k times the face): a small name plate can carry legible lettering.
+    {fill}(item, width, height), when given, paints a
+    face instead: an (height + 2) x (width + 2) x 4 array, a texel of bleed all round (the FSV-6 lays its patterned
+    material tiles this way)."""
+    import random
+    from PIL import Image
+    rng = random.Random(seed)
+    items = []
+    for b in bones:
+        for ci, cube in enumerate(b.get("cubes", [])):
+            for face, (ia, ib) in FACE_SIZE.items():
+                k = (boost or {}).get(cube["_material"], 1)
+                w, h = cube["size"][ia] * k, cube["size"][ib] * k
+                tw, th = max(1, math.ceil(w * texels - 1e-6)), max(1, math.ceil(h * texels - 1e-6))
+                items.append({"bone": b["name"], "cube": ci, "face": face, "material": cube["_material"],
+                              "size": (w, h), "tex": (tw, th), "cube_ref": cube})
+    pad = 2
+    area = sum((i["tex"][0] + pad) * (i["tex"][1] + pad) for i in items)
+    if width is None:
+        width = 64
+        while width * width < area * 1.25:
+            width *= 2
+    width = max(width, max(i["tex"][0] + pad for i in items))
+    # Shelf packing, tallest first.
+    x = y = shelf = 0
+    for item in sorted(items, key=lambda i: (-i["tex"][1], -i["tex"][0])):
+        tw, th = item["tex"]
+        if x + tw + pad > width:
+            x, y, shelf = 0, y + shelf, 0
+        item["rect"] = (x + 1, y + 1, x + 1 + tw, y + 1 + th)
+        x += tw + pad
+        shelf = max(shelf, th + pad)
+    height = y + shelf
+    height = ((height + texels * 16 - 1) // (texels * 16)) * texels * 16
+    for item in items:
+        x0, y0, _, _ = item["rect"]
+        w, h = item["size"]
+        uv = item["cube_ref"].setdefault("_faces", {})
+        uv[item["face"]] = {"uv": [round(x0 / texels, 4), round(y0 / texels, 4)], "uv_size": [round(w, 4), round(h, 4)]}
+    for b in bones:
+        for cube in b.get("cubes", []):
+            cube["uv"] = cube.pop("_faces")
+    base = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+    px = np.zeros((height, width, 4), np.uint8)
+    for item in items:
+        x0, y0, x1, y1 = item["rect"]
+        if fill is not None:
+            block = fill(item, x1 - x0, y1 - y0)
+            if block is not None:
+                px[y0 - 1:y1 + 1, x0 - 1:x1 + 1] = np.clip(block, 0, 255)
+                continue
+        rgba = materials[item["material"]]
+        grain = np.array([rng.choice((-2, -1, 0, 0, 1, 2)) for _ in range((y1 - y0 + 2) * (x1 - x0 + 2))]).reshape(y1 - y0 + 2, x1 - x0 + 2)
+        block = np.empty((y1 - y0 + 2, x1 - x0 + 2, 4), np.int32)
+        block[..., :3] = np.array(rgba[:3])[None, None] + (grain[..., None] if rgba[3] == 255 else 0)
+        block[..., 3] = rgba[3]
+        # One texel of bleed round each rectangle, so mipmaps and filtering at the edge keep the face's colour.
+        px[y0 - 1:y1 + 1, x0 - 1:x1 + 1] = np.clip(block, 0, 255)
+    for item in items:
+        item.pop("cube_ref")
+    return (width / texels, height / texels), items, Image.fromarray(px, "RGBA").copy()
+
+
+def paste_faces(target, source, faces, materials_kept):
+    """Copy the faces of the given materials from {source} onto {target} (both at the same texel scale or {target}
+    an exact multiple): glass, lamps and lenses keep their bake after the weathering pass."""
+    from PIL import Image
+    k = target.width // source.width
+    for item in faces:
+        if item["material"] not in materials_kept:
+            continue
+        x0, y0, x1, y1 = item["rect"]
+        patch = source.crop((x0 - 1, y0 - 1, x1 + 1, y1 + 1))
+        if k != 1:
+            patch = patch.resize((patch.width * k, patch.height * k), Image.NEAREST)
+        target.paste(patch, ((x0 - 1) * k, (y0 - 1) * k))
+    return target
+
+
+def glow_of(faces, size, materials_lit, colours, scale=1):
+    """The emissive layer's texture: only the faces of the lit materials, in their colours."""
+    from PIL import Image
+    img = Image.new("RGBA", size, (0, 0, 0, 0))
+    for item in faces:
+        if item["material"] in materials_lit:
+            x0, y0, x1, y1 = item["rect"]
+            img.paste(colours[item["material"]], ((x0 - 1) * scale, (y0 - 1) * scale, (x1 + 1) * scale, (y1 + 1) * scale))
+    return img
+
+
+def rebake_imported(geo, texture, texels=2, pad=2):
+    """An imported model (per-face UVs, faces sharing and stretching small texture patches: the A-10's 4 x 2 texel patch
+    over a 20 px panel, its left and right halves on the same texels) given a texture of its own per face: each face gets
+    a rectangle sized by the face itself at {texels} texels a model pixel, filled with its old paint resampled (nearest),
+    and its UV moved there with the same signs, so every face looks as it did, its left and right apart and with room for
+    the detail pass. Returns (geometry, texture, faces): faces as bake_unique's, with bone, face and rect."""
+    from PIL import Image
+    data = copy.deepcopy(geo)
+    desc = data["minecraft:geometry"][0]["description"]
+    tw, th = desc["texture_width"], desc["texture_height"]
+    old = texture.convert("RGBA")
+    kx, ky = old.width / tw, old.height / th
+    items = []
+    for b in data["minecraft:geometry"][0]["bones"]:
+        for cube in b.get("cubes", []):
+            for face, f in (cube.get("uv") or {}).items():
+                if not f or "uv" not in f:
+                    continue
+                ia, ib = FACE_SIZE[face]
+                w, h = cube["size"][ia], cube["size"][ib]
+                u, v = f["uv"]
+                su, sv = f.get("uv_size", (0, 0))
+                if su == 0 or sv == 0:
+                    continue
+                items.append({"bone": b["name"], "face": face, "f": f, "size": (max(w, 0.05), max(h, 0.05)),
+                              "src": (min(u, u + su), min(v, v + sv), max(u, u + su), max(v, v + sv)),
+                              "signs": (1 if su > 0 else -1, 1 if sv > 0 else -1),
+                              "tex": (max(1, math.ceil(max(w, 0.05) * texels - 1e-6)), max(1, math.ceil(max(h, 0.05) * texels - 1e-6)))})
+    area = sum((i["tex"][0] + pad) * (i["tex"][1] + pad) for i in items)
+    width = 64
+    while width * width < area * 1.25:
+        width *= 2
+    x = y = shelf = 0
+    for item in sorted(items, key=lambda i: (-i["tex"][1], -i["tex"][0])):
+        w_, h_ = item["tex"]
+        if x + w_ + pad > width:
+            x, y, shelf = 0, y + shelf, 0
+        item["rect"] = (x + 1, y + 1, x + 1 + w_, y + 1 + h_)
+        x += w_ + pad
+        shelf = max(shelf, h_ + pad)
+    height = ((y + shelf + texels * 16 - 1) // (texels * 16)) * texels * 16
+    out = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+    for item in items:
+        x0, y0, x1, y1 = item["rect"]
+        u0, v0, u1, v1 = item["src"]
+        box = (int(math.floor(u0 * kx + 1e-6)), int(math.floor(v0 * ky + 1e-6)),
+               max(int(math.floor(u0 * kx + 1e-6)) + 1, int(math.ceil(u1 * kx - 1e-6))),
+               max(int(math.floor(v0 * ky + 1e-6)) + 1, int(math.ceil(v1 * ky - 1e-6))))
+        patch = old.crop(box).resize((x1 - x0 + 2, y1 - y0 + 2), Image.NEAREST)
+        out.paste(patch, (x0 - 1, y0 - 1))
+        w, h = item["size"]
+        sx, sy = item["signs"]
+        f = item["f"]
+        f["uv"] = [round(x0 / texels + (w if sx < 0 else 0.0), 4), round(y0 / texels + (h if sy < 0 else 0.0), 4)]
+        f["uv_size"] = [round(sx * w, 4), round(sy * h, 4)]
+        item["size"] = (w, h)
+    desc["texture_width"], desc["texture_height"] = width / texels, height / texels
+    for item in items:
+        item.pop("f")
+    return data, out, items

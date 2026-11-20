@@ -31,6 +31,9 @@ import ttv.migami.jeg.vehicle.util.VehicleSoundHelper;
  * builds through the take-off run and the nose can be lifted once at rotate speed.
  */
 final class JetFlight {
+    /** Flaps, 0 in to 1 out (an aircraft with "flap_stall_factor" in its data). */
+    private float flaps;
+
     /** Gravity on a jet, blocks per tick squared. */
     static final double GRAVITY = 0.035D;
     private static final double ALPHA_STALL = Math.toRadians(15.0D);
@@ -46,6 +49,12 @@ final class JetFlight {
     private static final double IDLE_SPOOL = IDLE;
     private static final double THROTTLE_UP = 0.03D;
     private static final double THROTTLE_DOWN = 0.035D;
+    /**
+     * On the ground the throttle springs back to idle this much a tick once W is let go (from full in half a second), so
+     * the jet only gathers speed while W is held (the user's request, 2026-11-17: a latched throttle kept a taxiing jet
+     * speeding up). In the air the lever stays where it is left.
+     */
+    private static final double GROUND_THROTTLE_RELEASE = 0.1D;
     private static final double SPOOL_UP = 0.05D;
     private static final double SPOOL_DOWN = 0.075D;
     /**
@@ -144,6 +153,9 @@ final class JetFlight {
      * strikes and stalls at proportionally lower speeds.
      */
     static final double REFERENCE_TOP_SPEED = 3.4D;
+    /** Flaps run fully out or in in about a second; with them out the airframe has this much more drag. */
+    private static final float FLAP_TRAVEL = 0.05F;
+    private static final double FLAP_DRAG = 0.6D;
     private static final double SAFE_SINK = 0.22D;
     private static final double FATAL_SINK = 0.6D;
     /** Wing, fin, nose and engine points checked against the terrain each tick: the hull box only covers the fuselage. */
@@ -268,8 +280,19 @@ final class JetFlight {
         boolean controlled = pilot != null && hasEnergy && !wrecking;
         boolean grounded = this.jet.onGround() || this.jet.verticalCollisionBelow;
         double topSpeed = Math.max(0.2D, engine.maxForwardSpeed());
+        var aircraft = this.jet.vehicleData().aircraft();
         double stallSpeed = engine.jetStallSpeed();
         double rotateSpeed = engine.jetRotateSpeed();
+        if (aircraft.hasFlaps()) {
+            // Flaps come out slow (take-off and landing) and go in as it gathers speed: with them out the wing lifts
+            // more, so it flies and leaves the ground slower, at the cost of drag.
+            boolean flapsOut = this.jet.getDeltaMovement().length() < aircraft.flapSpeedFactor() * stallSpeed;
+            this.flaps = Mth.approach(this.flaps, flapsOut ? 1.0F : 0.0F, FLAP_TRAVEL);
+            double factor = Mth.lerp(this.flaps, 1.0D, aircraft.flapStallFactor());
+            stallSpeed *= factor;
+            rotateSpeed *= factor;
+        }
+        double thrustLapse = aircraft.thrustLapse();
         double diveSpeed = engine.jetMaxDiveSpeed();
         double weight = Mth.clamp(engine.playerWeight(), 0.5D, 3.0D);
         double scale = topSpeed / REFERENCE_TOP_SPEED;
@@ -287,7 +310,13 @@ final class JetFlight {
             double trend = airspeedNow - this.lastAirspeed;
             this.throttle = Mth.clamp(this.throttle + error * AUTOTHROTTLE_GAIN - trend * AUTOTHROTTLE_DAMPING, 0.0D, 1.0D);
         } else if (controlled) {
-            this.throttle = Mth.clamp(this.throttle + (input.forward() ? THROTTLE_UP : 0.0D) - (input.backward() ? THROTTLE_DOWN : 0.0D), 0.0D, 1.0D);
+            double down = input.backward() ? THROTTLE_DOWN : 0.0D;
+            if (grounded && !input.forward()) {
+                // On its wheels the throttle is held open, not set: let go of W and it comes back to idle (and the idle
+                // hold brake slows it), so taxiing the speed only builds while W is held.
+                down = Math.max(down, GROUND_THROTTLE_RELEASE);
+            }
+            this.throttle = Mth.clamp(this.throttle + (input.forward() ? THROTTLE_UP : 0.0D) - down, 0.0D, 1.0D);
         } else if (pilot == null) {
             this.throttle = 0.0D;
         }
@@ -482,7 +511,11 @@ final class JetFlight {
             double margin = Mth.clamp((speed / stallSpeed - GUN_RECOIL_FLOOR) / GUN_RECOIL_FADE, 0.0D, 1.0D);
             velocity.sub(new Vector3d(forward).mul(GUN_RECOIL_SHARE * engine.acceleration() * margin));
         }
-        double thrust = this.spool * engine.acceleration() * (1.0D - THRUST_LAPSE * Math.min(speed, diveSpeed) / topSpeed) * mobility * ceilingFactor;
+        // On the wheels with W let go, the engines winding down push no harder than at idle (the pilot is off the
+        // throttle and on the brakes): without this, the spool-down carried a taxiing jet faster for half a second.
+        boolean offThrottleOnGround = grounded && controlled && !input.forward() && input.cruiseSpeed() <= 0.0F;
+        double thrustSpool = offThrottleOnGround ? Math.min(this.spool, IDLE) : this.spool;
+        double thrust = thrustSpool * engine.acceleration() * (1.0D - thrustLapse * Math.min(speed, diveSpeed) / topSpeed) * mobility * ceilingFactor;
         velocity.add(new Vector3d(forward).mul(thrust));
         double newSpeed = velocity.length();
         boolean airbrake = controlled && input.brake() && !grounded;
@@ -493,8 +526,10 @@ final class JetFlight {
         this.speedBrake = Mth.approach(this.speedBrake, airbrake || diveBrake ? 1.0F : 0.0F, SPEED_BRAKE_TRAVEL);
         double inducedDrag = INDUCED_DRAG * scale;
         double cruiseGravity = GRAVITY * scale;
-        double parasiteDrag = (engine.acceleration() * (1.0D - THRUST_LAPSE) - inducedDrag * cruiseGravity * cruiseGravity / (topSpeed * topSpeed)) / (topSpeed * topSpeed);
-        double drag = Math.max(0.0D, parasiteDrag) * newSpeed * newSpeed * (1.0D + AIRBRAKE_DRAG * this.speedBrake + GEAR_DRAG * this.gear);
+        double parasiteDrag = (engine.acceleration() * (1.0D - thrustLapse) - inducedDrag * cruiseGravity * cruiseGravity / (topSpeed * topSpeed)) / (topSpeed * topSpeed);
+        // A fixed undercarriage is part of the airframe's drag already (its top speed is measured with it).
+        double gearDrag = aircraft.fixedGear() ? 0.0D : GEAR_DRAG * this.gear;
+        double drag = Math.max(0.0D, parasiteDrag) * newSpeed * newSpeed * (1.0D + AIRBRAKE_DRAG * this.speedBrake + gearDrag + FLAP_DRAG * this.flaps);
         drag += Math.min(0.03D * scale, inducedDrag * lift * lift / Math.max(newSpeed * newSpeed, 0.36D * scale * scale));
         if (newSpeed > 1.0E-4D) {
             velocity.sub(new Vector3d(velocity).div(newSpeed).mul(Math.min(drag, newSpeed)));
@@ -558,7 +593,16 @@ final class JetFlight {
     }
 
     /** Automatic gear: up once well clear of the ground, down for the approach and whenever it is on its wheels. */
+    float flaps() {
+        return this.flaps;
+    }
+
     private void tickGear(boolean server, boolean grounded, double altitude, double verticalSpeed) {
+        if (this.jet.vehicleData().aircraft().fixedGear()) {
+            this.gearTargetDown = true;
+            this.gear = 1.0F;
+            return;
+        }
         boolean down = this.gearTargetDown;
         if (grounded) {
             down = true;
@@ -653,7 +697,8 @@ final class JetFlight {
             return;
         }
         Vec3 origin = this.jet.position();
-        for (double[] point : STRIKE_POINTS) {
+        var own = this.jet.vehicleData().aircraft().strikePoints();
+        for (double[] point : own.isEmpty() ? java.util.Arrays.asList(STRIKE_POINTS) : own) {
             Vec3 world = origin.add(this.jet.rotateLocalOffsetWithPose(point[0], point[1], point[2], 1.0F));
             AABB probe = new AABB(world.x - 0.2D, world.y - 0.2D, world.z - 0.2D, world.x + 0.2D, world.y + 0.2D, world.z + 0.2D);
             if (!this.jet.level().hasChunkAt(BlockPos.containing(world)) || !this.jet.intersectsBlockCollision(probe)) {

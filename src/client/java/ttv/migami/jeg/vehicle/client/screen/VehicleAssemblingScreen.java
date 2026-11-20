@@ -1,7 +1,11 @@
 package ttv.migami.jeg.vehicle.client.screen;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
@@ -321,15 +325,16 @@ public final class VehicleAssemblingScreen extends AbstractContainerScreen<Vehic
         guiGraphics.text(this.font, this.title, 8, 6, TEXT, false);
     }
 
-    /** The vehicle's white silhouette (64 by 16), as on its container item. */
+    /** The vehicle's white silhouette (256 by 64), when its icon exists: every vehicle in the creator has one. */
     @Nullable
     private static Identifier vehicleIcon(Identifier vehicleId) {
-        return switch (vehicleId.getPath()) {
-            case "a10", "ah6", "bmp2", "hpj11", "laser_tower", "lav150", "mi28", "speedboat", "tom6", "truck", "howitzer", "plz05", "leopard2" ->
-                    Reference.id("textures/vehicle_icon/" + vehicleId.getPath() + "_icon.png");
-            default -> null;
-        };
+        return ICONS.computeIfAbsent(vehicleId, id -> {
+            Identifier icon = Reference.id("textures/vehicle_icon/" + id.getPath() + "_icon.png");
+            return Minecraft.getInstance().getResourceManager().getResource(icon).isPresent() ? Optional.of(icon) : Optional.empty();
+        }).orElse(null);
     }
+
+    private static final Map<Identifier, Optional<Identifier>> ICONS = new HashMap<>();
 
     private static Component vehicleName(Identifier vehicleId) {
         return Component.translatable("entity." + vehicleId.getNamespace() + "." + vehicleId.getPath());

@@ -145,7 +145,7 @@ public final class Type63Entity extends ShellGunEntity {
     }
 
     @Override
-    protected boolean shellsAreRockets() {
+    public boolean shellsAreRockets() {
         return true;
     }
 

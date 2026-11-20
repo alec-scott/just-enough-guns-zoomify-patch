@@ -122,6 +122,15 @@ public abstract class VehicleCameraMixin implements VehicleCameraHandler.Vehicle
         vehicle.refreshClientTurretAim(player, partialTick);
         Vec3 cameraPosition = vehicle.cameraPositionFor(player, partialTick);
         Vec3 cameraRotation = vehicle.cameraRotationFor(player, partialTick);
+        if ((vehicle.vehicleData().defaults().vehicleType() == ttv.migami.jeg.vehicle.data.subdata.VehicleType.LAND
+                || vehicle.vehicleData().defaults().vehicleType() == ttv.migami.jeg.vehicle.data.subdata.VehicleType.BOAT)
+                && !ttv.migami.jeg.vehicle.client.VehicleClientState.zoomDown()) {
+            // The crew feels the hull (VehicleFeel): its rock, the running rumble and the jolt of a landing. Not through
+            // a gun sight (zoomed), which is stabilised.
+            cameraPosition = cameraPosition.add(0.0D, ttv.migami.jeg.vehicle.client.VehicleFeel.cameraLift(vehicle, partialTick), 0.0D);
+            cameraRotation = cameraRotation.add(0.0D, ttv.migami.jeg.vehicle.client.VehicleFeel.cameraPitch(vehicle, partialTick),
+                    ttv.migami.jeg.vehicle.client.VehicleFeel.cameraRoll(vehicle, partialTick));
+        }
         this.jeg$setCameraRotation(cameraRotation);
         this.setPosition(cameraPosition.x, cameraPosition.y, cameraPosition.z);
     }

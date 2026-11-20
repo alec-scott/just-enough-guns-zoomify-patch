@@ -1,6 +1,7 @@
 {
   "entity_type": "jeg:lav150",
   "vehicle_type": "land",
+  "mass": 9.9,
   "max_health": 270.0,
   "auto_repair_per_tick": 0.014,
   "auto_repair_cooldown_ticks": 150,
@@ -9,40 +10,64 @@
   "allow_free_cam": true,
   "has_decoy": true,
   "container_type": "medium",
+  "no_first_person_seats": [1, 2, 3, 4],
   "seats": [
     {"index": 0, "x": 0.306, "y": 0.3825, "z": 0.476, "driver": true, "enclosed": true, "hide_passenger": true, "ban_hand": true, "min_pitch": -15.0, "max_pitch": 32.5, "sensitivity_x": 0.55, "sensitivity_y": 0.73, "sensitivity_z": 1.0, "zoom_camera": {"x": -0.102, "y": 0.578, "z": -0.3825, "use_fixed_camera_pos": true, "transform": "barrel"}},
     {"index": 1, "x": 0.55, "y": 0.8, "z": -0.55, "driver": false, "enclosed": true, "hide_passenger": true, "ban_hand": false, "zoom_camera": {"use_simulated_third_person": true, "simulated_third_person_distance": 6.0, "simulated_third_person_height": 1.0}},
     {"index": 2, "x": -0.55, "y": 0.8, "z": -0.55, "driver": false, "enclosed": true, "hide_passenger": true, "ban_hand": false, "zoom_camera": {"use_simulated_third_person": true, "simulated_third_person_distance": 6.0, "simulated_third_person_height": 1.0}},
     {"index": 3, "x": 0.55, "y": 0.8, "z": -1.55, "driver": false, "enclosed": true, "hide_passenger": true, "ban_hand": false, "zoom_camera": {"use_simulated_third_person": true, "simulated_third_person_distance": 6.0, "simulated_third_person_height": 1.0}},
-    {"index": 4, "x": -0.55, "y": 0.8, "z": -1.55, "driver": false, "enclosed": true, "hide_passenger": true, "ban_hand": false, "zoom_camera": {"use_simulated_third_person": true, "simulated_third_person_distance": 6.0, "simulated_third_person_height": 1.0}}
+    {"index": 4, "x": -0.55, "y": 0.8, "z": -1.55, "driver": false, "enclosed": true, "hide_passenger": true, "ban_hand": false, "zoom_camera": {"use_simulated_third_person": true, "simulated_third_person_distance": 6.0, "simulated_third_person_height": 1.0}},
+    {"index": 5, "x": 0.32, "y": 1.95, "z": 0.0, "driver": false, "enclosed": false, "hide_passenger": false, "ban_hand": false, "min_pitch": -60.0, "max_pitch": 60.0, "min_yaw": -180.0, "max_yaw": 180.0, "sensitivity_x": 0.75, "sensitivity_y": 0.8, "sensitivity_z": 1.0}
   ],
 
-  "engine": {"type": "wheel", "acceleration": 0.03, "max_forward_speed": 1.0, "max_reverse_speed": 0.6378, "friction": 0.8, "steering_speed": 0.14, "energy_cost_rate": 64},
+  "turret_riders": [5],
+  "amphibious": {"waterline": 1.45, "max_speed": 0.069, "no_fire_slots": []},
+  "engine": {"type": "wheel", "acceleration": 0.024, "max_forward_speed": 1.8, "max_reverse_speed": 0.6378, "friction": 0.8, "steering_speed": 0.29, "energy_cost_rate": 64},
   "third_person_camera": {"x": 0.0, "y": 3.0, "z": -10.0},
   "dismount": {"x": 1.75, "y": 0.1, "z": -0.6},
   "collision_level": "heavy",
   "obb": [
-    {"part": "body", "x": 0.0, "y": 1.4549, "z": -0.2255, "half_width": 1.2858, "half_height": 0.6899, "half_depth": 2.8625},
-    {"part": "wheel_left", "x": 0.977, "y": 0.6375, "z": 0.0096, "half_width": 0.2052, "half_height": 0.6375, "half_depth": 1.9763},
-    {"part": "wheel_right", "x": -0.977, "y": 0.6375, "z": 0.0096, "half_width": 0.2052, "half_height": 0.6375, "half_depth": 1.9763},
+    {"part": "body", "x": 0.3392, "y": 1.623, "z": -2.838, "half_width": 0.625, "half_height": 0.5233, "half_depth": 0.25},
+    {"part": "body", "x": -0.0358, "y": 1.4328, "z": -0.088, "half_width": 1.25, "half_height": 0.375, "half_depth": 2.75},
+    {"part": "body", "x": 0.02, "y": 1.8078, "z": 0.787, "half_width": 1.3058, "half_height": 0.25, "half_depth": 0.375},
+    {"part": "body", "x": -0.0358, "y": 1.4328, "z": -0.463, "half_width": 1.0, "half_height": 0.625, "half_depth": 2.375},
+    {"part": "body", "x": -0.0358, "y": 2.3078, "z": 1.3579, "half_width": 0.5, "half_height": 0.25, "half_depth": 0.4459},
+    {"part": "body", "x": -0.0358, "y": 1.1828, "z": -0.088, "half_width": 1.25, "half_height": 0.625, "half_depth": 2.5},
+    {"part": "body", "x": 0.0892, "y": 1.4328, "z": -0.088, "half_width": 1.125, "half_height": 0.875, "half_depth": 1.75},
+    {"part": "body", "x": 0.0, "y": 1.9328, "z": -0.088, "half_width": 1.1926, "half_height": 0.125, "half_depth": 2.25},
+    {"part": "wheel_left", "x": 0.8903, "y": 0.7998, "z": 0.0329, "half_width": 0.284, "half_height": 0.2, "half_depth": 0.6998},
+    {"part": "wheel_left", "x": 1.0822, "y": 1.0998, "z": 0.6791, "half_width": 0.1, "half_height": 0.2, "half_depth": 1.3461},
+    {"part": "wheel_left", "x": 0.8823, "y": 0.6499, "z": -1.2169, "half_width": 0.2999, "half_height": 0.6499, "half_depth": 0.7498},
+    {"part": "wheel_left", "x": 0.8823, "y": 0.6499, "z": 1.2793, "half_width": 0.2999, "half_height": 0.6499, "half_depth": 0.7465},
+    {"part": "wheel_right", "x": -1.0705, "y": 1.1497, "z": 0.0329, "half_width": 0.0883, "half_height": 0.15, "half_depth": 0.5999},
+    {"part": "wheel_right", "x": -0.9323, "y": 0.6499, "z": -1.2169, "half_width": 0.2499, "half_height": 0.6499, "half_depth": 0.7498},
+    {"part": "wheel_right", "x": -0.9323, "y": 0.6499, "z": 1.2793, "half_width": 0.2499, "half_height": 0.6499, "half_depth": 0.7465},
+    {"part": "wheel_right", "x": -0.8823, "y": 0.6998, "z": -0.0171, "half_width": 0.2999, "half_height": 0.2999, "half_depth": 1.4497},
     {"part": "main_engine", "x": 0.0, "y": 1.3924, "z": -2.2292, "half_width": 0.9001, "half_height": 0.6274, "half_depth": 0.8588},
-    {"part": "turret", "x": 0.0, "y": 2.6712, "z": -0.3141, "half_width": 0.7728, "half_height": 0.7554, "half_depth": 1.2855, "follows": "turret"},
-    {"part": "turret", "x": 0.0199, "y": 2.4229, "z": 2.597, "half_width": 0.0733, "half_height": 0.0733, "half_depth": 0.7331, "follows": "barrel"}
+    {"part": "turret", "x": 0.0197, "y": 2.0408, "z": -0.2941, "half_width": 0.7925, "half_height": 0.125, "half_depth": 1.3055, "follows": "turret"},
+    {"part": "turret", "x": -0.0564, "y": 3.0662, "z": -0.9084, "half_width": 0.2836, "half_height": 0.4004, "half_depth": 0.2923, "follows": "turret"},
+    {"part": "turret", "x": -0.0228, "y": 2.7908, "z": 0.0998, "half_width": 0.5, "half_height": 0.125, "half_depth": 1.1994, "follows": "turret"},
+    {"part": "turret", "x": 0.02, "y": 2.4158, "z": -0.1145, "half_width": 0.7928, "half_height": 0.25, "half_depth": 1.4851, "follows": "turret"},
+    {"part": "turret", "x": 0.0277, "y": 2.406, "z": 3.1875, "half_width": 0.0938, "half_height": 0.0625, "half_depth": 0.1826, "follows": "barrel"},
+    {"part": "turret", "x": 0.0223, "y": 2.4372, "z": 2.4736, "half_width": 0.0883, "half_height": 0.0312, "half_depth": 0.5313, "follows": "barrel"},
+    {"part": "turret", "x": 0.0277, "y": 2.4372, "z": 2.625, "half_width": 0.0312, "half_height": 0.0938, "half_depth": 0.7451, "follows": "barrel"},
+    {"part": "turret", "x": 0.0277, "y": 2.406, "z": 1.7236, "half_width": 0.1562, "half_height": 0.125, "half_depth": 0.2188, "follows": "barrel"}
   ],
   "wheels": {"roll": [{"bones": ["wheel_front_left", "wheel_front_right", "wheel_rear_left", "wheel_rear_right"], "radius": 10.2}], "steer": ["wheel_front_left", "wheel_front_right"], "wheelbase": 2.6775},
   "weapons": [
     {"weapon": "jeg:vehicle_20mm_cannon", "ammo": "jeg:small_shell", "energy_cost": 2, "guided": false, "seat": 0, "muzzle": {"x": 0.0199, "y": 2.4229, "z": 3.3301}},
     {"weapon": "jeg:vehicle_coax_machine_gun", "ammo": "jeg:rifle_ammo", "energy_cost": 1, "guided": false, "seat": 0, "muzzle": {"x": 0.2563, "y": 2.317, "z": 1.2894}}
   ],
-  "turret": {"seat": 0, "render_pivot_y": 1.87, "origin_x": 0.0, "origin_y": 2.0403, "origin_z": 0.0, "barrel_x": 0.0199, "barrel_y": 0.287, "barrel_z": 0.7013, "guided_uses_turret": true},
+  "turret": {"seat": 0, "render_pivot_y": 1.87, "origin_x": 0.0, "origin_y": 2.0403, "origin_z": 0.0, "barrel_x": 0.0199, "barrel_y": 0.287, "barrel_z": 0.7013, "guided_uses_turret": true,
+             "traverse_rate": 1.5, "elevation_rate": 1.0},
   "destroy": {"explodes": true, "explosion_power": 2.6},
   "seek": {"range": 72.0, "angle": 10.0, "warns_target": true},
   "armor": {
-    "fallback": {"rating": 7.0, "undermatch_multiplier": 0.16, "overmatch_multiplier": 0.95, "passenger_leak_multiplier": 0.14, "part_damage_multiplier": 0.9},
+    "fallback": {"rating": 5.1, "undermatch_multiplier": 0.16, "overmatch_multiplier": 0.95, "passenger_leak_multiplier": 0.14, "part_damage_multiplier": 0.9},
     "parts": {
       "wheel_left": {"rating": 4.8, "undermatch_multiplier": 0.28, "overmatch_multiplier": 1.05, "passenger_leak_multiplier": 0.0, "part_damage_multiplier": 1.6},
       "wheel_right": {"rating": 4.8, "undermatch_multiplier": 0.28, "overmatch_multiplier": 1.05, "passenger_leak_multiplier": 0.0, "part_damage_multiplier": 1.6},
-      "main_engine": {"rating": 7.0, "undermatch_multiplier": 0.22, "overmatch_multiplier": 1.0, "passenger_leak_multiplier": 0.08, "part_damage_multiplier": 1.45}
+      "main_engine": {"rating": 5.1, "undermatch_multiplier": 0.22, "overmatch_multiplier": 1.0, "passenger_leak_multiplier": 0.08, "part_damage_multiplier": 1.45}
     }
   }
 }

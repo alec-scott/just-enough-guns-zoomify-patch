@@ -37,7 +37,10 @@ public final class VehicleAssemblyRecipeManager {
             Reference.id("type63"),
             Reference.id("howitzer"),
             Reference.id("plz05"),
-            Reference.id("leopard2")
+            Reference.id("yx100"),
+            Reference.id("hpj11"),
+            Reference.id("sentry"),
+            Reference.id("tom6")
     );
     private static volatile Map<Identifier, VehicleAssemblyRecipe> recipes = defaultsOnly();
     private static volatile Map<Identifier, String> syncedJson = Map.of();
@@ -86,7 +89,6 @@ public final class VehicleAssemblyRecipeManager {
     }
 
     private static Map<Identifier, VehicleAssemblyRecipe> defaultsOnly() {
-        Identifier lightCombatRecipe = Reference.id("light_combat_vehicle");
         Identifier testHelicopterRecipe = Reference.id("test_helicopter");
         Identifier testBoatRecipe = Reference.id("test_boat");
         Identifier testArtilleryRecipe = Reference.id("test_artillery");
@@ -98,15 +100,6 @@ public final class VehicleAssemblyRecipeManager {
                         List.of(
                                 new VehicleAssemblyRecipe.Ingredient(Identifier.withDefaultNamespace("iron_ingot"), 16),
                                 new VehicleAssemblyRecipe.Ingredient(Identifier.withDefaultNamespace("redstone"), 4)
-                        )
-                ),
-                lightCombatRecipe, new VehicleAssemblyRecipe(
-                        lightCombatRecipe,
-                        Reference.id("light_combat_vehicle"),
-                        List.of(
-                                new VehicleAssemblyRecipe.Ingredient(Identifier.withDefaultNamespace("iron_ingot"), 32),
-                                new VehicleAssemblyRecipe.Ingredient(Identifier.withDefaultNamespace("copper_ingot"), 12),
-                                new VehicleAssemblyRecipe.Ingredient(Identifier.withDefaultNamespace("redstone"), 8)
                         )
                 ),
                 testHelicopterRecipe, new VehicleAssemblyRecipe(

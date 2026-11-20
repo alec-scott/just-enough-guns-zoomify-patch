@@ -22,7 +22,7 @@ import ttv.migami.jeg.vehicle.entity.base.VehicleEntity;
 
 /**
  * Fleet plan Phase 0.3: the ground vehicles' guns reach as the aircraft guns do and are heard the same way. A BMP-2 fires
- * its 30 mm and coax, a LAV-150 its 20 mm and a Leopard's commander the weapon station, level along +Z, with the render
+ * its 30 mm and coax, a LAV-150 its 20 mm and a YX-100's commander the weapon station, level along +Z, with the render
  * distance at 6 and the simulation at 5. Fails unless each round is on the long-range path, flies about its full range
  * (1,200 blocks) out past everything loaded and is then gone, and the shot is heard through its report.
  */
@@ -58,7 +58,7 @@ public class VehicleGunReachClientGameTest implements FabricClientGameTest {
             this.fire(context, server, ModEntities.BMP2.get(), "autocannon_shell", 0, 0, "vehicle_30mm_cannon", failures);
             this.fire(context, server, ModEntities.BMP2.get(), "rifle_ammo", 1, 0, "vehicle_coax_machine_gun", failures);
             this.fire(context, server, ModEntities.LAV150.get(), "small_shell", 0, 0, "vehicle_20mm_cannon", failures);
-            this.fire(context, server, ModEntities.LEOPARD2.get(), "rifle_ammo", 0, 1, "vehicle_leopard2_rws", failures);
+            this.fire(context, server, ModEntities.YX100.get(), "rifle_ammo", 0, 1, "vehicle_yx100_rws", failures);
         } finally {
             context.runOnClient(mc -> {
                 mc.options.renderDistance().set(previous[0]);

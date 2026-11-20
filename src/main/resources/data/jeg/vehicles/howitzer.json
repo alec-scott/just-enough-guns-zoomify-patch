@@ -1,6 +1,7 @@
 {
   "entity_type": "jeg:howitzer",
   "vehicle_type": "artillery",
+  "mass": 2.1,
   "max_health": 140.0,
   "auto_repair_per_tick": 0.0,
   "auto_repair_cooldown_ticks": 200,
@@ -21,13 +22,19 @@
              "barrel_x": 0.0, "barrel_y": 0.375, "barrel_z": -0.0625, "guided_uses_turret": false,
              "traverse_rate": 0.5, "elevation_rate": 0.5},
   "obb": [
-    {"part": "wheel_left", "x": 0.9813, "y": 0.5006, "z": -0.0000, "half_width": 0.1688, "half_height": 0.5006, "half_depth": 0.4975},
-    {"part": "wheel_right", "x": -0.9812, "y": 0.5006, "z": -0.0000, "half_width": 0.1687, "half_height": 0.5006, "half_depth": 0.4975},
-    {"part": "body", "x": 0.0000, "y": 0.5825, "z": -0.1125, "half_width": 0.8187, "half_height": 0.1700, "half_depth": 0.4250},
-    {"part": "body", "x": 0.0000, "y": 1.1250, "z": 0.4344, "half_width": 1.0625, "half_height": 0.5625, "half_depth": 0.1844, "follows": "turret"},
-    {"part": "body", "x": 0.0500, "y": 1.1313, "z": 0.0757, "half_width": 0.5813, "half_height": 0.3813, "half_depth": 0.5274, "follows": "turret"},
-    {"part": "turret", "x": 0.0000, "y": 1.0906, "z": 0.7328, "half_width": 0.3000, "half_height": 0.2531, "half_depth": 1.3953, "follows": "barrel"},
-    {"part": "body", "x": 0.0000, "y": 0.3701, "z": -2.2573, "half_width": 0.4315, "half_height": 0.3218, "half_depth": 1.9336}
+    {"part": "wheel_left", "x": 0.9813, "y": 0.5006, "z": 0.0, "half_width": 0.1688, "half_height": 0.5006, "half_depth": 0.4975},
+    {"part": "wheel_right", "x": -0.9812, "y": 0.5006, "z": 0.0, "half_width": 0.1687, "half_height": 0.5006, "half_depth": 0.4975},
+    {"part": "body", "x": 0.0513, "y": 0.5062, "z": 0.0224, "half_width": 0.8075, "half_height": 0.0938, "half_depth": 0.125},
+    {"part": "body", "x": -0.7562, "y": 0.6, "z": -0.1013, "half_width": 0.0625, "half_height": 0.1875, "half_depth": 0.4362},
+    {"part": "body", "x": 0.8013, "y": 0.6, "z": -0.1013, "half_width": 0.0575, "half_height": 0.1875, "half_depth": 0.4362},
+    {"part": "body", "x": -0.0062, "y": 0.6, "z": -0.1026, "half_width": 0.625, "half_height": 0.1875, "half_depth": 0.4375},
+    {"part": "body", "x": 0.0, "y": 1.125, "z": 0.4344, "half_width": 1.0625, "half_height": 0.5625, "half_depth": 0.1844, "follows": "turret"},
+    {"part": "body", "x": 0.05, "y": 1.1313, "z": 0.0757, "half_width": 0.5813, "half_height": 0.3813, "half_depth": 0.5274, "follows": "turret"},
+    {"part": "turret", "x": 0.0, "y": 1.0906, "z": 0.7328, "half_width": 0.3, "half_height": 0.2531, "half_depth": 1.3953, "follows": "barrel"},
+    {"part": "body", "x": 0.0043, "y": 0.1943, "z": -3.798, "half_width": 0.5355, "half_height": 0.1943, "half_depth": 0.1339},
+    {"part": "body", "x": 0.0, "y": 0.578, "z": -0.451, "half_width": 0.4775, "half_height": 0.1539, "half_depth": 0.1339},
+    {"part": "body", "x": 0.0043, "y": 0.2233, "z": -3.5502, "half_width": 0.5355, "half_height": 0.2008, "half_depth": 0.6894},
+    {"part": "body", "x": 0.0, "y": 0.4241, "z": -1.7228, "half_width": 0.4775, "half_height": 0.2678, "half_depth": 1.2719}
   ],
   "obb_deployed": [
     {"part": "wheel_left", "x": 0.9813, "y": 0.5006, "z": -0.0000, "half_width": 0.1688, "half_height": 0.5006, "half_depth": 0.4975},

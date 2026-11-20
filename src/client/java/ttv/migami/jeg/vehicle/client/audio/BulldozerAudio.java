@@ -235,7 +235,8 @@ public final class BulldozerAudio {
                 case "tracks" -> level(inside, .32F, TRACK_LOUDNESS, distance) * s.track() * near;
                 case "blade" -> s.working() ? level(inside, .55F, BLADE_LOUDNESS, distance) * s.load() * near : 0;
                 case "hydraulic" -> s.hydraulic() ? level(inside, .16F, HYDRAULIC_LOUDNESS, distance) * near : 0;
-                case "reverse" -> s.reversing() ? level(inside, .1F, ALARM_LOUDNESS, distance) : 0;
+                // A real back-up beeper, audible from the seat too (the user never heard the old one: review, 2026-11-18).
+                case "reverse" -> s.reversing() ? level(inside, .32F, ALARM_LOUDNESS, distance) : 0;
                 case "horn" -> s.horn() ? level(inside, .55F, HORN_LOUDNESS, distance) : 0;
                 default -> 0;
             };

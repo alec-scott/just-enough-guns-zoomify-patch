@@ -46,6 +46,10 @@
       "required": false
     },
     {
+      "id": "jeg:sentry",
+      "required": false
+    },
+    {
       "id": "jeg:mortar",
       "required": false
     },
@@ -102,7 +106,7 @@
       "required": false
     },
     {
-      "id": "jeg:leopard2",
+      "id": "jeg:yx100",
       "required": false
     }
   ]

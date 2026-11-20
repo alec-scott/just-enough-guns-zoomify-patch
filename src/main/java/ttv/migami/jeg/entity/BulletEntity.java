@@ -94,6 +94,8 @@ public class BulletEntity extends Projectile {
     private static final Identifier PRIMITIVE_BOW_ID = Reference.id("primitive_bow");
     private static final Identifier VEHICLE_20MM_CANNON_ID = Reference.id("vehicle_20mm_cannon");
     private static final Identifier VEHICLE_30MM_CANNON_ID = Reference.id("vehicle_30mm_cannon");
+    /** The BMP-2's HE belt (dual feed): a burst against infantry and hordes, little against armour. */
+    private static final Identifier VEHICLE_30MM_HE_ID = Reference.id("vehicle_30mm_cannon_he");
     private static final Identifier VEHICLE_GAU8_CANNON_ID = Reference.id("vehicle_gau8_cannon");
     private static final Identifier VEHICLE_70MM_ROCKET_ID = Reference.id("vehicle_70mm_rocket");
     private static final Identifier VEHICLE_80MM_ROCKET_ID = Reference.id("vehicle_80mm_rocket");
@@ -132,6 +134,9 @@ public class BulletEntity extends Projectile {
     private static final float VEHICLE_30MM_EXPLOSION_DAMAGE = 4.0F;
     private static final double VEHICLE_20MM_EXPLOSION_RADIUS = 4.5D;
     private static final double VEHICLE_30MM_EXPLOSION_RADIUS = 2.0D;
+    private static final float VEHICLE_30MM_HE_EXPLOSION_POWER = 1.3F;
+    private static final float VEHICLE_30MM_HE_EXPLOSION_DAMAGE = 16.0F;
+    private static final double VEHICLE_30MM_HE_EXPLOSION_RADIUS = 4.5D;
     // The GAU-8's high-explosive incendiary rounds: each one a small burst, so a strafing run carpets an area.
     private static final float VEHICLE_GAU8_EXPLOSION_POWER = 0.9F;
     private static final float VEHICLE_GAU8_EXPLOSION_DAMAGE = 8.0F;
@@ -192,6 +197,70 @@ public class BulletEntity extends Projectile {
         // DO NOT use noPhysics for flare gun - it prevents proper ticking
         this.refreshDimensions();
         this.setOldPosAndRot();
+    }
+
+    /**
+     * A round fired by a vehicle with nobody at the gun (an air defence on automatic): owned by the vehicle itself, and
+     * placed at the muzzle by {@link #initialisePosition} afterwards.
+     */
+    public BulletEntity(Level level, net.minecraft.world.entity.Entity owner, GunStats stats, Vec3 velocity, float damage) {
+        this(ModEntities.BULLET.get(), level);
+        this.setOwner(owner);
+        this.setPos(owner.getX(), owner.getY() + 1.0D, owner.getZ());
+        this.entityData.set(DATA_GUN, stats.id().toString());
+        this.entityData.set(DATA_DAMAGE, damage);
+        this.entityData.set(DATA_LIFE, projectileLifeFor(stats));
+        this.entityData.set(DATA_FALLOFF_LIFE, Math.max(1, stats.projectileLife()));
+        this.entityData.set(DATA_TRAIL_COLOR, stats.trailColor());
+        this.entityData.set(DATA_TRAIL_LENGTH, stats.clampedTrailLength());
+        this.entityData.set(DATA_SIZE, stats.clampedProjectileSize());
+        this.entityData.set(DATA_EXPLOSIVE_AMMO, false);
+        this.setVelocityAndRotation(velocity);
+        this.setNoGravity(false);
+        this.refreshDimensions();
+        this.setOldPosAndRot();
+    }
+
+    /** Air defence rounds burst on a threat passing within this many blocks of their path (0: no fuze). */
+    private double proximityFuze;
+
+    /**
+     * Gives the round a proximity fuze (the HPJ-11's 30 mm): it bursts beside a missile, an enemy aircraft or a phantom
+     * that passes within {@code radius} blocks of its path (AirDefenceTargets), destroying a missile in flight.
+     */
+    public void setProximityFuze(double radius) {
+        this.proximityFuze = radius;
+    }
+
+    /** Server: the fuze looks along this tick's path; true when it burst (the round is gone). */
+    private boolean tickProximityFuze(ServerLevel level, Vec3 from, Vec3 to) {
+        net.minecraft.world.phys.AABB box = new net.minecraft.world.phys.AABB(from, to).inflate(this.proximityFuze + 2.0D);
+        Vec3 path = to.subtract(from);
+        double length2 = Math.max(1.0E-6D, path.lengthSqr());
+        net.minecraft.world.entity.Entity hit = null;
+        double hitT = Double.MAX_VALUE;
+        for (net.minecraft.world.entity.Entity entity : level.getEntities(this, box, ttv.migami.jeg.vehicle.util.AirDefenceTargets::isThreat)) {
+            Vec3 centre = entity.getBoundingBox().getCenter();
+            double t = Mth.clamp(centre.subtract(from).dot(path) / length2, 0.0D, 1.0D);
+            double reach = this.proximityFuze + Math.max(entity.getBbWidth(), entity.getBbHeight()) * 0.5D;
+            if (from.add(path.scale(t)).distanceToSqr(centre) <= reach * reach && t < hitT) {
+                hit = entity;
+                hitT = t;
+            }
+        }
+        if (hit == null) {
+            return false;
+        }
+        Vec3 burst = from.add(path.scale(hitT));
+        level.sendParticles(net.minecraft.core.particles.ParticleTypes.EXPLOSION, burst.x, burst.y, burst.z, 1, 0.0D, 0.0D, 0.0D, 0.0D);
+        if (hit instanceof ttv.migami.jeg.vehicle.projectile.VehicleMissileEntity missile) {
+            missile.shootDown();
+        } else {
+            // The burst's fragments count as the round's own hit (its armour piercing against the target's armour).
+            hit.hurtServer(level, this.damageSources().thrown(this, this.getOwner()), this.entityData.get(DATA_DAMAGE) * 1.5F);
+        }
+        this.discard();
+        return true;
     }
 
     /** Fired by a vehicle's own gun; clients draw it as a heavier tracer leaving the vehicle's muzzle. */
@@ -323,6 +392,9 @@ public class BulletEntity extends Projectile {
         Vec3 currentPos = this.position();
         Vec3 nextPos = currentPos.add(motion);
         boolean legacyBulletClass = shouldSendBulletTrail(gunStats);
+        if (this.proximityFuze > 0.0D && this.level() instanceof ServerLevel fuzeLevel && this.tickProximityFuze(fuzeLevel, currentPos, nextPos)) {
+            return;
+        }
         if (this.helicopterGunRound && this.level() instanceof ServerLevel serverLevel && this.getOwner() != null) {
             VehicleGunBlockDamage.alongPath(serverLevel, currentPos, nextPos, this.getOwner(), this);
         }
@@ -1077,8 +1149,9 @@ public class BulletEntity extends Projectile {
                             ExplosionInteraction.TNT, ParticleTypes.SMOKE, ParticleTypes.SMOKE,
                             net.minecraft.util.random.WeightedList.of(), net.minecraft.sounds.SoundEvents.GENERIC_EXPLODE);
                 } else {
-                    spawnCustomExplosionEffects((ServerLevel) this.level(), this.position(), id);
-                    this.level().explode(this, null, blocks, this.getX(), this.getY(), this.getZ(), explosionPower, false, ExplosionInteraction.TNT);
+                    // The realistic blast, not the classic JEG burst (the user's review, 2026-11-18).
+                    ttv.migami.jeg.vehicle.projectile.RealisticBlast.explode((ServerLevel) this.level(), this, blocks, this.position(),
+                            explosionPower, false, ExplosionInteraction.TNT);
                 }
                 ttv.migami.jeg.vehicle.projectile.DistantTerrainRefresh.afterBlast();
                 if (id.equals(ROCKET_LAUNCHER_ID)) {
@@ -1109,20 +1182,35 @@ public class BulletEntity extends Projectile {
             return true;
         }
 
-        if (id.equals(VEHICLE_20MM_CANNON_ID) || id.equals(VEHICLE_30MM_CANNON_ID) || id.equals(VEHICLE_GAU8_CANNON_ID)) {
+        if (id.equals(VEHICLE_20MM_CANNON_ID) || id.equals(VEHICLE_30MM_CANNON_ID) || id.equals(VEHICLE_30MM_HE_ID) || id.equals(VEHICLE_GAU8_CANNON_ID)) {
             if (!this.level().isClientSide()) {
                 Entity owner = this.getOwner();
                 Vec3 pos = result.getLocation();
                 if (id.equals(VEHICLE_GAU8_CANNON_ID)) {
                     this.spawnGau8ImpactEffects((ServerLevel) this.level(), pos, result);
-                } else {
-                    spawnVehicleCannonExplosionEffects((ServerLevel) this.level(), pos);
                 }
                 ExplosionInteraction interaction = Config.bulletBlockDestructionEnabled()
                         ? ExplosionInteraction.TNT
                         : ExplosionInteraction.NONE;
-                this.level().explode(this, pos.x, pos.y, pos.z, vehicleCannonExplosionPower(id), interaction);
-                ttv.migami.jeg.vehicle.projectile.DistantTerrainRefresh.afterBlast();
+                if (id.equals(VEHICLE_GAU8_CANNON_ID)) {
+                    this.level().explode(this, pos.x, pos.y, pos.z, vehicleCannonExplosionPower(id), interaction);
+                    ttv.migami.jeg.vehicle.projectile.DistantTerrainRefresh.afterBlast();
+                } else if (id.equals(VEHICLE_30MM_CANNON_ID)) {
+                    // The 2A42's AP feed: a solid penetrator, no burst (2026-11-19: with both feeds bursting alike the
+                    // two read as one weapon). It strikes sparks and spalls; its damage is the direct hit's.
+                    ServerLevel serverLevel = (ServerLevel) this.level();
+                    serverLevel.sendParticles(ParticleTypes.CRIT, pos.x, pos.y, pos.z, 10, 0.1D, 0.1D, 0.1D, 0.35D);
+                    serverLevel.sendParticles(ParticleTypes.SMALL_FLAME, pos.x, pos.y, pos.z, 3, 0.05D, 0.05D, 0.05D, 0.08D);
+                    if (result instanceof BlockHitResult blockHit) {
+                        serverLevel.sendParticles(new net.minecraft.core.particles.BlockParticleOption(ParticleTypes.BLOCK,
+                                        serverLevel.getBlockState(blockHit.getBlockPos())),
+                                pos.x, pos.y, pos.z, 12, 0.15D, 0.15D, 0.15D, 0.2D);
+                    }
+                } else {
+                    // An autocannon's HE: a small realistic burst, not the classic JEG one (review, 2026-11-18).
+                    ttv.migami.jeg.vehicle.projectile.RealisticBlast.explode((ServerLevel) this.level(), this, null, pos,
+                            vehicleCannonExplosionPower(id), false, interaction);
+                }
 
                 if (result instanceof EntityHitResult entityHit) {
                     Entity hitEntity = entityHit.getEntity();
@@ -1156,6 +1244,9 @@ public class BulletEntity extends Projectile {
         if (id.equals(VEHICLE_GAU8_CANNON_ID)) {
             return VEHICLE_GAU8_EXPLOSION_POWER;
         }
+        if (id.equals(VEHICLE_30MM_HE_ID)) {
+            return VEHICLE_30MM_HE_EXPLOSION_POWER;
+        }
         return id.equals(VEHICLE_30MM_CANNON_ID) ? VEHICLE_30MM_EXPLOSION_POWER : VEHICLE_20MM_EXPLOSION_POWER;
     }
 
@@ -1183,12 +1274,18 @@ public class BulletEntity extends Projectile {
         if (id.equals(VEHICLE_GAU8_CANNON_ID)) {
             return VEHICLE_GAU8_EXPLOSION_DAMAGE;
         }
+        if (id.equals(VEHICLE_30MM_HE_ID)) {
+            return VEHICLE_30MM_HE_EXPLOSION_DAMAGE;
+        }
         return id.equals(VEHICLE_30MM_CANNON_ID) ? VEHICLE_30MM_EXPLOSION_DAMAGE : VEHICLE_20MM_EXPLOSION_DAMAGE;
     }
 
     private static double vehicleCannonBlastRadius(Identifier id) {
         if (id.equals(VEHICLE_GAU8_CANNON_ID)) {
             return VEHICLE_GAU8_EXPLOSION_RADIUS;
+        }
+        if (id.equals(VEHICLE_30MM_HE_ID)) {
+            return VEHICLE_30MM_HE_EXPLOSION_RADIUS;
         }
         return id.equals(VEHICLE_30MM_CANNON_ID) ? VEHICLE_30MM_EXPLOSION_RADIUS : VEHICLE_20MM_EXPLOSION_RADIUS;
     }

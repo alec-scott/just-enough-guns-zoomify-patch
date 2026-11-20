@@ -56,11 +56,21 @@ Second pass (after the slew limit):
 | Proximity: HE passing 2.5 blocks from a phantom bursts; at 6 flies on; AP never | pass |
 | Slew: elevation after 20 ticks, train after 20 ticks | 23.75° (25°/s), 38° (40°/s); both reach the view |
 | Cluster shell near the ground | 18 bomblets; a target among them took 147 |
-| Grapeshot | 36 pellets at the muzzle; a target 30 blocks out took 7 pellets (191) |
+| Grapeshot | 36 pellets at the muzzle; a target 30 blocks out took 7 pellets (191). Replaced by the incendiary (2026-11-19): `IncendiaryShell` |
 | HE bursting 9 blocks from its own gun | dud: hull 350 -> 350 |
 | Cluster over a 3x3 grid of targets 3 blocks apart | 18 bomblets; 556 in all |
 
 `MortarClientGameTest` was rerun after the shared refactor and passes (765.9 blocks at 45°, blast 94/48/0).
+
+## Finalisation (2026-11-18, design/READINESS.md)
+
+- `Mk42ClientGameTest` passes with `-PwithPack` after the fleet-wide changes of 2026-11-17/18 (the new HUD, `"mass"` 63 t as
+  tow load, real-sound and wreck work on other guns).
+- Played (mcpfabric, pack client, midnight): from the gunner's seat the panel (shell and fuze, elevation, bearing, range) and the elevation scale read clearly in the dark.
+- Wrecks as every gun does (cooks off, burns, breaks apart; `GroundWreckClientGameTest` runs the Mk42 for the shared
+  artillery path). The handwheels are heard while it is laid (`VehicleFeel`).
+- Its sounds are Superb Warfare's recordings, used with the SBW team's permission; they are real gun recordings and
+  need only listening.
 
 ## Not covered yet
 
@@ -69,4 +79,3 @@ Second pass (after the slew limit):
 - Far observer at 1,100 blocks (the report rides `GunReportPayload` to 1,024 blocks like the mortar's).
 - Firing at a real enemy AH-6 or BMP-2 (the fuze and damage are tested on mobs).
 - The dedicated server's own mods, multiplayer, and claim mods with the shell's block damage.
-- No sandbox world yet.

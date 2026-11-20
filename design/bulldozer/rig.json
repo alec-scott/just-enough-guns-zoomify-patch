@@ -109,7 +109,7 @@
     [
       -31.6,
       -0.4,
-      -49.6
+      -55.3724
     ],
     [
       31.599999999999998,
@@ -260,6 +260,6 @@
     }
   ],
   "revision": "05 - seated mirror, continuous centred operator audio",
-  "bones": 125,
-  "cuboids": 1037
+  "bones": 126,
+  "cuboids": 1086
 }

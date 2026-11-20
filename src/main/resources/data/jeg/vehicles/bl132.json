@@ -1,6 +1,7 @@
 {
   "entity_type": "jeg:bl132",
   "vehicle_type": "artillery",
+  "mass": 40.0,
   "max_health": 400.0,
   "auto_repair_per_tick": 0.0,
   "auto_repair_cooldown_ticks": 200,
@@ -22,9 +23,23 @@
              "traverse_rate": 1.25, "elevation_rate": 2.0},
   "obb": [
     {"part": "body", "x": 0.0, "y": 0.1875, "z": 0.0, "half_width": 2.8201, "half_height": 0.1875, "half_depth": 2.8201},
-    {"part": "body", "x": 0.0, "y": 2.4477, "z": -0.4401, "half_width": 3.6266, "half_height": 2.0752, "half_depth": 4.1978, "follows": "turret"},
-    {"part": "body", "x": -0.0001, "y": 4.6646, "z": 2.4938, "half_width": 0.8662, "half_height": 0.1417, "half_depth": 0.8662, "follows": "turret"},
-    {"part": "turret", "x": 0.0, "y": 2.6344, "z": 5.4507, "half_width": 1.5, "half_height": 0.8063, "half_depth": 1.693, "follows": "barrel"}
+    {"part": "body", "x": 3.77, "y": 2.1481, "z": -1.125, "half_width": 0.0388, "half_height": 1.0256, "half_depth": 0.3237, "follows": "turret"},
+    {"part": "body", "x": -0.0, "y": 4.4975, "z": -0.8581, "half_width": 2.2269, "half_height": 0.125, "half_depth": 1.5299, "follows": "turret"},
+    {"part": "body", "x": 0.0, "y": 2.6225, "z": 3.4549, "half_width": 1.459, "half_height": 0.75, "half_depth": 0.3428, "follows": "turret"},
+    {"part": "body", "x": 0.009, "y": 1.4975, "z": 3.3621, "half_width": 3.5277, "half_height": 1.125, "half_depth": 0.25, "follows": "turret"},
+    {"part": "body", "x": 0.1063, "y": 2.1225, "z": -0.6379, "half_width": 2.875, "half_height": 1.75, "half_depth": 4.0, "follows": "turret"},
+    {"part": "body", "x": -0.0187, "y": 2.3725, "z": -1.5129, "half_width": 3.0, "half_height": 2.0, "half_depth": 2.625, "follows": "turret"},
+    {"part": "body", "x": -0.0187, "y": 2.2475, "z": -0.2629, "half_width": 3.75, "half_height": 1.875, "half_depth": 3.375, "follows": "turret"},
+    {"part": "body", "x": -0.0914, "y": 3.9675, "z": 2.2354, "half_width": 3.5727, "half_height": 0.595, "half_depth": 1.1233, "follows": "turret"},
+    {"part": "body", "x": -0.0176, "y": 4.8041, "z": 2.5026, "half_width": 0.3388, "half_height": 0.0312, "half_depth": 0.3125, "follows": "turret"},
+    {"part": "body", "x": 0.0087, "y": 4.6166, "z": 1.9763, "half_width": 0.3125, "half_height": 0.0938, "half_depth": 0.0888, "follows": "turret"},
+    {"part": "body", "x": -0.0137, "y": 4.6791, "z": 2.2213, "half_width": 0.5849, "half_height": 0.1562, "half_depth": 0.1562, "follows": "turret"},
+    {"part": "body", "x": -0.0137, "y": 4.6479, "z": 2.5338, "half_width": 0.5849, "half_height": 0.125, "half_depth": 0.5312, "follows": "turret"},
+    {"part": "turret", "x": -1.2469, "y": 2.0812, "z": 5.4707, "half_width": 0.2369, "half_height": 0.2369, "half_depth": 1.713, "follows": "barrel"},
+    {"part": "turret", "x": -1.2469, "y": 3.1875, "z": 5.4707, "half_width": 0.2369, "half_height": 0.2369, "half_depth": 1.713, "follows": "barrel"},
+    {"part": "turret", "x": 1.2469, "y": 2.0812, "z": 5.4707, "half_width": 0.2369, "half_height": 0.2369, "half_depth": 1.713, "follows": "barrel"},
+    {"part": "turret", "x": 1.2469, "y": 3.1875, "z": 5.4707, "half_width": 0.2369, "half_height": 0.2369, "half_depth": 1.713, "follows": "barrel"},
+    {"part": "turret", "x": -0.7594, "y": 2.6459, "z": 3.7777, "half_width": 0.0494, "half_height": 0.04, "half_depth": 0.02, "follows": "barrel"}
   ],
   "weapons": [
     {"weapon": "jeg:vehicle_bl132_he", "ammo": "jeg:shell_5in_he", "energy_cost": 0, "guided": false, "seat": 0,

@@ -152,6 +152,7 @@ public final class VehicleDataManager {
         OBBInfo deployedObb = parseObb(object, "obb_deployed", null);
         TrackInfo tracks = parseTracks(getObject(object, "tracks"));
         WheelInfo wheels = parseWheels(getObject(object, "wheels"));
+        ttv.migami.jeg.vehicle.data.subdata.BoatInfo boat = parseBoat(getObject(object, "boat"));
         VehicleArmorProfile armor = parseArmor(getObject(object, "armor"), fallback.armor());
         DamageModifierInfo damageModifier = parseDamageModifier(getObject(object, "damage_modifier"), fallback.damageModifier());
         List<VehicleWeaponInfo> weapons = parseWeapons(object, fallback.weapons());
@@ -184,7 +185,13 @@ public final class VehicleDataManager {
                 hasDecoy,
                 seek,
                 destroy
-        ), deployedObb, tracks, wheels);
+        ), deployedObb, tracks, wheels, boat).withAircraft(parseAircraft(getObject(object, "aircraft")))
+                .withAmphibious(parseAmphibious(getObject(object, "amphibious")))
+                .withTurretRiders(parseIntList(object, "turret_riders"))
+                .withNoFirstPersonSeats(parseIntList(object, "no_first_person_seats"))
+                .withStandingSeats(parseIntList(object, "standing_seats"))
+                .withGripSeats(parseIntList(object, "grip_seats"))
+                .withMass(getDouble(object, "mass", Double.NaN));
     }
 
     private static DefaultVehicleData fallbackFor(Identifier id) {
@@ -327,6 +334,77 @@ public final class VehicleDataManager {
         return new WheelInfo(List.copyOf(roll), List.copyOf(steer), getFloat(object, "wheelbase", 2.5F));
     }
 
+    /** A fixed-wing aircraft's own flight settings ("aircraft"; AircraftInfo), or the A-10's when absent. */
+    private static ttv.migami.jeg.vehicle.data.subdata.AircraftInfo parseAircraft(JsonObject object) {
+        var d = ttv.migami.jeg.vehicle.data.subdata.AircraftInfo.DEFAULT;
+        if (object == null) {
+            return d;
+        }
+        List<double[]> points = new java.util.ArrayList<>();
+        if (object.has("strike_points")) {
+            for (JsonElement element : GsonHelper.getAsJsonArray(object, "strike_points")) {
+                JsonArray p = element.getAsJsonArray();
+                points.add(new double[]{p.get(0).getAsDouble(), p.get(1).getAsDouble(), p.get(2).getAsDouble(), p.get(3).getAsDouble()});
+            }
+        }
+        return new ttv.migami.jeg.vehicle.data.subdata.AircraftInfo(
+                getDouble(object, "thrust_lapse", d.thrustLapse()),
+                getBoolean(object, "fixed_gear", d.fixedGear()),
+                getDouble(object, "flap_stall_factor", d.flapStallFactor()),
+                getDouble(object, "flap_speed_factor", d.flapSpeedFactor()),
+                List.copyOf(points),
+                object.has("wing_camera") ? parseTriple(GsonHelper.getAsJsonArray(object, "wing_camera")) : d.wingCamera());
+    }
+
+    private static double[] parseTriple(JsonArray array) {
+        return new double[]{array.get(0).getAsDouble(), array.get(1).getAsDouble(), array.get(2).getAsDouble()};
+    }
+
+    private static java.util.List<Integer> parseIntList(JsonObject object, String key) {
+        java.util.List<Integer> values = new java.util.ArrayList<>();
+        if (object.has(key) && object.get(key).isJsonArray()) {
+            object.getAsJsonArray(key).forEach(e -> values.add(e.getAsInt()));
+        }
+        return values;
+    }
+
+    /** A land vehicle's swimming ("amphibious"; AmphibiousInfo), or NONE when absent. */
+    private static ttv.migami.jeg.vehicle.data.subdata.AmphibiousInfo parseAmphibious(JsonObject object) {
+        if (object == null) {
+            return ttv.migami.jeg.vehicle.data.subdata.AmphibiousInfo.NONE;
+        }
+        java.util.List<Integer> noFire = new java.util.ArrayList<>();
+        if (object.has("no_fire_slots") && object.get("no_fire_slots").isJsonArray()) {
+            object.getAsJsonArray("no_fire_slots").forEach(e -> noFire.add(e.getAsInt()));
+        }
+        return new ttv.migami.jeg.vehicle.data.subdata.AmphibiousInfo(getDouble(object, "waterline", 1.0D),
+                getDouble(object, "max_speed", 0.1D), java.util.List.copyOf(noFire));
+    }
+
+    /** A boat's hull behaviour ("boat"; BoatInfo), or the default hull when absent. */
+    private static ttv.migami.jeg.vehicle.data.subdata.BoatInfo parseBoat(JsonObject object) {
+        var d = ttv.migami.jeg.vehicle.data.subdata.BoatInfo.DEFAULT;
+        if (object == null) {
+            return d;
+        }
+        return new ttv.migami.jeg.vehicle.data.subdata.BoatInfo(
+                getFloat(object, "collision_length_scale", d.collisionLengthScale()),
+                getDouble(object, "collision_forward_shift", d.collisionForwardShift()),
+                getDouble(object, "bow_probe_distance", d.bowProbeDistance()),
+                getDouble(object, "bow_probe_half_width", d.bowProbeHalfWidth()),
+                getDouble(object, "bow_probe_low_y", d.bowProbeLowY()),
+                getDouble(object, "bow_probe_high_y", d.bowProbeHighY()),
+                getDouble(object, "thrust", d.thrust()),
+                getDouble(object, "plane_speed", d.planeSpeed()),
+                getDouble(object, "displacement_friction", d.displacementFriction()),
+                getDouble(object, "planed_friction", d.planedFriction()),
+                getFloat(object, "bow_rise_degrees", d.bowRiseDegrees()),
+                getDouble(object, "keel_grip", d.keelGrip()),
+                getDouble(object, "beach_speed", d.beachSpeed()),
+                getDouble(object, "beach_step", d.beachStep()),
+                getDouble(object, "draft", d.draft()));
+    }
+
     /** The running gear for the shared track driver ("tracks"), or null for a vehicle without one. */
     private static TrackInfo parseTracks(JsonObject object) {
         if (object == null) {
@@ -388,7 +466,9 @@ public final class VehicleDataManager {
         }
         JsonArray array = element.getAsJsonArray();
         if (array.isEmpty()) {
-            return fallback;
+            // "weapons": [] is an unarmed vehicle (the bush plane, the truck, the bulldozer), not "use the defaults":
+            // that gave them the default hand guns.
+            return List.of();
         }
         java.util.ArrayList<VehicleWeaponInfo> weapons = new java.util.ArrayList<>();
         for (JsonElement weaponElement : array) {
@@ -425,7 +505,8 @@ public final class VehicleDataManager {
                 getDouble(object, "barrel_z", fallback.barrelZ()),
                 getBoolean(object, "guided_uses_turret", fallback.guidedUsesTurret()),
                 (float) getDouble(object, "traverse_rate", fallback.traverseRate()),
-                (float) getDouble(object, "elevation_rate", fallback.elevationRate())
+                (float) getDouble(object, "elevation_rate", fallback.elevationRate()),
+                getInt(object, "fallback_seat", fallback.fallbackSeat())
         );
     }
 

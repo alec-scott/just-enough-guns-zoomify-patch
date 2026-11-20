@@ -65,6 +65,12 @@ public class SupportTowClientGameTest implements FabricClientGameTest {
             LOG.info("[support-tow] hitch offered to the driver {}; tow key -> {}", offered, hitched);
             if (!offered) failures.append("the driver's panel did not offer the hitch with the LAV behind\n");
             if (!server.computeOnServer(s -> truck(s).towedEntityId() == lav(s).getId())) failures.append("the tow key did not hitch the LAV: ").append(hitched).append('\n');
+            // The load weighs on the drive: 15 t + the LAV's 9.9 t, inertia sqrt(12 / 24.9) = 0.69 against 0.89 alone;
+            // the truck's own suspension (inertia()) is unchanged.
+            double[] pull = server.computeOnServer(s -> new double[]{truck(s).driveInertia(), truck(s).inertia()});
+            LOG.info("[support-tow] towing the LAV: drive inertia {} (suspension {})", pull[0], pull[1]);
+            if (Math.abs(pull[0] - Math.sqrt(12.0D / 24.9D)) > 0.01D || Math.abs(pull[1] - Math.sqrt(12.0D / 15.0D)) > 0.01D)
+                failures.append("the tow load does not weigh on the drive: ").append(pull[0]).append(" / ").append(pull[1]).append('\n');
 
             context.runOnClient(mc -> { mc.options.setCameraType(CameraType.THIRD_PERSON_BACK); mc.player.setYRot(180); mc.player.setXRot(20); });
             context.getInput().holdKey(options -> options.keyUp);
@@ -93,6 +99,14 @@ public class SupportTowClientGameTest implements FabricClientGameTest {
                 return gap < lav.getBbWidth() * .5 + 3 && lav.position().distanceTo(new Vec3(.5, G, .5 - 7)) > 40;
             });
             if (!followed) failures.append("the LAV did not follow on the tow bar: ").append(follow).append('\n');
+            // The tow bar (SupportTowBarLayer) seen from beside the hitch.
+            context.runOnClient(mc -> {
+                mc.options.setCameraType(CameraType.THIRD_PERSON_BACK);
+                mc.player.setYRot(mc.player.getVehicle().getYRot() + 120.0F);
+                mc.player.setXRot(12.0F);
+            });
+            context.waitTicks(5);
+            context.takeScreenshot("support_tow_bar_side");
             context.getInput().pressKey(options -> ttv.migami.jeg.client.KeyBindings.VEHICLE_TOW);
             context.waitTicks(6);
             String released = server.computeOnServer(s -> "towing id after the tow key " + truck(s).towedEntityId());

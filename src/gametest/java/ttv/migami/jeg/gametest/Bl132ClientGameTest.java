@@ -64,7 +64,9 @@ public class Bl132ClientGameTest implements FabricClientGameTest {
     }
 
     private void hitbox(ClientGameTestContext context, TestServerContext server) {
-        Vec3 gunsRest = new Vec3(0.0D, 2.63D, 5.5D);
+        // On a barrel (the lower right of the four): since the hitbox was fitted to the model (2026-11-19) the air between
+        // the barrels, where this probe was, is empty.
+        Vec3 gunsRest = new Vec3(1.25D, 2.08D, 5.5D);
         for (float yaw : new float[] {0.0F, 90.0F}) {
             server.runOnServer(s -> gun(s).setAiTurretAim(yaw, 0.0F));
             context.waitTicks(3);

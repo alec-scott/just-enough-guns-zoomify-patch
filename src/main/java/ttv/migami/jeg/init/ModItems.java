@@ -110,7 +110,10 @@ public final class ModItems {
             "shell_5in_he",
             () -> new Item(baseProperties(Reference.id("shell_5in_he")).stacksTo(16))
     );
-    /** The Mk42's cluster shell (18 bomblets near the target) and grapeshot (36 pellets from the muzzle). */
+    /**
+     * The Mk42's cluster shell (18 bomblets near the target) and incendiary (bursts over the target, setting the ground
+     * alight; the id is grapeshot's, which it replaced on 2026-11-19, so shells already made still load).
+     */
     public static final DeferredHolder<Item, Item> SHELL_5IN_CM = REGISTER.register(
             "shell_5in_cm",
             () -> new Item(baseProperties(Reference.id("shell_5in_cm")).stacksTo(16))

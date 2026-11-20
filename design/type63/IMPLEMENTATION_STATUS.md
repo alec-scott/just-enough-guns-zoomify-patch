@@ -31,10 +31,20 @@ Brief: [BRIEF.md](BRIEF.md).
 Fixed on the way: GeckoLib logged a missing `animation.type63.rest` every frame; the test's crate stack of 13 was
 clamped to 12, so the range shot had nothing to load.
 
+## Finalisation (2026-11-18, design/READINESS.md)
+
+- `Type63ClientGameTest` passes with `-PwithPack` after the fleet-wide changes of 2026-11-17/18 (the new HUD, `"mass"` 0.6 t as
+  tow load, real-sound and wreck work on other guns).
+- Played (mcpfabric, pack client, midnight): from the seat the panel (rocket, elevation, bearing, range) and the scale read clearly in the dark.
+- Wrecks as every gun does (cooks off, burns, breaks apart; `GroundWreckClientGameTest` runs the Mk42 for the shared
+  artillery path). The handwheels are heard while it is laid (`VehicleFeel`).
+- Its sounds are Superb Warfare's recordings, used with the SBW team's permission; they are real gun recordings and
+  need only listening.
+
 ## Not covered yet
 
 - Listening (a full ripple heard at range).
 - AP and cluster rounds fired at range; a ripple's spread on the ground.
-- Night view; the third-person view while firing.
+- The third-person view while firing.
 - Towing behind the FSV-6 (the tow-eye hook is tested on the howitzer, `HowitzerClientGameTest`, not on the Type-63).
-- The dedicated server, multiplayer, claim mods. No sandbox world yet.
+- The dedicated server, multiplayer, claim mods.

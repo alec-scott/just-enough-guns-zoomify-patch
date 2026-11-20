@@ -20,6 +20,7 @@ import random
 import uuid
 
 from PIL import Image, ImageDraw
+import sys
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
@@ -42,8 +43,12 @@ MATERIALS = {
     "brass": (150, 124, 60, 255),
 }
 PAINT = ("olive", "olive_light", "olive_dark", "label")
-TILE = 32
-ATLAS = (256, 64)
+TILE = 32  # the old tile atlas, laid out before the bake gives every face its own texels
+ATLAS = [256, 64]
+# The fleet's model and texture review (2026-11-19): every face its own texels (refit_lib.bake_unique) and the detail
+# pass over them (seams, worn edges, bolt heads, grime, mud on the wheels and spades), as the refits have.
+TEXELS = 4
+DETAIL = dict(upscale=1, mud_height=9.0, mud=0.55, wear=1.0, streaks=0.8)
 
 BONES: list[dict] = []
 BY_NAME: dict[str, dict] = {}
@@ -512,6 +517,36 @@ def write_vehicle_obb(packed, deployed):
     VEHICLE_JSON.write_text(text, encoding="utf-8")
 
 
+def paint_numbers(base, faces):
+    """The "105" stencilled on the shield's label plate, both faces, in the cream the Army stencils in."""
+    draw = ImageDraw.Draw(base)
+    for item in faces:
+        if item["material"] != "label" or item["face"] not in ("north", "south"):
+            continue
+        x0, y0, x1, y1 = item["rect"]
+        if x1 - x0 < 12 or y1 - y0 < 6:
+            continue
+        from PIL import ImageFont
+        size = max(8, int((y1 - y0) * 0.62))
+        try:
+            font = ImageFont.truetype(str(ROOT / "design/hud/Inter-SemiBold.ttf"), size)
+        except OSError:
+            font = ImageFont.load_default(size=size)
+        draw.text(((x0 + x1) / 2, (y0 + y1) / 2), "105", font=font, fill=(222, 220, 200, 255), anchor="mm")
+
+
+def bake():
+    """Every face its own texels, the stencil, then the weathering pass; glass kept as baked."""
+    sys.path.insert(0, str(ROOT / "design/superbwarfare-port"))
+    sys.path.insert(0, str(ROOT / "design/superbwarfare-port/triage"))
+    sys.path.insert(0, str(ROOT / "design/ground-vehicles"))
+    import refit_lib as L
+    uv, faces, base = L.bake_unique(BONES, MATERIALS, TEXELS)
+    ATLAS[:] = [int(round(uv[0])), int(round(uv[1]))]
+    paint_numbers(base, faces)
+    return L, faces, base
+
+
 def make_texture():
     atlas = Image.new("RGBA", ATLAS, (0, 0, 0, 0))
     rng = random.Random(1050)
@@ -845,15 +880,18 @@ def main():
     split_beams()
     separate_finishes()
     print(f"Biased {resolve_zfighting()} coplanar faces against z-fighting.")
-    atlas = make_texture()
+    L, faces, base = bake()
     texture_path = ASSETS / f"textures/entity/vehicle/{ID}.png"
-    atlas.save(texture_path)
-    url = "data:image/png;base64," + base64.b64encode(texture_path.read_bytes()).decode()
     geometry = {"format_version": "1.12.0", "minecraft:geometry": [{
         "description": {"identifier": f"geometry.jeg.{ID}", "texture_width": ATLAS[0], "texture_height": ATLAS[1],
                         "visible_bounds_width": 9, "visible_bounds_height": 4, "visible_bounds_offset": [0, 1, 0]},
         "bones": [{k: [{ck: cv for ck, cv in c.items() if not ck.startswith("_")} for c in v] if k == "cubes" else v
                    for k, v in b.items()} for b in BONES]}]}
+    import detail_texture as D
+    atlas, _, _ = D.detail_image(native_geometry(geometry), base, DETAIL)
+    L.paste_faces(atlas, base, faces, ("glass",))
+    atlas.save(texture_path)
+    url = "data:image/png;base64," + base64.b64encode(texture_path.read_bytes()).decode()
     animations = make_animations()
     project = make_bbmodel(url, animations)
     count = validate(animations, project)

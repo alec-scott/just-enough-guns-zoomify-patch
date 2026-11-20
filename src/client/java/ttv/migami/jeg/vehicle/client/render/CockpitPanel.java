@@ -3,6 +3,7 @@ package ttv.migami.jeg.vehicle.client.render;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import java.util.List;
+import java.util.Map;
 import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.util.Mth;
 import org.joml.Vector3f;
@@ -114,23 +115,7 @@ final class CockpitPanel {
         float hu = cu + nu * pitchUp * scale;
         float hv = cv + nv * pitchUp * scale;
         if (groundAlpha > 0.0F) {
-            // The window's corners on the ground side of the horizon.
-            List<float[]> ground = new java.util.ArrayList<>();
-            float[][] corners = {{u0, v0}, {u1, v0}, {u1, v1}, {u0, v1}};
-            for (int i = 0; i < 4; i++) {
-                float[] a = corners[i];
-                float[] b = corners[(i + 1) % 4];
-                float da = (a[0] - hu) * nu + (a[1] - hv) * nv;
-                float db = (b[0] - hu) * nu + (b[1] - hv) * nv;
-                if (da >= 0.0F) {
-                    ground.add(a);
-                }
-                if ((da >= 0.0F) != (db >= 0.0F)) {
-                    float t = da / (da - db);
-                    ground.add(new float[]{a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t});
-                }
-            }
-            this.fill(pose, buffer, ground, w - 0.02F, argb(rgb, groundAlpha * level));
+            this.fill(pose, buffer, ground(hu, hv, nu, nv, u0, v0, u1, v1), w - 0.02F, argb(rgb, groundAlpha * level));
         }
         float span = (u1 - u0) + (v1 - v0);
         this.split(pose, buffer, hu, hv, au, av, span, gap, lineWidth, w, argb(rgb, level), u0, v0, u1, v1);
@@ -144,6 +129,108 @@ final class CockpitPanel {
             this.split(pose, buffer, lu, lv, au, av, half, Math.min(gap, half * 0.6F), lineWidth * 0.67F, w,
                     argb(rgb, 0.75F * level), u0, v0, u1, v1);
         }
+    }
+
+    /**
+     * The ground side of the horizon in the window (u0, v0)-(u1, v1), filled in {@code colour}: the horizon placed as
+     * {@link #attitude} places it, for a colour display (sky drawn first, then this over it).
+     */
+    void ground(PoseStack.Pose pose, VertexConsumer buffer, float cu, float cv, float u0, float v0, float u1, float v1,
+                float pitchUp, float bank, float scale, float w, int colour) {
+        float roll = bank * Mth.DEG_TO_RAD;
+        float nu = Mth.sin(roll);
+        float nv = Mth.cos(roll);
+        this.fill(pose, buffer, ground(cu + nu * pitchUp * scale, cv + nv * pitchUp * scale, nu, nv, u0, v0, u1, v1), w, colour);
+    }
+
+    /** The window's corners on the ground side of a horizon through (hu, hv) with downward normal (nu, nv). */
+    private static List<float[]> ground(float hu, float hv, float nu, float nv, float u0, float v0, float u1, float v1) {
+        List<float[]> ground = new java.util.ArrayList<>();
+        float[][] corners = {{u0, v0}, {u1, v0}, {u1, v1}, {u0, v1}};
+        for (int i = 0; i < 4; i++) {
+            float[] a = corners[i];
+            float[] b = corners[(i + 1) % 4];
+            float da = (a[0] - hu) * nu + (a[1] - hv) * nv;
+            float db = (b[0] - hu) * nu + (b[1] - hv) * nv;
+            if (da >= 0.0F) {
+                ground.add(a);
+            }
+            if ((da >= 0.0F) != (db >= 0.0F)) {
+                float t = da / (da - db);
+                ground.add(new float[]{a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t});
+            }
+        }
+        return ground;
+    }
+
+    /** Seven-segment digits' segments (a top, then clockwise, g the middle), as {x0, y0, x1, y1} of a 1 x 1 cell. */
+    private static final float[][] SEGMENTS = {{0, 0, 1, 0}, {1, 0, 1, 0.5F}, {1, 0.5F, 1, 1}, {0, 1, 1, 1},
+            {0, 0.5F, 0, 1}, {0, 0, 0, 0.5F}, {0, 0.5F, 1, 0.5F}};
+    /** Which segments each digit lights, bit 0 = a. */
+    private static final int[] DIGITS = {0b0111111, 0b0000110, 0b1011011, 0b1001111, 0b1100110, 0b1101101, 0b1111101,
+            0b0000111, 0b1111111, 0b1101111};
+    /** Stroked letters (polylines in the 1 x 1 cell) for a compass rose. */
+    private static final Map<Character, float[]> LETTERS = Map.of(
+            'N', new float[]{0, 1, 0, 0, 1, 1, 1, 0},
+            'E', new float[]{1, 0, 0, 0, 0, 1, 1, 1},
+            'W', new float[]{0, 0, 0.25F, 1, 0.5F, 0.4F, 0.75F, 1, 1, 0});
+
+    /** The width {@link #text} takes for {@code s} at {@code height}. */
+    static float textWidth(String s, float height) {
+        float width = 0.0F;
+        for (int i = 0; i < s.length(); i++) {
+            width += s.charAt(i) == '.' ? height * 0.3F : height * 0.78F;
+        }
+        return Math.max(0.0F, width - height * 0.23F);
+    }
+
+    /**
+     * Digits (seven-segment), '-', '.', and the letters N, E, S and W, {@code height} pixels tall, its top left at (u, v),
+     * clipped to the window (cu0, cv0)-(cu1, cv1).
+     */
+    void text(PoseStack.Pose pose, VertexConsumer buffer, String s, float u, float v, float height, float w, int colour,
+              float cu0, float cv0, float cu1, float cv1) {
+        float cell = height * 0.55F;
+        float stroke = height * 0.13F;
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if (c == '.') {
+                this.line(pose, buffer, u + height * 0.05F, v + height - stroke * 0.5F, u + height * 0.05F + stroke,
+                        v + height - stroke * 0.5F, stroke, w, colour, cu0, cv0, cu1, cv1);
+                u += height * 0.3F;
+                continue;
+            }
+            int mask = c >= '0' && c <= '9' ? DIGITS[c - '0'] : c == 'S' ? DIGITS[5] : c == '-' ? 0b1000000 : 0;
+            for (int k = 0; k < 7; k++) {
+                if ((mask >> k & 1) != 0) {
+                    float[] seg = SEGMENTS[k];
+                    this.line(pose, buffer, u + seg[0] * cell, v + seg[1] * height, u + seg[2] * cell, v + seg[3] * height,
+                            stroke, w, colour, cu0, cv0, cu1, cv1);
+                }
+            }
+            float[] strokes = LETTERS.get(c);
+            if (strokes != null) {
+                for (int k = 0; k + 3 < strokes.length; k += 2) {
+                    this.line(pose, buffer, u + strokes[k] * cell, v + strokes[k + 1] * height, u + strokes[k + 2] * cell,
+                            v + strokes[k + 3] * height, stroke, w, colour, cu0, cv0, cu1, cv1);
+                }
+                if (c == 'E') {
+                    this.line(pose, buffer, u, v + height * 0.5F, u + cell * 0.8F, v + height * 0.5F, stroke, w, colour,
+                            cu0, cv0, cu1, cv1);
+                }
+            }
+            u += height * 0.78F;
+        }
+    }
+
+    /** A rectangle's outline, {@code width} thick. */
+    void outline(PoseStack.Pose pose, VertexConsumer buffer, float u0, float v0, float u1, float v1, float width, float w,
+                 int colour) {
+        float h = width * 0.5F;
+        this.face(pose, buffer, u0 - h, v0 - h, u1 - u0 + width, width, w, colour);
+        this.face(pose, buffer, u0 - h, v1 - h, u1 - u0 + width, width, w, colour);
+        this.face(pose, buffer, u0 - h, v0 + h, width, v1 - v0 - width, w, colour);
+        this.face(pose, buffer, u1 - h, v0 + h, width, v1 - v0 - width, w, colour);
     }
 
     /** A line through (u, v) along (au, av), {@code half} each way, with a gap of {@code gap} each side of the middle. */

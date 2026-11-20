@@ -18,6 +18,8 @@ public final class VehicleGunReports {
     private static final Report CANNON_30MM = new Report("vehicle.gun.30mm", 2.5F);
     private static final Report HEAVY_MG = new Report("vehicle.gun.hmg", 2.0F);
     private static final Report COAX = new Report("vehicle.gun.coax", 1.6F);
+    /** The sentry's 7.62 mm: a real Negev's report (design/sentry/prepare_audio.py). */
+    private static final Report SENTRY = new Report("vehicle.gun.sentry", 2.0F);
 
     private VehicleGunReports() {}
 
@@ -30,8 +32,9 @@ public final class VehicleGunReports {
         String path = weapon.getPath();
         return switch (path) {
             case "vehicle_20mm_cannon" -> CANNON_20MM;
-            case "vehicle_30mm_cannon" -> CANNON_30MM;
+            case "vehicle_30mm_cannon", "vehicle_30mm_cannon_he" -> CANNON_30MM;
             case "vehicle_coax_machine_gun" -> COAX;
+            case "vehicle_sentry_machine_gun" -> SENTRY;
             default -> path.startsWith("vehicle_") && (path.endsWith("_hmg") || path.endsWith("_rws")) ? HEAVY_MG : null;
         };
     }

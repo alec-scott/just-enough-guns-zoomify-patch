@@ -64,6 +64,8 @@ public class BulldozerFarSoundClientGameTest implements FabricClientGameTest {
                 driver.setSilent(true);
                 driver.snapTo(dozer.getX(), dozer.getY(), dozer.getZ(), 0, 0);
                 level.addFreshEntity(driver);
+                // Since yftm.22 only a player or tagged crew may drive or man a gun.
+                driver.addTag(ttv.migami.jeg.vehicle.ai.EnemyVehicleController.ENEMY_VEHICLE_CREW_TAG);
                 driver.startRiding(dozer, true, true);
                 return dozer.getUUID().toString();
             });

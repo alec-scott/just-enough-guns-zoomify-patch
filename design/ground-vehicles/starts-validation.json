@@ -1,0 +1,26 @@
+{
+  "bmp2": {
+    "catch_s": 3.0,
+    "start_s": 6.5,
+    "stop_s": 3.41
+  },
+  "yx100": {
+    "catch_s": 4.0,
+    "start_s": 8.5,
+    "stop_s": 7.0
+  },
+  "plz05": {
+    "catch_s": 1.0,
+    "start_s": 4.0,
+    "stop_s": 4.88
+  },
+  "lav150": {
+    "catch_s": 1.09,
+    "start_s": 5.43,
+    "stop_s": 7.5
+  },
+  "tyres": {
+    "loop_s": 19.0,
+    "seam_jump": 0.0122
+  }
+}

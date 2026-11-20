@@ -41,6 +41,13 @@ public class HowitzerClientGameTest implements FabricClientGameTest {
     public void runTest(ClientGameTestContext context) {
         context.runOnClient(mc -> mc.options.renderDistance().set(12));
         try (TestSingleplayerContext world = context.worldBuilder().create()) {
+            // The real recordings (a field gun's report, design/howitzer/prepare_audio.py) must be what is heard.
+            java.util.List<String> heard = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
+            net.minecraft.client.sounds.SoundEventListener listener = (sound, events, range) -> {
+                String path = sound.getIdentifier().getPath();
+                if (path.contains("howitzer")) heard.add(path);
+            };
+            context.runOnClient(mc -> mc.getSoundManager().addListener(listener));
             context.waitTicks(100);
             TestServerContext server = world.getServer();
             server.runCommand("gamemode survival @a");
@@ -207,6 +214,9 @@ public class HowitzerClientGameTest implements FabricClientGameTest {
             check(towed[2] > 30.0D, "the howitzer must follow the FSV-6, moved " + towed[2]);
             check(towed[0] < 0.8D, "the lunette must ride on the pintle, " + towed[0] + " blocks off");
             check(towed[1] < -0.95D, "the gun must trail behind the truck, muzzle away from it (" + towed[1] + ")");
+            context.runOnClient(mc -> mc.getSoundManager().removeListener(listener));
+            LOGGER.info("[howitzer] sounds heard: {}", heard.stream().distinct().toList());
+            if (heard.stream().noneMatch(p -> p.startsWith("vehicle.howitzer.fire"))) throw new AssertionError("its report was not heard: " + java.util.List.copyOf(heard));
             LOGGER.info("[howitzer] COMPLETE");
         } catch (Throwable failure) {
             LOGGER.error("[howitzer] FAILED: {}", failure.getMessage());

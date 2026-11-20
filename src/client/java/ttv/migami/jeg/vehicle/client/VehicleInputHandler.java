@@ -129,6 +129,11 @@ public final class VehicleInputHandler {
                     KeyBindings.VEHICLE_DISMOUNT.getTranslatedKeyMessage()), false);
         }
         wasRidingVehicle = true;
+        if (minecraft.options.getCameraType().isFirstPerson()
+                && vehicle.vehicleData().noFirstPersonSeats().contains(vehicle.getSeatIndex(player))) {
+            // A troop seat has no view of its own (its eye is outside the hull): F5 cycles the chase and hull cameras.
+            minecraft.options.setCameraType(CameraType.THIRD_PERSON_BACK);
+        }
 
         boolean vehicleInventoryDown = minecraft.options.keyInventory.isDown();
         if (vehicleInventoryInputBlockTicks > 0) {
@@ -279,6 +284,8 @@ public final class VehicleInputHandler {
                 minecraft.options.keyAttack.isDown(),
                 reload,
                 freeLook,
+                // The dozer has no weapons: there the weapon-switch key (X) toggles its lane lock. Its own key would
+                // clash in the pack: K toggles Iris shaders, U and M are Xaero's, every other letter is taken.
                 KeyBindings.VEHICLE_SWITCH_WEAPON.consumeClick(),
                 KeyBindings.VEHICLE_PREVIOUS_WEAPON.consumeClick(),
                 weaponSlot,
@@ -390,8 +397,8 @@ public final class VehicleInputHandler {
         // kept its world heading, so a hard turn reached the seat's yaw limit and was pushed round by the tick's yaw:
         // the F5 camera stepped 20 times a second. A turret seat keeps its world aim (stabilised gun).
         float referenceYaw = vehicle.getYRot();
-        boolean turret = vehicle.vehicleData().defaults().turret().enabled() && seat.index() == vehicle.vehicleData().defaults().turret().seatIndex();
-        if (!vehicle.usesVehiclePoseTransform() && !turret) {
+        boolean turret = vehicle.vehicleData().defaults().turret().enabled() && seat.index() == vehicle.turretSeat();
+        if (!vehicle.usesVehiclePoseTransform() && !turret && !vehicle.yawFollowsRider(player)) {
             float partialTick = Minecraft.getInstance().getDeltaTracker().getGameTimeDeltaPartialTick(false);
             referenceYaw = Mth.rotLerp(partialTick, vehicle.yRotO, vehicle.getYRot());
             if (followedVehicleId == vehicle.getId()) {

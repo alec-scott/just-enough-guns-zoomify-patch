@@ -35,10 +35,23 @@ Brief: [BRIEF.md](BRIEF.md).
 | Gunner leaves the sight | wire breaks; the missile keeps its heading (dot 1.0) |
 | Sneak-click pack-up | launcher and the missile left in the crate returned |
 
+## Finalisation (2026-11-18, design/READINESS.md)
+
+- **A real launch** (`prepare_audio.py`, `vehicle.tow.launch`), replacing the BMP-2's missile sound: a BGM-71 TOW
+  launch from US military footage (qubodup, CC0) over the roar and echo of an anti-tank missile leaving the tube on a US
+  Army range (qubodup, CC0). The reload keeps the mod's launcher handling sounds (lid open, round in, lid closed).
+- **Weight:** `"mass"` 0.1 t (tow load only).
+
+| Test (`-PwithPack`) | Result |
+| --- | --- |
+| `TowClientGameTest` | passes, now also listening: `vehicle.tow.launch` heard |
+
+Played (mcpfabric, pack client, midnight): loaded two missiles through its hold, R to load, the sight's bracket reads
+clearly in the dark; fired at a target 60 blocks off: hit, "Reloading 6s" in the panel.
+
 ## Not covered yet
 
-- Listening (the launch and reload sounds are stand-ins).
+- **Listen:** `vehicle/tow/launch`; the reload's handling sounds.
 - A moving target at 400 blocks; losing the missile behind a block (the rule is in, not tested); the 1,000-block wire end.
-- Night view.
 - The dedicated server, multiplayer, claim mods.
 - No sandbox world yet.

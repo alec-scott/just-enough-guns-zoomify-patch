@@ -255,7 +255,10 @@ public final class FabricClientBootstrap {
             return net.minecraft.world.InteractionResult.PASS;
         });
         UseEntityCallback.EVENT.register((player, world, hand, entity, hitResult) -> {
-            if (player.getMainHandItem().getItem() instanceof GunItem) {
+            // A gun in hand aims on right-click instead of using the entity, except on a vehicle: with a gun out, a click
+            // on a vehicle did nothing, so boarding "sometimes" failed (the user's review, 2026-11-18).
+            if (player.getMainHandItem().getItem() instanceof GunItem
+                    && !(entity instanceof ttv.migami.jeg.vehicle.entity.base.VehicleEntity)) {
                 return net.minecraft.world.InteractionResult.FAIL;
             }
             return net.minecraft.world.InteractionResult.PASS;
@@ -309,6 +312,7 @@ public final class FabricClientBootstrap {
         EntityRendererRegistry.register(ModEntities.MI28.get(), Mi28Renderer::new);
         EntityRendererRegistry.register(ModEntities.TOM6.get(), Tom6Renderer::new);
         EntityRendererRegistry.register(ModEntities.LASER_TOWER.get(), LaserTowerRenderer::new);
+        EntityRendererRegistry.register(ModEntities.SENTRY.get(), ttv.migami.jeg.vehicle.client.render.SentryRenderer::new);
         EntityRendererRegistry.register(ModEntities.HPJ11.get(), Hpj11Renderer::new);
         EntityRendererRegistry.register(ModEntities.MORTAR.get(), ttv.migami.jeg.vehicle.client.render.MortarRenderer::new);
         // A round at 200 m/s is a blur nobody sees: it is heard and its blast is drawn (MissileBlastPayload).
@@ -319,7 +323,7 @@ public final class FabricClientBootstrap {
         EntityRendererRegistry.register(ModEntities.TYPE63.get(), ttv.migami.jeg.vehicle.client.render.Type63Renderer::new);
         EntityRendererRegistry.register(ModEntities.HOWITZER.get(), ttv.migami.jeg.vehicle.client.render.HowitzerRenderer::new);
         EntityRendererRegistry.register(ModEntities.PLZ05.get(), ttv.migami.jeg.vehicle.client.render.Plz05Renderer::new);
-        EntityRendererRegistry.register(ModEntities.LEOPARD2.get(), ttv.migami.jeg.vehicle.client.render.Leopard2Renderer::new);
+        EntityRendererRegistry.register(ModEntities.YX100.get(), ttv.migami.jeg.vehicle.client.render.Yx100Renderer::new);
         EntityRendererRegistry.register(ModEntities.CANNON_SHELL.get(), net.minecraft.client.renderer.entity.NoopRenderer::new);
         EntityRendererRegistry.register(ModEntities.WAVEFORCE_TOWER.get(), WaveforceTowerRenderer::new);
         EntityRendererRegistry.register(ModEntities.VEHICLE_DECOY.get(), VehicleDecoyRenderer::new);
@@ -333,6 +337,8 @@ public final class FabricClientBootstrap {
         registerMenuScreen(ModMenuTypes.SUPPORT_BEACON_MENU.get(), (menu, inventory, title) -> new ttv.migami.jeg.vehicle.client.screen.SupportBeaconScreen((ttv.migami.jeg.vehicle.menu.SupportBeaconMenu) menu, inventory, title));
         registerMenuScreen(ModMenuTypes.VEHICLE_CHARGING_STATION_MENU.get(), (menu, inventory, title) -> new VehicleChargingStationScreen((VehicleChargingStationMenu) menu, inventory, title));
 
+        // Smoke and flame drawn as real smoke (SmokeFx -> the blasts' puff renderer).
+        ttv.migami.jeg.vehicle.effect.SmokeFx.install(ttv.migami.jeg.client.render.MissileBlastRenderer::emitPlume);
         LevelRenderEvents.AFTER_SOLID_FEATURES.register(context -> {
             if (context.poseStack() == null || context.bufferSource() == null) {
                 return;
@@ -345,6 +351,7 @@ public final class FabricClientBootstrap {
             ttv.migami.jeg.client.render.MissileTrailRenderer.render(context.poseStack(), context.bufferSource(), partialTick);
             ttv.migami.jeg.client.render.MissileBlastRenderer.render(context.poseStack(), context.bufferSource(), partialTick);
             ttv.migami.jeg.client.render.GunBarrelHeatRenderer.render(context.poseStack(), context.bufferSource(), partialTick);
+            ttv.migami.jeg.vehicle.client.ImpactMarkerRenderer.render(context.poseStack(), context.bufferSource(), partialTick);
         });
 
         ClientTickEvents.START_CLIENT_TICK.register(FabricClientBootstrap::handleOffhandSwapOverride);
@@ -362,10 +369,10 @@ public final class FabricClientBootstrap {
             ttv.migami.jeg.vehicle.client.audio.BulldozerAudio.tick(client);
             ttv.migami.jeg.vehicle.client.audio.SupportAudio.tick(client);
             ttv.migami.jeg.vehicle.client.audio.GroundVehicleAudio.tick(client);
+            ttv.migami.jeg.vehicle.client.VehicleFeel.tick(client);
+            ttv.migami.jeg.vehicle.client.audio.CiwsAudio.tick(client);
             ttv.migami.jeg.vehicle.client.SupportHints.tick(client);
             ttv.migami.jeg.vehicle.client.audio.GunReportAudio.tick(client);
-            ttv.migami.jeg.vehicle.client.MortarAim.tick(client);
-            ttv.migami.jeg.vehicle.client.ShellGunAim.tick(client);
             MedalManager.tick();
             if (NetworkHandler.shouldRenderLegacyBulletTrail()) {
                 BulletTrailRenderer.tick();
@@ -501,6 +508,8 @@ public final class FabricClientBootstrap {
         });
         for (Entity entity : minecraft.level.entitiesForRendering()) {
             if (!(entity instanceof VehicleEntity vehicle)
+                    // The HPJ-11's gun has its own near and distant loops (CiwsAudio).
+                    || vehicle instanceof ttv.migami.jeg.vehicle.entity.Hpj11Entity
                     || !vehicle.isWeaponFiring()
                     || vehicle.distanceToSqr(player) > fireAudioRangeSqr(vehicle)
                     || VEHICLE_FIRE_SOUNDS.containsKey(vehicle.getId())

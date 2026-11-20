@@ -80,6 +80,8 @@ public final class Config {
     public static final ModConfigSpec.BooleanValue ENEMY_VEHICLE_SPAWNING_ENABLED;
     public static final ModConfigSpec.IntValue ENEMY_VEHICLE_START_DAY;
     public static final ModConfigSpec.DoubleValue ENEMY_VEHICLE_CONVERSION_CHANCE;
+    public static final ModConfigSpec.BooleanValue AUTO_DEFENCE_ENABLED;
+    public static final ModConfigSpec.IntValue AUTO_DEFENCE_PER_CHUNK;
     public static final ModConfigSpec.BooleanValue HELICOPTER_WEIGHTY_FLIGHT;
     public static final ModConfigSpec.DoubleValue HELICOPTER_WEIGHT_MULTIPLIER;
     public static final ModConfigSpec.DoubleValue HELICOPTER_TURN_GRIP;
@@ -359,6 +361,13 @@ public final class Config {
         ENEMY_VEHICLE_CONVERSION_CHANCE = serverBuilder
                 .comment("Probability (0-1) that a newly created open-sky natural gunner converts into an enemy vehicle.")
                 .defineInRange("enemyVehicleConversionChance", 0.05D, 0.0D, 1.0D);
+        AUTO_DEFENCE_ENABLED = serverBuilder
+                .comment("If true, base defences (the HPJ-11 close-in weapon system, sentries) may be switched to automatic fire:",
+                        "they engage hostile aircraft, missiles and mobs on their own. They never fire at players or what is theirs.")
+                .define("autoDefenceEnabled", true);
+        AUTO_DEFENCE_PER_CHUNK = serverBuilder
+                .comment("How many base defences in one chunk may fire automatically at once; the rest wait for a crew.")
+                .defineInRange("autoDefencePerChunk", 2, 0, 64);
         serverBuilder.push("helicopter");
         HELICOPTER_WEIGHTY_FLIGHT = serverBuilder
                 .comment("If true, player-flown helicopters use weighty flight: tilting the hull is what moves it, speed builds and",
@@ -414,6 +423,8 @@ public final class Config {
         registerCommandConfig("vehicle.enemySpawning.enabled", ENEMY_VEHICLE_SPAWNING_ENABLED);
         registerCommandConfig("vehicle.enemySpawning.startDay", ENEMY_VEHICLE_START_DAY);
         registerCommandConfig("vehicle.enemySpawning.conversionChance", ENEMY_VEHICLE_CONVERSION_CHANCE);
+        registerCommandConfig("vehicle.autoDefence.enabled", AUTO_DEFENCE_ENABLED);
+        registerCommandConfig("vehicle.autoDefence.perChunk", AUTO_DEFENCE_PER_CHUNK);
         registerCommandConfig("vehicle.helicopter.weightyFlight", HELICOPTER_WEIGHTY_FLIGHT);
         registerCommandConfig("vehicle.helicopter.weightMultiplier", HELICOPTER_WEIGHT_MULTIPLIER);
         registerCommandConfig("vehicle.helicopter.turnGrip", HELICOPTER_TURN_GRIP);
@@ -911,6 +922,15 @@ public final class Config {
 
     public static boolean enemyVehicleSpawningEnabled() {
         return VEHICLE_ENABLED.get() && ENEMY_VEHICLE_SPAWNING_ENABLED.get();
+    }
+
+    /** Whether base defences may fire automatically (fleet plan decision 3: on by default, capped per chunk). */
+    public static boolean autoDefenceEnabled() {
+        return VEHICLE_ENABLED.get() && AUTO_DEFENCE_ENABLED.get();
+    }
+
+    public static int autoDefencePerChunk() {
+        return Math.max(0, AUTO_DEFENCE_PER_CHUNK.get());
     }
 
     public static int enemyVehicleStartDay() {

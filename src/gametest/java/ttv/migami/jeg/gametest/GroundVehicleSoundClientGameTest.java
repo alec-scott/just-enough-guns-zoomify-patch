@@ -24,7 +24,7 @@ import ttv.migami.jeg.vehicle.entity.base.VehicleEntity;
  * Fleet plan Phase 0.1 and 0.2: the armoured vehicles heard as the aircraft are (BulldozerFarSoundClientGameTest and
  * BulldozerAudioClientGameTest are the models).
  * <ul>
- *   <li>Far: a crewed Leopard is held at one distance after another out to 1,100 blocks (render distance 12, so entity
+ *   <li>Far: a crewed YX-100 is held at one distance after another out to 1,100 blocks (render distance 12, so entity
  *   range is 192 as on yftm). Fails unless it is heard 800 blocks off and silent past 1,024, only gets quieter going
  *   out (no jump where it leaves entity range), and from 300 blocks the distant layer dominates.</li>
  *   <li>Views: the player drives a BMP-2. In first person the crew hears the muffled cab loop centred on them and not
@@ -60,10 +60,10 @@ public class GroundVehicleSoundClientGameTest implements FabricClientGameTest {
             }
             context.waitTicks(40);
 
-            // ---- Far: a crewed Leopard held at each distance.
+            // ---- Far: a crewed YX-100 held at each distance.
             String id = server.computeOnServer(s -> {
                 var level = s.overworld();
-                VehicleEntity tank = ModEntities.LEOPARD2.get().create(level, EntitySpawnReason.COMMAND);
+                VehicleEntity tank = ModEntities.YX100.get().create(level, EntitySpawnReason.COMMAND);
                 tank.snapTo(DISTANCES[0], -60, 0.5D, 90, 0);
                 tank.addEnergy(tank.maxVehicleEnergy());
                 level.addFreshEntity(tank);
@@ -72,18 +72,24 @@ public class GroundVehicleSoundClientGameTest implements FabricClientGameTest {
                 driver.setSilent(true);
                 driver.snapTo(tank.getX(), tank.getY(), tank.getZ(), 0, 0);
                 level.addFreshEntity(driver);
+                // Since yftm.22 only a player or tagged crew may drive or man a gun.
+                driver.addTag(ttv.migami.jeg.vehicle.ai.EnemyVehicleController.ENEMY_VEHICLE_CREW_TAG);
                 driver.startRiding(tank, true, true);
                 return tank.getUUID().toString();
             });
             int entityId = server.computeOnServer(s -> vehicle(s, id).getId());
             this.hold(context, server, id, DISTANCES[0], 60);
+            // Crewed in view: this client saw its engine start, and hears the start.
+            List<String> crewedShots = context.computeOnClient(mc -> GroundVehicleAudio.shots(entityId));
+            report.append("YX-100 crewed in view, one-shots: ").append(crewedShots).append('\n');
+            if (!crewedShots.contains("engine_start")) failures.append("a vehicle crewed in view did not play its start\n");
             List<Heard> heard = new ArrayList<>();
             for (int distance : DISTANCES) {
                 this.hold(context, server, id, distance, 90);
                 heard.add(this.sample(context, entityId, distance));
             }
             for (Heard h : heard) {
-                report.append(String.format(Locale.ROOT, "Leopard at %4d blocks: %s near %.3f, distant %.3f, far %.3f -> %.3f%n", h.distance(),
+                report.append(String.format(Locale.ROOT, "YX-100 at %4d blocks: %s near %.3f, distant %.3f, far %.3f -> %.3f%n", h.distance(),
                         h.entity() ? "entity " : "tracked", h.near(), h.distant(), h.far(), h.total()));
             }
             float previous = Float.MAX_VALUE;
@@ -100,6 +106,12 @@ public class GroundVehicleSoundClientGameTest implements FabricClientGameTest {
                 }
             }
             if (heard.getFirst().total() < 0.2F) failures.append(String.format(Locale.ROOT, "quiet close up (%.3f)%n", heard.getFirst().total()));
+            // Back from beyond entity range, still running: arriving at a running vehicle never plays a second start.
+            this.hold(context, server, id, DISTANCES[0], 40);
+            int returnedId = server.computeOnServer(s -> vehicle(s, id).getId());
+            List<String> arrivalShots = context.computeOnClient(mc -> GroundVehicleAudio.shots(returnedId));
+            report.append("YX-100 back in entity range, running: one-shots ").append(arrivalShots).append('\n');
+            if (arrivalShots.contains("engine_start")) failures.append("a vehicle arriving already running played its start\n");
             server.runCommand("kill @e[type=!player]");
             context.waitTicks(20);
 
@@ -116,15 +128,23 @@ public class GroundVehicleSoundClientGameTest implements FabricClientGameTest {
             context.waitTicks(10);
             server.runOnServer(s -> s.getPlayerList().getPlayers().get(0).startRiding(s.overworld().getEntity(bmp), true, true));
             context.runOnClient(mc -> mc.options.setCameraType(CameraType.FIRST_PERSON));
-            context.waitTicks(60);
+            // The real start plays at once; the loops wait for the engine to catch in it (3 s into the BMP-2's).
+            context.waitTicks(8);
+            List<String> startShots = context.computeOnClient(mc -> GroundVehicleAudio.shots(bmp));
+            context.waitTicks(22);
+            float cabCranking = context.computeOnClient(mc -> Math.max(GroundVehicleAudio.loopVolume(bmp, "engine_cab"), GroundVehicleAudio.loopVolume(bmp, "engine_cab_idle")));
+            report.append(String.format(Locale.ROOT, "BMP-2 boarded: one-shots %s; cab loop while cranking %.3f%n", startShots, cabCranking));
+            if (!startShots.contains("engine_start")) failures.append("boarding did not play the engine start\n");
+            if (cabCranking > 0.05F) failures.append(String.format(Locale.ROOT, "the loops ran before the start caught (%.3f)%n", cabCranking));
+            context.waitTicks(80);
             Map<String, SoundInstance> firstLoops = context.computeOnClient(mc -> GroundVehicleAudio.loops(bmp));
-            float cabFirst = context.computeOnClient(mc -> GroundVehicleAudio.loopVolume(bmp, "engine_cab"));
+            float cabFirst = context.computeOnClient(mc -> Math.max(GroundVehicleAudio.loopVolume(bmp, "engine_cab"), GroundVehicleAudio.loopVolume(bmp, "engine_cab_idle")));
             float outsideFirst = context.computeOnClient(mc -> Math.max(GroundVehicleAudio.loopVolume(bmp, "engine_idle"), GroundVehicleAudio.loopVolume(bmp, "engine_load")));
             boolean relativeFirst = context.computeOnClient(mc -> GroundVehicleAudio.loops(bmp).get("engine_cab").isRelative());
             context.runOnClient(mc -> mc.options.setCameraType(CameraType.THIRD_PERSON_BACK));
             context.waitTicks(30);
             Map<String, SoundInstance> thirdLoops = context.computeOnClient(mc -> GroundVehicleAudio.loops(bmp));
-            float cabThird = context.computeOnClient(mc -> GroundVehicleAudio.loopVolume(bmp, "engine_cab"));
+            float cabThird = context.computeOnClient(mc -> Math.max(GroundVehicleAudio.loopVolume(bmp, "engine_cab"), GroundVehicleAudio.loopVolume(bmp, "engine_cab_idle")));
             float outsideThird = context.computeOnClient(mc -> Math.max(GroundVehicleAudio.loopVolume(bmp, "engine_idle"), GroundVehicleAudio.loopVolume(bmp, "engine_load")));
             boolean relativeThird = context.computeOnClient(mc -> GroundVehicleAudio.loops(bmp).get("engine_idle").isRelative());
             context.runOnClient(mc -> mc.options.setCameraType(CameraType.FIRST_PERSON));
@@ -140,6 +160,12 @@ public class GroundVehicleSoundClientGameTest implements FabricClientGameTest {
                     || firstLoops.entrySet().stream().anyMatch(e -> thirdLoops.get(e.getKey()) != e.getValue())) {
                 failures.append("the loops restarted across the view switch\n");
             }
+            // Leaving the controls stops the engine with its real shutdown.
+            server.runOnServer(s -> s.getPlayerList().getPlayers().get(0).stopRiding());
+            context.waitTicks(6);
+            List<String> stopShots = context.computeOnClient(mc -> GroundVehicleAudio.shots(bmp));
+            report.append("BMP-2 left: one-shots ").append(stopShots).append('\n');
+            if (!stopShots.contains("engine_stop")) failures.append("leaving did not play the engine stop\n");
         } finally {
             context.runOnClient(mc -> mc.options.renderDistance().set(previousDistance));
             LOG.info("{}", report);

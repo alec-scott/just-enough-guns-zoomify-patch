@@ -6,7 +6,8 @@ the real machine. Nothing here is in the mod yet.
 **Decided 2026-11-15:**
 - The proposed verdicts are accepted, **for vehicles only**: standalone explosives are out of scope (the
   explosives section below is kept for reference).
-- YX-100: **remodel** as a real MBT (built 2026-11-17 as the Leopard 2A7, `design/leopard2/`).
+- YX-100: **refit**, kept as a deliberate science-fiction exception (user, 2026-11-17, `design/yx100/`). It was first
+  remodelled as a Leopard 2A7, which the user reverted the same day.
 - Mle1934: **drop**.
 
 - **keep:** port the geometry as is (plus `rig.json` and a generated hitbox).
@@ -91,5 +92,5 @@ behaviour (fuzes, blast, guidance), and use SBW models only where a round is see
 ## Decisions (2026-11-15)
 
 1. Proposed verdicts accepted; vehicles only, no standalone explosives.
-2. YX-100: remodel as a real MBT.
+2. YX-100: remodel as a real MBT; reverted the same day to option 2, a refit of SBW's model.
 3. Mle1934: drop.
