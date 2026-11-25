@@ -739,6 +739,11 @@ public final class VehicleHudOverlay {
         } else if (vehicle instanceof ttv.migami.jeg.vehicle.entity.ShellGunEntity gun && gun.laysGun(mc.player)) {
             panel = shellGunPanel(l, gun);
         } else if (vehicle instanceof ttv.migami.jeg.vehicle.entity.ChinookEntity chinook && vehicle.getControllingPassenger() == mc.player) {
+            if (!chinook.onGround()) {
+                // Only on the ground: the strip goes at lift-off (the user, 2026-11-26). The sling still says what it
+                // does in the action bar.
+                return;
+            }
             panel = new HudPanel(l.font()).minWidth(0);
             chinookRows(l, panel, chinook);
             if (helicopterHmd(mc, vehicle, isFocusedVehicleSight(vehicle))) {
