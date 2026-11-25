@@ -122,6 +122,15 @@ public abstract class VehicleCameraMixin implements VehicleCameraHandler.Vehicle
         vehicle.refreshClientTurretAim(player, partialTick);
         Vec3 cameraPosition = vehicle.cameraPositionFor(player, partialTick);
         Vec3 cameraRotation = vehicle.cameraRotationFor(player, partialTick);
+        if (ttv.migami.jeg.vehicle.client.PilotHeadLook.applies(player, vehicle)) {
+            // A helicopter pilot's head turns within the cockpit (free look) and comes back to the nose when let go.
+            Vec3 pinned = new Vec3(net.minecraft.util.Mth.rotLerp(partialTick, vehicle.yRotO, vehicle.getYRot()),
+                    vehicle.cameraPitch(partialTick) + vehicle.cockpitViewDown(), 0.0D);
+            Vec3 head = ttv.migami.jeg.vehicle.client.PilotHeadLook.view(player, vehicle, pinned);
+            if (head != null) {
+                cameraRotation = head;
+            }
+        }
         if ((vehicle.vehicleData().defaults().vehicleType() == ttv.migami.jeg.vehicle.data.subdata.VehicleType.LAND
                 || vehicle.vehicleData().defaults().vehicleType() == ttv.migami.jeg.vehicle.data.subdata.VehicleType.BOAT)
                 && !ttv.migami.jeg.vehicle.client.VehicleClientState.zoomDown()) {

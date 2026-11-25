@@ -71,6 +71,11 @@ final class VehicleLightsLayer<T extends VehicleEntity> extends GeoRenderLayer<T
      */
     private static final float SHADER_ROOM_SPILL = 0.5F;
     private static final float ROOM_SPILL_WRAP = 0.12F;
+    /** A walk-in cabin's dome lights: how far they wrap onto faces turned from them, and their wash under a shader pack. */
+    private static final float CABIN_SPILL_WRAP = 0.45F;
+    private static final float SHADER_CABIN_SPILL = 0.6F;
+    /** Spilled light is worked out at the corners of faces no longer than this (blocks) near a light. */
+    private static final float SPILL_CELL = 0.4F;
 
     VehicleLightsLayer(GeoRenderer<T, Void, VehicleRenderState> renderer) {
         super(renderer);
@@ -83,7 +88,12 @@ final class VehicleLightsLayer<T extends VehicleEntity> extends GeoRenderLayer<T
             return;
         }
         AircraftLights.LightSet set = AircraftLights.forVehicle(vehicle);
-        if (set == null || !AircraftLights.isPowered(vehicle)) {
+        if (set == null) {
+            return;
+        }
+        // With the engines off only the battery's lights (a cabin's lamps, the jump lights) work; a wreck has none.
+        boolean powered = AircraftLights.isPowered(vehicle);
+        if (!powered && (vehicle.isWrecked() || !set.hasBatteryLights())) {
             return;
         }
         float partialTick = Mth.clamp(passInfo.renderState().ageInTicks - vehicle.tickCount, 0.0F, 1.0F);
@@ -103,6 +113,9 @@ final class VehicleLightsLayer<T extends VehicleEntity> extends GeoRenderLayer<T
         List<Glow> glows = new ArrayList<>();
         List<float[]> spills = new ArrayList<>();
         for (AircraftLights.PointLight light : set.lights()) {
+            if (!powered && !AircraftLights.onBattery(light.kind())) {
+                continue;
+            }
             Vector3f at = model.transformPosition(new Vector3f(light.x() / 16.0F, light.y() / 16.0F, light.z() / 16.0F));
             float r = ((light.colour() >> 16) & 0xFF) / 255.0F;
             float g = ((light.colour() >> 8) & 0xFF) / 255.0F;
@@ -147,17 +160,79 @@ final class VehicleLightsLayer<T extends VehicleEntity> extends GeoRenderLayer<T
                 shown *= openSeat ? 0.3F : light.kind() == AircraftLights.Kind.STROBE ? 0.25F : 0.5F;
                 size *= 0.7F;
             }
+            boolean cabinLamp = light.kind() == AircraftLights.Kind.CABIN;
+            boolean jumpLight = light.kind() == AircraftLights.Kind.JUMP_RED || light.kind() == AircraftLights.Kind.JUMP_GREEN;
+            if (cabinLamp || jumpLight) {
+                // Seen from a metre or two inside the cabin: a small lit lens, not a flare (the green jump light's halo
+                // filled a quarter of the view and the dome lights showed white stars, the user's report, 2026-11-25).
+                size *= jumpLight ? 0.45F : 0.6F;
+                shown *= 0.7F;
+            }
             glows.add(new Glow(at, size, r, g, b, shown, !occupant));
             if (!openSeat) {
-                spills.add(new float[]{at.x, at.y, at.z, r, g, b, light.spill() * SPILL_GAIN * flash,
-                        light.spillRadius() * 1.2F, 0.1F});
+                if (cabinLamp) {
+                    // A dome light washes the cabin and the ceiling round it (light bounces in a small room), not the
+                    // outside of the hull: a wide wrap, gentler under a shader pack, which blooms what this draws.
+                    spills.add(new float[]{at.x, at.y, at.z, r, g, b, light.spill() * SPILL_GAIN * flash * (shaders ? SHADER_CABIN_SPILL : 1.0F),
+                            light.spillRadius() * 1.6F, CABIN_SPILL_WRAP});
+                } else if (jumpLight) {
+                    // A jump light is a signal, not a lamp: a little colour on the frame round it.
+                    spills.add(new float[]{at.x, at.y, at.z, r, g, b, light.spill() * SPILL_GAIN * flash * 0.35F, 0.9F, 0.0F});
+                } else {
+                    spills.add(new float[]{at.x, at.y, at.z, r, g, b, light.spill() * SPILL_GAIN * flash,
+                            light.spillRadius() * 1.2F, 0.1F});
+                }
+            }
+        }
+
+        // Blocks placed in the CH-47's cabin that give light wash the cabin round them in their colour (a furnace from its
+        // mouth, flickering as fire does, as torches, lanterns and candles do), as far and as bright as their light level
+        // reaches: warm light on the floor and walls beside them, more of it at night (the user, 2026-11-25: "lighting
+        // looks off"; 2026-11-26: every placeable block's light).
+        if (vehicle instanceof ttv.migami.jeg.vehicle.entity.ChinookEntity chinook) {
+            var grid = ttv.migami.jeg.vehicle.cabin.CabinClient.grid(chinook.getId());
+            float night = AircraftLights.nightSwitch(partialTick);
+            // The brightest 16 (each light is worked out at every vertex of the model): a cabin full of lamps is lit
+            // by them alone anyway.
+            List<net.minecraft.core.BlockPos> emitters = new ArrayList<>(ttv.migami.jeg.vehicle.cabin.CabinBlockEffects.emitters(grid));
+            emitters.sort(java.util.Comparator.comparingInt(cell -> -ttv.migami.jeg.vehicle.cabin.CabinBlockEffects.emission(grid.get(cell))));
+            for (net.minecraft.core.BlockPos cell : emitters.subList(0, Math.min(16, emitters.size()))) {
+                var state = grid.get(cell);
+                var corner = ttv.migami.jeg.vehicle.entity.ChinookEntity.LAYOUT.cellCorner(cell);
+                float x = (float) (-(corner.x + 1.0D) + 0.5D);
+                float y = (float) (corner.y + 0.5D);
+                float z = (float) (-(corner.z + 1.0D) + 0.5D);
+                if (ttv.migami.jeg.vehicle.cabin.CabinBlockEffects.furnace(state)) {
+                    net.minecraft.core.Direction drawn = state.getValue(
+                            net.minecraft.world.level.block.state.properties.BlockStateProperties.HORIZONTAL_FACING);
+                    x += drawn.getStepX() * 0.7F;
+                    y -= 0.15F;
+                    z += drawn.getStepZ() * 0.7F;
+                }
+                Vector3f at = model.transformPosition(new Vector3f(x, y, z));
+                float strength = ttv.migami.jeg.vehicle.cabin.CabinBlockEffects.emission(state) / 13.0F;
+                float flicker = 1.0F;
+                if (ttv.migami.jeg.vehicle.cabin.CabinBlockEffects.flame(state)) {
+                    float phase = (cell.hashCode() & 255) * 0.1F;
+                    flicker = 0.82F + 0.1F * Mth.sin(seconds * 7.3F + phase) + 0.08F * Mth.sin(seconds * 17.9F + phase * 2.0F);
+                }
+                float[] c = ttv.migami.jeg.vehicle.cabin.CabinBlockEffects.colour(state);
+                spills.add(new float[]{at.x, at.y, at.z, c[0], c[1], c[2],
+                        0.55F * Math.min(strength, 1.0F) * flicker * (0.45F + 0.55F * night) * (shaders ? SHADER_CABIN_SPILL : 1.0F),
+                        3.2F * strength, 0.3F});
             }
         }
 
         // Formation strips: flat panels of soft light on the skin, and a little of it on the panels round them.
         List<Vector3f[]> strips = new ArrayList<>();
         List<float[]> stripColours = new ArrayList<>();
+        float night = AircraftLights.nightSwitch(partialTick);
         for (AircraftLights.Strip strip : set.strips()) {
+            // Formation lights are a night light: by day they are dark panels (the CH-47's read as neon bars, 2026-11-21).
+            float level = !powered ? 0.0F : strip.nightOnly() ? night : 1.0F;
+            if (level <= 0.01F) {
+                continue;
+            }
             float out = Math.signum(strip.x()) * 0.15F;
             float x = (strip.x() + out) / 16.0F;
             float y0 = (strip.y() - strip.height() * 0.5F) / 16.0F;
@@ -170,9 +245,10 @@ final class VehicleLightsLayer<T extends VehicleEntity> extends GeoRenderLayer<T
             float r = ((strip.colour() >> 16) & 0xFF) / 255.0F;
             float g = ((strip.colour() >> 8) & 0xFF) / 255.0F;
             float b = (strip.colour() & 0xFF) / 255.0F;
-            stripColours.add(new float[]{r, g, b});
+            stripColours.add(new float[]{r, g, b, level});
             Vector3f centre = model.transformPosition(new Vector3f(x, strip.y() / 16.0F, (z0 + z1) * 0.5F));
-            spills.add(new float[]{centre.x, centre.y, centre.z, r, g, b, 0.5F, 1.0F, 0.2F});
+            // Only on the skin round it: with a wrap it showed through the CH-47's walls on its cabin's cable runs.
+            spills.add(new float[]{centre.x, centre.y, centre.z, r, g, b, 0.5F * level, 1.0F, 0.0F});
         }
 
         // The searchlight: from the lens along the beam to the first block it meets.
@@ -220,13 +296,14 @@ final class VehicleLightsLayer<T extends VehicleEntity> extends GeoRenderLayer<T
                 for (int i = 0; i < strips.size(); i++) {
                     Vector3f[] c = strips.get(i);
                     float[] rgb = stripColours.get(i);
-                    int[] colour = colour(rgb[0], rgb[1], rgb[2], 0.95F);
+                    // Faded in at dusk: the eyes type adds its colour, so the colour itself is scaled.
+                    int[] colour = colour(rgb[0] * rgb[3], rgb[1] * rgb[3], rgb[2] * rgb[3], 0.95F * rgb[3]);
                     quad(buffer, c[0], c[1], c[2], c[3], 0.0F, 1.0F, colour, colour);
                 }
             });
         }
         AircraftLights.RotorTips tips = set.rotorTips();
-        if (tips != null) {
+        if (tips != null && powered) {
             // Radians the rotor turns in a tick: the tip lights are drawn smeared over half of that, as the eye sees a
             // spinning light, which closes into a ring once the rotor is up to speed.
             float turn = Math.abs(vehicle.propellerRot(1.0F) - vehicle.propellerRot(0.0F));
@@ -563,18 +640,98 @@ final class VehicleLightsLayer<T extends VehicleEntity> extends GeoRenderLayer<T
         }
 
         private void flush() {
+            float[] p = this.position;
+            float edgeU = Mth.sqrt(square(p[3] - p[0]) + square(p[4] - p[1]) + square(p[5] - p[2]));
+            float edgeV = Mth.sqrt(square(p[9] - p[0]) + square(p[10] - p[1]) + square(p[11] - p[2]));
+            int n = Math.min(16, Math.max(1, (int) Math.ceil(Math.max(edgeU, edgeV) / SPILL_CELL)));
+            if (n > 1 && this.nearLight(edgeU, edgeV)) {
+                // A long face near a light (a cabin's cable run, a ceiling panel) is lit cell by cell: worked out only at
+                // its corners, one end's colour ran its whole length as a neon line, and a panel whose corners were all
+                // out of a lamp's reach stayed black round it (the CH-47's cabin at night, 2026-11-25). The cells are
+                // an n by n grid laid on the face's own two triangles (split along corners 0-2, as it is drawn), so on a
+                // face that isn't flat they stay on the drawn surface: laid on a bilinear patch, they sank behind it in
+                // dark jagged streaks.
+                for (int j = 0; j < n; j++) {
+                    for (int i = 0; i < n; i++) {
+                        this.cell(i / (float) n, j / (float) n, (i + 1) / (float) n, (j + 1) / (float) n);
+                    }
+                }
+                return;
+            }
             boolean any = false;
             for (int i = 0; i < 4; i++) {
-                this.colour[i] = this.light(this.position[i * 3], this.position[i * 3 + 1], this.position[i * 3 + 2]);
+                this.colour[i] = this.light(p[i * 3], p[i * 3 + 1], p[i * 3 + 2]);
                 any |= (this.colour[i] >>> 24) > 1;
             }
             if (!any) {
                 return;
             }
             for (int i = 0; i < 4; i++) {
-                this.out.addVertex(this.position[i * 3], this.position[i * 3 + 1], this.position[i * 3 + 2],
+                this.out.addVertex(p[i * 3], p[i * 3 + 1], p[i * 3 + 2],
                         this.colour[i], this.uv[i * 2], this.uv[i * 2 + 1], this.overlay, 0x00F000F0,
                         this.normal[0], this.normal[1], this.normal[2]);
+            }
+        }
+
+        private static float square(float v) {
+            return v * v;
+        }
+
+        /** Whether any light reaches the face: from its middle, within its radius and half the face's size. */
+        private boolean nearLight(float edgeU, float edgeV) {
+            float[] p = this.position;
+            float cx = (p[0] + p[3] + p[6] + p[9]) * 0.25F;
+            float cy = (p[1] + p[4] + p[7] + p[10]) * 0.25F;
+            float cz = (p[2] + p[5] + p[8] + p[11]) * 0.25F;
+            float half = 0.5F * Mth.sqrt(edgeU * edgeU + edgeV * edgeV);
+            for (float[] light : this.lights) {
+                float reach = light[7] + half;
+                if (square(light[0] - cx) + square(light[1] - cy) + square(light[2] - cz) < reach * reach) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        /** One cell of the face, from (u0, v0) to (u1, v1) across it (corners 0-1 along u, 0-3 along v). */
+        private void cell(float u0, float v0, float u1, float v1) {
+            float[][] corners = {{u0, v0}, {u1, v0}, {u1, v1}, {u0, v1}};
+            float[] at = new float[12];
+            float[] tex = new float[8];
+            int[] lit = new int[4];
+            boolean any = false;
+            for (int k = 0; k < 4; k++) {
+                float s = corners[k][0], t = corners[k][1];
+                // On triangle (0, 1, 2) below the diagonal, (0, 2, 3) above it.
+                float w0, w1, w2, w3;
+                if (s >= t) {
+                    w0 = 1 - s;
+                    w1 = s - t;
+                    w2 = t;
+                    w3 = 0;
+                } else {
+                    w0 = 1 - t;
+                    w1 = 0;
+                    w2 = s;
+                    w3 = t - s;
+                }
+                for (int c = 0; c < 3; c++) {
+                    // A hair toward the camera (positions are camera-relative), so the wash never loses the depth test
+                    // to the face it lights.
+                    at[k * 3 + c] = (w0 * this.position[c] + w1 * this.position[3 + c] + w2 * this.position[6 + c] + w3 * this.position[9 + c]) * 0.999F;
+                }
+                for (int c = 0; c < 2; c++) {
+                    tex[k * 2 + c] = w0 * this.uv[c] + w1 * this.uv[2 + c] + w2 * this.uv[4 + c] + w3 * this.uv[6 + c];
+                }
+                lit[k] = this.light(at[k * 3], at[k * 3 + 1], at[k * 3 + 2]);
+                any |= (lit[k] >>> 24) > 1;
+            }
+            if (!any) {
+                return;
+            }
+            for (int k = 0; k < 4; k++) {
+                this.out.addVertex(at[k * 3], at[k * 3 + 1], at[k * 3 + 2], lit[k], tex[k * 2], tex[k * 2 + 1], this.overlay,
+                        0x00F000F0, this.normal[0], this.normal[1], this.normal[2]);
             }
         }
 

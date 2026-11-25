@@ -1,0 +1,25 @@
+{
+  "result_vehicle": "jeg:ch47",
+  "ingredients": [
+    {
+      "item": "minecraft:iron_ingot",
+      "count": 96
+    },
+    {
+      "item": "minecraft:copper_ingot",
+      "count": 48
+    },
+    {
+      "item": "minecraft:redstone",
+      "count": 32
+    },
+    {
+      "item": "minecraft:feather",
+      "count": 24
+    },
+    {
+      "item": "minecraft:glass_pane",
+      "count": 16
+    }
+  ]
+}

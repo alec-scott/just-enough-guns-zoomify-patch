@@ -117,7 +117,7 @@ public final class SupportModules {
     public final Fittings fittings;
     /** Contents of storage modules (wall bays and lockers) and furnace state, by fitting slot. */
     private final ModuleContainer[] storage = new ModuleContainer[FITTINGS];
-    private final Furnace[] furnaces = new Furnace[WALL_BAYS];
+    private final VehicleFurnace[] furnaces = new VehicleFurnace[WALL_BAYS];
     private final Brewer[] brewers = new Brewer[WALL_BAYS];
     private final SupportServices.State services = new SupportServices.State();
 
@@ -125,7 +125,7 @@ public final class SupportModules {
         this.vehicle = vehicle;
         this.fittings = new Fittings();
         for (int i = 0; i < WALL_BAYS; i++) {
-            this.furnaces[i] = new Furnace();
+            this.furnaces[i] = new VehicleFurnace(this::canUse, this.vehicle::onFittingsChanged);
             this.brewers[i] = new Brewer();
         }
     }
@@ -243,7 +243,7 @@ public final class SupportModules {
                 @Override public boolean stillValid(Player who) { return modules.canUse(who); }
             }, title));
             case FURNACE, SMOKER, BLAST_FURNACE -> {
-                Furnace furnace = this.furnaces[slot];
+                VehicleFurnace furnace = this.furnaces[slot];
                 player.openMenu(new SimpleMenuProvider((id, inv, p) -> switch (kind) {
                     case SMOKER -> new net.minecraft.world.inventory.SmokerMenu(id, inv, furnace.items, furnace.data);
                     case BLAST_FURNACE -> new net.minecraft.world.inventory.BlastFurnaceMenu(id, inv, furnace.items, furnace.data);
@@ -297,7 +297,7 @@ public final class SupportModules {
             }
         }
         for (int slot = 0; slot < WALL_BAYS; slot++) {
-            Furnace furnace = this.furnaces[slot];
+            VehicleFurnace furnace = this.furnaces[slot];
             if (furnace.items.isEmpty() && furnace.litTime == 0) continue;
             ValueOutput child = out.child("Furnace" + slot);
             ContainerHelper.saveAllItems(child.child("Items"), furnace.items.getItems());
@@ -333,7 +333,7 @@ public final class SupportModules {
             in.child("Storage" + slot).ifPresent(child -> ContainerHelper.loadAllItems(child, this.storage(s).getItems()));
         }
         for (int slot = 0; slot < WALL_BAYS; slot++) {
-            Furnace furnace = this.furnaces[slot];
+            VehicleFurnace furnace = this.furnaces[slot];
             Optional<ValueInput> child = in.child("Furnace" + slot);
             child.ifPresent(c -> {
                 c.child("Items").ifPresent(items -> ContainerHelper.loadAllItems(items, furnace.items.getItems()));
@@ -359,7 +359,7 @@ public final class SupportModules {
             out.add(this.fittings.getItem(slot));
             if (this.storage[slot] != null) out.addAll(this.storage[slot].getItems());
         }
-        for (Furnace furnace : this.furnaces) out.addAll(furnace.items.getItems());
+        for (VehicleFurnace furnace : this.furnaces) out.addAll(furnace.items.getItems());
         for (Brewer brewer : this.brewers) out.addAll(brewer.items.getItems());
         for (var disc : this.services.discs) out.addAll(disc.getItems());
         out.addAll(this.services.payment.getItems());
@@ -484,69 +484,6 @@ public final class SupportModules {
 
         @Override public boolean stillValid(Player player) {
             return SupportModules.this.canUse(player);
-        }
-    }
-
-    /** A furnace, smoker or blast furnace fitted in a bay, cooking as the vanilla one does (no experience). */
-    private final class Furnace {
-        final ModuleContainer items = new ModuleContainer(3);
-        int litTime, litDuration, cookingProgress, cookingTotal;
-        final ContainerData data = new ContainerData() {
-            @Override public int get(int index) {
-                return switch (index) {
-                    case 0 -> Furnace.this.litTime;
-                    case 1 -> Furnace.this.litDuration;
-                    case 2 -> Furnace.this.cookingProgress;
-                    case 3 -> Furnace.this.cookingTotal;
-                    default -> 0;
-                };
-            }
-
-            @Override public void set(int index, int value) {
-                switch (index) {
-                    case 0 -> Furnace.this.litTime = value;
-                    case 1 -> Furnace.this.litDuration = value;
-                    case 2 -> Furnace.this.cookingProgress = value;
-                    case 3 -> Furnace.this.cookingTotal = value;
-                    default -> { }
-                }
-            }
-
-            @Override public int getCount() {
-                return 4;
-            }
-        };
-
-        @SuppressWarnings("unchecked")
-        void tick(ServerLevel level, RecipeType<? extends AbstractCookingRecipe> type, int speed) {
-            boolean wasLit = this.litTime > 0;
-            if (this.litTime > 0) this.litTime--;
-            ItemStack input = this.items.getItem(0), fuel = this.items.getItem(1), output = this.items.getItem(2);
-            Optional<? extends RecipeHolder<? extends AbstractCookingRecipe>> recipe = input.isEmpty() ? Optional.empty()
-                    : level.recipeAccess().getRecipeFor((RecipeType<AbstractCookingRecipe>) type, new SingleRecipeInput(input), level);
-            ItemStack result = recipe.map(r -> r.value().assemble(new SingleRecipeInput(input))).orElse(ItemStack.EMPTY);
-            boolean canCook = !result.isEmpty() && (output.isEmpty()
-                    || ItemStack.isSameItemSameComponents(output, result) && output.getCount() + result.getCount() <= output.getMaxStackSize());
-            if (this.litTime <= 0 && canCook && level.fuelValues().isFuel(fuel)) {
-                this.litDuration = this.litTime = level.fuelValues().burnDuration(fuel) / speed;
-                if (this.litTime > 0) {
-                    Item remainder = fuel.getItem() == Items.LAVA_BUCKET ? Items.BUCKET : null;
-                    fuel.shrink(1);
-                    if (fuel.isEmpty() && remainder != null) this.items.setItem(1, new ItemStack(remainder));
-                }
-            }
-            if (this.litTime > 0 && canCook) {
-                this.cookingTotal = recipe.get().value().cookingTime();
-                if (++this.cookingProgress >= this.cookingTotal) {
-                    this.cookingProgress = 0;
-                    if (output.isEmpty()) this.items.setItem(2, result.copy());
-                    else output.grow(result.getCount());
-                    input.shrink(1);
-                }
-            } else if (this.cookingProgress > 0) {
-                this.cookingProgress = Math.max(0, this.cookingProgress - 2);
-            }
-            if (wasLit != this.litTime > 0) SupportModules.this.vehicle.onFittingsChanged();
         }
     }
 

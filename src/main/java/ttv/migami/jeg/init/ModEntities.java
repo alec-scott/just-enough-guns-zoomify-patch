@@ -255,6 +255,10 @@ public final class ModEntities {
     public static final DeferredHolder<EntityType<?>, EntityType<ConfiguredVehicleEntity>> A10 = configuredVehicle("a10", 3.2F, 3.4F);
     public static final DeferredHolder<EntityType<?>, EntityType<ConfiguredVehicleEntity>> BMP2 = configuredVehicle("bmp2", 3.4F, 2.4F);
     public static final DeferredHolder<EntityType<?>, EntityType<ConfiguredVehicleEntity>> MI28 = configuredVehicle("mi28", 3.0F, 4.5F);
+    /** The CH-47F Chinook (design/chinook/): its block box is its fitted parts' envelope, its cabin walk-in. */
+    public static final DeferredHolder<EntityType<?>, EntityType<ttv.migami.jeg.vehicle.entity.ChinookEntity>> CH47 = REGISTER.register("ch47",
+            () -> EntityType.Builder.<ttv.migami.jeg.vehicle.entity.ChinookEntity>of(ttv.migami.jeg.vehicle.entity.ChinookEntity::new, MobCategory.MISC)
+                    .sized(4.5F, 4.5F).clientTrackingRange(16).updateInterval(1).build(entityKey("ch47")));
     public static final DeferredHolder<EntityType<?>, EntityType<ConfiguredVehicleEntity>> TOM6 = configuredVehicle("tom6", 3.0F, 2.4F);
     /**
      * Retired 2026-11-17 (replaced by the sentry, fleet plan section 6): kept registered for one release so a saved tower

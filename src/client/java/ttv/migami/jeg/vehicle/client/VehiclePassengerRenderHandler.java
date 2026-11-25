@@ -42,17 +42,30 @@ public final class VehiclePassengerRenderHandler {
             return false;
         }
         var entity = level.getEntity(avatar.id);
-        if (entity == null || !(entity.getVehicle() instanceof VehicleEntity vehicle) || !vehicle.usesVehiclePoseTransform()) {
+        if (entity == null) {
             return false;
+        }
+        VehicleEntity vehicle = entity.getVehicle() instanceof VehicleEntity seat && seat.usesVehiclePoseTransform() ? seat : null;
+        // Seated: about the hips. Standing in a cabin: about the eye, which the cabin places (CabinMath.feetWorld puts the
+        // body upright below it), so the tilt brings the feet back onto the floor. Drawn upright, someone standing in a
+        // CH-47 banked 60 degrees hung 1.4 blocks to the low side, through the wall and the blocks stowed there (the
+        // user, 2026-11-26: "the passenger in the back kind of bugs out when the chinook hard banks").
+        float pivot = 0.6F;
+        if (vehicle == null) {
+            int cabin = ttv.migami.jeg.vehicle.cabin.CabinClient.cabinOf(entity);
+            if (cabin < 0 || !(level.getEntity(cabin) instanceof VehicleEntity aboard) || !aboard.usesVehiclePoseTransform()) {
+                return false;
+            }
+            vehicle = aboard;
+            pivot = (float) ttv.migami.jeg.vehicle.cabin.CabinMath.EYE;
         }
         float partialTick = net.minecraft.client.Minecraft.getInstance().getDeltaTracker().getGameTimeDeltaPartialTick(false);
         double yaw = vehicle.poseAngles(partialTick).x;
         org.joml.Quaterniond tilt = vehicle.poseRotation(partialTick).rotateY(Math.toRadians(yaw));
         poseStack.pushPose();
-        float hips = 0.6F;
-        poseStack.translate(0.0F, hips, 0.0F);
+        poseStack.translate(0.0F, pivot, 0.0F);
         poseStack.mulPose(new org.joml.Quaternionf((float) tilt.x, (float) tilt.y, (float) tilt.z, (float) tilt.w));
-        poseStack.translate(0.0F, -hips, 0.0F);
+        poseStack.translate(0.0F, -pivot, 0.0F);
         return true;
     }
 

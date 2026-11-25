@@ -7,5 +7,7 @@ public final class FabricClientEntrypoint implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
         FabricClientBootstrap.init();
+        ttv.migami.jeg.vehicle.cabin.CabinClient.init();
+        ttv.migami.jeg.vehicle.cabin.CabinBlockEffects.init();
     }
 }

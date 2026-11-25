@@ -103,6 +103,8 @@ tracker is `design/READINESS.md` ("The user's fleet review"); "how" names the sh
 | Weapons | **Tracers and flashes leave the muzzle in every view, zoomed included**: lay a gun on the server at a rate (R2) so the drawn gun and the rounds agree; a zoomed sight sits **above and behind the gun, never on its muzzle** (from the muzzle, rounds and flash came out of the crosshair), so they rise into the crosshair from the bottom of the view | speedboat, Mi-28 gunner | the speedboat's rates; the Mi-28's `zoom_x/y/z` 0.26 above the bore and 1.6 behind the muzzle (`Mi28GunnerAimClientGameTest` pins it); a turreted helicopter gun's tracer starts on the gun as drawn, not where the server fired it a few ticks earlier (`BulletTrailRenderer.drawnVehicleMuzzleOffset`) |
 | Weapons | **Reloads at a playable pace, and heard as heavy work** (a spent case dropped, the next round slid home): under about 4 s for a single round, 8 s for a rocket rack | TOW, PLZ-05, Type-63; BL-132, Mk42 | stats in `VehicleWeaponStats` (x 0.64); `design/mk42/prepare_reload_audio.py` |
 | Camera | **No seat looks out from outside the hull.** A troop seat with no real view of its own has no first person | BMP-2, LAV-150 | `"no_first_person_seats"` in the data; F5 cycles the chase and hull cameras there |
+| Camera | **The pilot sees the panel in first person.** The pinned view looks down at a seated pilot's eye line, with the eye about 0.7 m from the panel; the helmet display's speed and altitude boxes follow the aircraft's line ahead, and the status card moves off the displays | CH-47 (eye 2.5 m up and 0.44 m from the panel: only windscreen showed) | `VehicleEntity.cockpitViewDown` (12 on the CH-47), the seat's `zoom_camera`, `HelicopterHmd`, `VehicleHudOverlay` |
+| Camera | **The pilot's eye stays in the seat when the hull banks.** In a helicopter only the view's own roll stays level through sway; the eye is placed with the hull's whole pose | CH-47 (eye 2.5 m over the roll pivot: swaying put the camera through the posts and out of the airframe) | `VehicleEntity.seatEyeOffsetWithPose` |
 | Camera | **The last F5 view is an action camera on the vehicle** (helicopters: tail boom; A-10: wing; land vehicles and boats: rear corner of the hull's side, looking forward along it) | BMP-2, LAV-150 | `VehicleEntity.tailCameraPosition`/`hasHullCamera` |
 | Model | **Textured like a real machine, not flat colour**: panel lines, weathering, decals, colour variation | BMP-2, LAV-150, HPJ-11 | `design/ground-vehicles/detail_texture.py <id>`: enlarges the texture and weathers each texel by where it sits on the model (seams, worn edges, bolts, mottling, streaks, dust, mud); the untouched texture kept as `design/<id>/texture_base.png`, a before/after in `review-texture.png`. Add a vehicle to its `VEHICLES` table |
 | Model | **The occupant never clips the vehicle**: head clear of walls and roofs, feet on the floor, and a seated pilot stays in the seat as the airframe banks or slips | FSV-6, AH-6 | walls and floors stop short of the block cells real blocks sit in (`design/support/generate.py`); `VehiclePassengerRenderHandler.tiltWithAircraft` |
@@ -113,7 +115,7 @@ tracker is `design/READINESS.md` ("The user's fleet review"); "how" names the sh
 | Damage | **Explosions are the realistic blast** of the A-10 and helicopters (fireball, real smoke column, debris), never the classic JEG burst | all | `RealisticBlast.explode` / `show` |
 | Damage | **Smoke looks like smoke** (soft, volumetric, drifting) and never hides the target from its own gunner | LAV-150, Type-63 | rockets blow their smoke out behind the launcher (`ShellGunEntity.fireShell`); smoke screens (dischargers, grenades, smoke shells) are one billowing lit cloud per canister (`SmokeScreenPayload` -> `MissileBlastRenderer`'s smoke), never vanilla campfire smoke. **All other vehicle smoke and flame** (damage by hull left, burning wrecks, jet trails, gun gas, exhausts, flare trails) goes through `SmokeFx.emit` (kinds GREY, DARK, BLACK, FIRE, WHITE); a shell gun's muzzle blast and barrel wisps are drawn from its `GunReportPayload` (`MissileBlastRenderer.gunFired`). No `ParticleTypes.*SMOKE*` or campfire smoke on a vehicle (`SmokeFxClientGameTest`) |
 | HUD | **Cards hold their size**: a card never shrinks back after a reading grows it, numbers have a digit of headroom, numbers sit against the right edge (`HudPanel`); F1 hides the vehicle HUD | all | `HudPanel.width`, `numeric` |
-| HUD | **Minimal and single**: show only what this seat needs now, each fact once; readouts in fixed-width cards (the m/s card grew with its digits); nothing flashes; every mark on screen is explained by its shape (the yellow bore marker was not) | all | `VehicleHudOverlay`: one status card headed by the vehicle's name (the user wants the name kept, 2026-11-19) with `HudPanel.reading` rows, the weapon list for weapons, the crew list only when it matters, the bore marker a ring labelled GUN; switches drawn in the HUD style, never vanilla buttons |
+| HUD | **Minimal and single**: show only what this seat needs now, each fact once; readouts in fixed-width cards (the m/s card grew with its digits); nothing flashes; every mark on screen is explained by its shape (the yellow bore marker was not) | all | `VehicleHudOverlay`: one status card headed by the vehicle's name (the user wants the name kept, 2026-11-19) with `HudPanel.reading` rows (a speed under bars reads in the bars' column, `readingAfterBars`: set against the card's edge it sat apart, 2026-11-26), the weapon list for weapons, the crew list only when it matters, the bore marker a ring labelled GUN; switches drawn in the HUD style, never vanilla buttons |
 | Interaction | **The helm has live instruments**, in the vehicle's own style, as the helicopters' cockpits do: no blank dash | speedboat | `SpeedboatCockpitLayer` (textures `design/speedboat/make_console.py`); draw in the dash's own bone frame (`inDash`), or it sinks into the dash when the hull pitches |
 | Interaction | **A right-click on any visible part boards it, every time**, whatever is in hand | all | the gun mod's own right-click (aim) never swallows a click on a vehicle (`FabricClientBootstrap` UseEntityCallback) |
 | Defences | **Automatic mode is a visible switch** (the hold's screen, the HUD's key chip), heard when thrown, engages hostile mobs only (a monster's mount included: a chicken jockey) and needs no ammunition; a mounted gun on a crewed vehicle gets one too, for when nobody is at it | HPJ-11, sentry, speedboat | `VehicleMenu.BUTTON_TOGGLE_AUTO` and the screen's switch; `AutoDefenceEntity.unmannedFireIsFree`; `Hpj11Entity.targetPriority` takes hostile mobs after air threats |
@@ -206,6 +208,13 @@ clears, and grows the entity box at every angle that isn't square on.
 - **Long thin parts.** Where parts like a tail boom or stub wings would make the rotated envelope much bigger than
   the hull, keep the entity box at the hull size, as helicopters do (`usesHullBlockCollisionBox`). Then size
   `ModEntities` `sized(width, height)` to the hull.
+- **Long vehicles are missed by vanilla's entity search.** Vanilla finds an entity by the 16-block section its origin
+  stands in, looking only 2 blocks round the searched box. A part more than 2 blocks from the origin, in the next
+  section, is never found: the Chinook's cockpit (7 m ahead of its origin) couldn't be clicked to board, and a round
+  at its nose from the side passed through (2026-11-25). Searches that must see whole vehicles add them from
+  `LargeVehicles` (every vehicle whose parts reach past 2 blocks registers itself each tick): `BulletEntity`'s
+  entity hits and the player's view (`LargeVehiclePick`). Explosions still use vanilla's search. Test a click and a
+  shot at the far ends of a long vehicle, with its origin near a section's edge.
 - **Clearances.** Keep the top under 3 blocks if it should pass under tree canopies. Keep the bottom at ground level
   so steps work with `up_step`.
 - **Verify with pictures and a test, not by eye in JSON:**
@@ -263,6 +272,34 @@ hand-editing JSON. The script keeps the geometry parametric, validated and repro
 
 - the GeckoLib geometry, two LOD models, the texture and glow atlas, and the paint mask
 - `rig.json`, the Blockbench project and an offline preview
+
+**Curved skins (mesh).** GeckoLib draws only boxes. A vehicle that must look curved (the CH-47 is the worked example,
+`design/chinook/mesh.py`) adds a quad mesh drawn on its GeckoLib bones by `VehicleMesh`, so animation still works:
+- Write each part relative to its bone's pivot. GeckoLib hands the per-bone render the pose at the pivot.
+- Keep opaque, glass and lining parts apart in the file: opaque goes in the cutout pass, glass in the translucent one,
+  and linings are drawn only near the camera. Any opaque texel drawn in the translucent pass looks grainy under shaders.
+- **Cut window outlines into the geometry, never into the texture's alpha.** A cutout edge steps at the texel size,
+  and from a seat a hand's breadth away even 6 mm texels show as stairs. Give the window a signed distance
+  (`Surface.clip`): the quads it crosses are split along it, the pane goes to the glass pass and the frame stays opaque,
+  and `clip_inner` adds the frame's depth up to the lining. Blend a seal into the colour, not the alpha.
+- Split only the cells the outline crosses (sample them), not every cell near it: the distance test alone quadrupled
+  the CH-47's quads.
+- **To make a model roomier, grow it on output; don't re-author it.** The CH-47's cabin went from 2.3 x 2 m to 3 x 3 m
+  inside (`generate.grow`):
+  - Each half moves out from the centre line, which only lengthens the flat roof, floor and belly.
+  - Everything above a line moves up. Ahead of the cabin the nose is stretched smoothly instead, because a step there
+    stood a box on the cockpit.
+  - Every box, bone pivot, mesh point, seat, muzzle and hitbox goes through the same mapping. Rotors only rise.
+  - Small centred items (lamps, the hook) keep their size.
+  - Keep each surface's authored grid (`Surface.D`) and draw window outlines and painted placings in it. Add ring
+    points on the raise's line, so the new wall shades as one with the wall below.
+  - **Nothing may be authored exactly on the raise's line.** A point on it doesn't rise. The CH-47's aft pylon
+    underside sat at 47, the line, so it stayed a metre under the grown ceiling and hung across the ramp opening as a
+    dark slab (the user, 2026-11-21). Author the parts that meet the cabin's ceiling at the ceiling (`CABIN_TOP`), and
+    look out of the cabin's openings in a cut-away render after any grow.
+- **Build mirrored sides from named faces, not from a pair ordered by sign.** `cabin_wall` set `x_in, x_out =
+  (-OUT_HALF, -IN_HALF)` for the left side, so its "inner" face was the outer skin. The lining and ribs were built
+  through the skin, and the left side showed the cabin's quilting from outside. Check both sides from outside.
 
 **Imported models (Superb Warfare).** A model kept from SBW is never hand-edited either: its
 `design/<vehicle>/refit.py` is its generator. It builds on `design/superbwarfare-port/refit_lib.py` and reads the
@@ -374,6 +411,8 @@ alpha between 1 and 254, and every other pixel 0 or 255.
 physically; parts that stop working when hit.
 
 ### Texture quality (the review of 2026-11-19)
+
+**Interiors people walk in need patterns, not flat colours** (the CH-47, 2026-11-21: "more detailed textures inside"). Paint them per material through `bake_unique`'s `fill`, at a higher density (`boost`). Lay each pattern out in model coordinates, so it carries on across the pieces a wall is built from (`design/chinook/interior_paint.py`: quilted blankets, floor plates and tie-downs, rollers, riveted frames, cables). Keep those materials out of the weathering pass (`KEPT`), and give a pattern its own material rather than reusing one the guns share (the cable runs were `black`, as the M240s are).
 
 - **No flat swatches.** A face painted one colour at one texel a model pixel reads as plastic next to the pack's
   shaded world. Refits run `design/ground-vehicles/detail_texture.py <id>` (4x texture, panel seams, worn edges, bolt
@@ -500,13 +539,81 @@ Lessons from the FSV-6 (`design/support/`).
   client. The ways to do it, from cheapest: crew seats in the back that face a module and open it (one at a time);
   own moving collision plus carrying riders along each tick (large, and still laggy for passengers); or a Sable
   sub-level (Create Aeronautics, in the pack), which moves real blocks that players can walk on, at the cost of a hard
-  dependency that `-PwithPack` does not load.
+  dependency that `-PwithPack` does not load. The Chinook does the second with the shared cabin
+  (`vehicle/cabin`, `CabinVehicle`). Lessons from its first play-through (2026-11-20, `Ch47RampDoorClientGameTest`):
+  - **Movement aboard collides with the cabin only, not the world.** Count feet as aboard (`cabinAboard`) only where
+    the cabin has something under them. A ramp's aboard zone ran 0.3 m past its lip. People stepping on there had no
+    floor, fell, and were let go inside the ground. When someone is taken aboard, set them on the tread they stand in
+    (`CabinClient.standingHeight`): collision ignores a box the body already overlaps.
+  - **A click handler that cancels `Minecraft.startUseItem` must set `rightClickDelay`** (vanilla sets it first thing).
+    Otherwise the held-key repeat calls it again the same tick and every tick after. One click on the ramp panel
+    cycled the ramp twice, and placing a furnace opened it at once.
+  - **A door's aboard zone must hold a person through the whole jump that boards them.** The CH-47's crew door counted
+    feet aboard only up to 0.3 m over the floor, so a jump in from the ground (taken aboard on the way up) left the
+    zone at its top. The player was let go in mid-air outside the hull and fell back (2026-11-21). Count it to the
+    top of a jump (`ChinookEntity.cabinAboard`). Give a folded-out step a shell box so the player can stand on it.
+  - **A helicopter that holds its hover for its crew keeps its engines on every client.** The pilot's client cleared
+    its own engine state as they pressed dismount and again on the dismount sync. It heard the shutdown play while the
+    server held the hover (the CH-47, 2026-11-21). Any path that clears a vehicle's control state must ask
+    `holdsHoverWhenPilotLeaves` first (`VehicleEntity.releasePilotControls`). Test it tick by tick after getting up,
+    not only at the end.
+  - **An open doorway has nothing to hit.** A click through it went on to the vehicle's own "right-click boards it"
+    and sat the player in the pilot's seat. Route it to the door (`CabinVehicle.cabinControlOnRay`).
+  - **People standing in the cabin are crew aboard** (2026-11-21: "it should still hover even if the pilot gets out of
+    his seat"). Count them for the helicopter's autopilot (`hasCrewOffSeats`), and sync it, since the client runs the
+    same check. Keep the engines on when the pilot gets up in flight (`holdsHoverWhenPilotLeaves`). Bridge the
+    couple of ticks before the cabin hears where they stand. Re-send the engine state while the hover holds: the
+    client wrote its own copy while it was predicting, and only changes are sent. `Ch47CrewHoverClientGameTest`.
+
+  Lessons from the two-player play-test (2026-11-25: one player flying, one walking about inside, two pack clients
+  over LAN, section 9):
+  - **Play damage with a survival player.** The hull's ramming (`tickRammingDamage`) hit everyone inside its boxes, so
+    a Chinook lifting off killed the person standing in its cabin ("crushed by a vehicle"). Every earlier trial used
+    creative players, who take no damage, so it never showed. People aboard are carried: the hull's ramming and its
+    push-out pass them by (`VehicleEntity.carriesAboard`, from `CabinNetwork`). `Ch47GroundIdleCrewClientGameTest`.
+  - **Everything vanilla reads from a player's world movement is wrong aboard.** Their world movement is the vehicle's
+    flight. Seen from the other client, a person standing still on the ramp at 23 m/s ran flat out; their footsteps
+    were silent on both clients (vanilla's step sounds come from `Entity.move`, skipped aboard); and the engine they
+    stood beside was Doppler-shifted as if it flew away from them. Limbs swing to the walk in cabin coordinates
+    (`LivingEntityCabinWalkMixin`, `CabinClient.remoteWalked`); each client plays everyone's steps aboard from their
+    cabin-coordinate walk (`CabinClient.playStep`: the floor's sound, or the placed block's); people aboard hear the
+    interior engine mix with no Doppler, as the seated crew do (`HelicopterEngineAudio.isAboard`). The local player's
+    own move is placed on the pose they were last placed on, so view bobbing reads their walk too.
+  - **From inside, the view is never on the vehicle itself.** The eye stood in the vehicle's entity box, so every
+    right-click in the cabin went to "right-click boards it" and sat the player in the first free seat (the pilot's,
+    or the co-pilot's while the pilot flew), and an empty-handed punch hit the hull. The pick aboard is filtered
+    (`LocalPlayerCabinPickMixin`, `CabinClient.filterPick`): not the vehicle, and nothing in the world behind the
+    walls. A seat is taken by pointing at it (`CabinVehicle.cabinSeatOnRay`), and every control and seat has a prompt
+    in the action bar (`cabinControlPrompt`), as the FSV-6's lockers have; outside, the hull says what a click does
+    (`Ch47Hints`).
 - **Fitted blocks are drawn two ways; test both.** A block with a real model is drawn with `submitMovingBlock`. A
   chest, trapped chest, ender chest or shulker box also reports `RenderShape.MODEL` in 26.1, but its block model is
   empty (its look comes from the block entity's renderer), so that draws nothing. Draw those through
   `BlockModelResolver.update(state, blockState, BlockDisplayContext.create())` and `BlockModelRenderState.submit`, as
   an enderman draws its held block (`SupportVehicleRenderer.drawSpecialBlock`). Fit both kinds in the visual test
   (`SupportLookClientGameTest`): the FSV-6's chests were invisible in every bay until then.
+- **Blocks placed in a moving cabin keep their light, look and sound (2026-11-26).** A block in a cabin grid is drawn by
+  the vehicle, so nothing of the world's gives it any of these. `CabinBlockEffects` (client) gives them back for every
+  placeable block, as in the world:
+  - Light: each block's own level (`getLightEmission`) lights its cell and a level less a cell away, and washes the
+    walls in its colour (`VehicleLightsLayer`, the 16 brightest). Blocks that glow as drawn (magma) are full bright.
+    Before, only a lit furnace lit anything; lanterns, torches and glowstone aboard were dark at night.
+  - Look and sound: vanilla's `animateTick` runs for each block as often as for a placed one that far from the player,
+    told it stands at its cell's spot in the world. `ClientLevelCabinEffectsMixin` moves the particles and sounds it
+    makes onto the drawn block. The particles are then carried with the cabin each tick. Given only the aircraft's
+    speed, a torch's smoke slowed in the world's air and streamed aft at 30 m/s.
+  - Block entities: chests, ender chests and shulker boxes open their lids, and an enchanting table's book opens and
+    turns to whoever is near, in the cabin's frame.
+  - Placement follows the face clicked (`CabinBlocks.placedState`): wall torches, hanging lanterns, grindstones on the
+    floor, end rods and amethyst out of the face. Candles light with flint and steel and go out by hand.
+  - Check with the dev tools: `/jegcabin put <i j k> <block>` fills cells, and `/jegsounds <s>` logs every sound with
+    its cabin cell.
+- **Draw people standing in a cabin tilted with it, about their eye (2026-11-26).** The cabin places the eye and puts an
+  upright body under it (`CabinMath.feetWorld`), which suits the camera, but the body drawn that way hangs out of a
+  banked cabin: in a CH-47 banked 60 degrees, someone standing aboard hung 1.4 blocks to the low side, through the wall
+  and the blocks stowed there. `VehiclePassengerRenderHandler.tiltWithAircraft` tilts them by the hull's attitude about
+  the eye, as it tilts seated riders about the hips. Test with `/jegfly steep <speed> <radius>` (up to 60 degrees) and a
+  second client watching.
 - **Walls proud of the cells.** Where a real block (a bed) fills a cell up to the room's edge, the wall that closes
   that edge must stand a little outside it (0.4 px), not on the same plane, or the block shows through from outside.
 - **Real blocks only where needed.** Place a real block only where a feature needs one (a bed for sleep and spawn).
@@ -669,6 +776,62 @@ captures, such as `finish_blade_tilt`), scaled from where it rests, driven clien
 to frame. Drive it from what the player sees happening (the dozer is cutting) rather than a figure that measures
 something else (the dozer's synced load is the hold's credit and stays near 0.15 while cutting a bank).
 
+A load hanging under a helicopter (the Chinook's sling) pulls on the airframe through `externalAcceleration`. The hover
+hold carries that pull (the user, 2026-11-21: hands off, a loaded Chinook hovers as an empty one does). Take the hold's
+error on the speed *before* the pull, and add the pull back as lift. With only the error term it sank 2 m/s; with the
+error on the pulled speed it settled climbing at the pull's own rate.
+
+Draw a rope with weight, not as a straight tube (the user, 2026-11-21: "the rope should have gravity attached to it so
+it naturally slings around"). `SlingRope` is a client-side Verlet chain under real gravity with air drag. Its links only
+pull, so the rope can go slack. Pin it at both ends to the positions the server's physics hold. Let a free end hang with
+a hook's weight. Tick it at 20 Hz in the vehicle's client tick, and draw it eased between ticks with its pinned ends
+placed exactly. A rope hanging still is straight, and it bows only in motion: check that by flying past a camera
+(`Ch47SlingRopeClientGameTest`), not by its sag at rest.
+
+A helicopter coming down onto another vehicle rests on its roof (`restOnVehiclesBelow`, in `moveHelicopter` so the
+pilot's predicting client does it too). Vehicle-against-vehicle resolution only stops sideways closing speed, so a
+Chinook descended straight through an LAV-150 and stuck there.
+
+### Handing the controls over (2026-11-25)
+
+A client predicts a vehicle's movement only while its player drives it. Two handovers glitched on the CH-47:
+- **Taking the controls.** The client's flight model kept what it held when that player last flew: back in the pilot's
+  seat from the co-pilot's, the nose snapped 10 degrees down and the aircraft lurched off at its old speed. Seed the
+  model from the vehicle as it is when prediction starts (`VehicleEntity.seedHelicopterPrediction`).
+- **Leaving them in flight.** Forty forced state syncs after the pilot got up each set the position and the previous
+  position together, so the aircraft (and the camera of anyone in its cabin) stood still between ticks and jumped on
+  each: a 20 Hz judder for two seconds. A helicopter that flies on for its crew hands over with one sync that eases;
+  the former pilot's client flies it on along its velocity until the server's states arrive; synced states are eased
+  toward where the aircraft will be after the easing (position plus velocity times its three ticks), not where it was.
+  Measure with a frame trace (`/jegfly trace N` logs the drawn pose each frame) rather than by eye.
+
+### A pilot's head (2026-11-26)
+
+A helicopter pilot's mouse is the stick, so the pilot looks about while free look (C) is held (`PilotHeadLook`). The
+head turns within the cockpit, up to the seat's yaw and pitch limits, and turns with the airframe. Before, free look held
+a world heading, so in a turn the cockpit swung round a fixed view, and letting go snapped the view back to the nose. Now
+it eases back over about a fifth of a second. This applies to every helicopter's driver seat with a pinned view
+(sensitivity 0, fixed camera). Jets keep their own free look: their view rolls with the hull.
+
+### Light from lamps on long faces
+
+A vehicle's lamps light it by drawing it again, washed, with the light worked out at each face's corners. A long
+face (a cable run, a ceiling panel) then carries one end's colour all along it (neon green lines from a green jump
+light) or, with every corner out of a lamp's reach, stays black round it. `VehicleLightsLayer` lights such faces near a
+lamp cell by cell (0.4 m), laying the cells on the two triangles the face is drawn as: a bilinear patch on a face that
+isn't flat sank behind it in dark jagged streaks.
+
+### A transport helicopter on the ground (2026-11-25)
+
+The light helicopters cut their engines whenever they stand on the ground with the collective down. A transport can't:
+the CH-47 cut its engines the moment its twenty-second start finished unless the pilot held the collective through it,
+and again at every touchdown, so troops walking off the ramp cost the pilot another start. A helicopter that returns
+`idlesOnGround()` keeps flight rpm at flat pitch on the ground until the pilot holds descend there for two seconds
+(counted only after a second on the ground, so the hold that landed it doesn't count), or leaves the seat. Its HUD says
+which: starting with a progress bar, ground idle with the shut-down key, shutting down with a bar. A heavy airframe also
+climbs and descends slower (`helicopterVerticalRateScale`, 0.6 on the CH-47: 6 m/s up, 6.6 down). The light helicopters'
+11 m/s descent, held, set off the sink-rate warning (the missile beeper) in a plain descent.
+
 ### Destruction and wrecks
 
 Nothing vanishes when destroyed (2026-11-17, `VehicleEntity.goesDownAsWreck`). Aircraft go down burning; land
@@ -690,6 +853,23 @@ SBW's door bones pivot mid-door, not on their hinges. Don't move pivots by hand 
 overwrites it); turn the bone in the renderer about the real hinge with `swingAboutHinge` (rotate about the pivot, then
 translate by (I - R)(H - P), in GeckoLib's X-mirrored frame). The BMP-2's rear doors open while someone boards or leaves
 (`VehicleDoors`, from the passenger count). Check the swing in a screenshot from behind at mid-travel.
+
+The same applies to hinged parts of our own models. A part modelled reaching aft (model +Z), such as the Chinook's
+ramp, lifts its far edge with a **negative** X turn in GeckoLib. The generator's review renders use the opposite sense,
+so the Chinook's "closed" ramp looked right in `review-ramp-closed.png` and hung down in game. Its crew door's lower
+half, on a hinge along the sill on the right (+X authored), folds outward with a **negative** Z turn: positive laid it
+across the cabin floor. Check every pose in game.
+
+**Doors that move are seen and heard moving** (the user, 2026-11-21). The CH-47 is the worked example:
+- **Ease every motion.** Ramp the speed up and slow onto the stop on the server, as the Chinook's ramp does
+  (`rampSpeed`), and ease the drawn fraction with smoothstep in the renderer (`Ch47Renderer.ease`). A constant rate
+  starts and stops like a switch.
+- **Model real mechanisms.** The crew door is split like the real one: its upper half slides aft, then its lower half
+  folds down into the boarding steps. The two motions overlap in time.
+- **Give each motion a real recording** (`design/chinook/prepare_audio.py doors()`). Use a loop while a powered part
+  moves, played by the client from the synced angle (`Ch47CabinAudio`); track the last angle yourself, since the
+  entity's own "previous" value is overwritten by the time the client's tick sees it. Add a lock clunk at each stop, a
+  slide at the start, and a latch or step thud when the motion completes. Don't use vanilla door or piston sounds.
 
 ### Retiring a vehicle
 
@@ -744,6 +924,18 @@ reach and in sight, led at the round's speed, laid through the turret's own slew
 
 ### Weapons
 
+- **A helicopter's crew-served guns are heard as what they are.** Every helicopter gun plays the minigun loop unless
+  the vehicle names a report for it (`ownGunReport`). The CH-47's M240 door guns use `VehicleGunReports.DOOR_GUN` (a
+  real 7.62 mm Negev's report, shot by shot), and with that they also fire the long-range rounds the ground guns do.
+- **Each gun can have its own ammunition** (`ammoContainer(weapon)`; the hold by default). Two guns sharing a hold
+  share one supply, and a reload takes up to a whole magazine: the Chinook's first door gun to reload took all 128
+  rounds, leaving the other empty. Its door guns each have a 9-slot can, opened by that gunner's hold key
+  (`openHoldFor`).
+- **A rifle-calibre gun with the gunner's eye just behind it** (a seat gun, `seatGunMuzzle`) gets the small muzzle
+  flash; the medium one still filled the Chinook door gunner's view.
+- **A key the vehicle reuses for something of its own** (the Chinook's ramp on X): count presses with
+  `takeDriverSwitchPresses`, not by reading `landInput()` once a tick. A press whose down and up packets reach the
+  server in the same tick never shows there.
 - **Projectiles.** Fire through the existing long-range paths, where projectiles tick wherever they are, load
   terrain ahead, are never saved with a chunk and end at their range. Send tracers to players up to 1024 blocks
   away.
@@ -941,6 +1133,29 @@ engine). A take with no stop can still give one: `prepare_starts.py` plays a tur
 (the YX-100's turbine: 80 ticks). Tracks already clank on their own layer, so prefer a drive take without track noise
 when there is one; the PLZ-05's ride has some.
 
+### Helicopter sounds: start, flight, slap and shutdown (2026-11-21)
+
+The CH-47's sounds (`design/chinook/prepare_audio.py`) are the worked example. `HelicopterEngineAudio` plays, for
+`vehicle.<id>.*`:
+- **`startup`**, set as the data's `engine_start_sound`. Make it last `helicopterStartupTicks`; it crossfades into the
+  loop over its last 1.5 s.
+- **`engine`**, the near loop, pitched and faded by rotor speed. Its pitch falling as the rotor coasts *is* the rotor's
+  wind-down, so don't record one into `shutdown`.
+- **`engine_distant`**, which takes over with distance.
+- **`slap`** (optional), a loop of the blades slapping. It swells while the helicopter comes down with the engines
+  working (blade-vortex slap, the sound of a helicopter coming in to land) and in hard banked turns at speed, and dies
+  on the ground. Cut it from the closest pass of a flyby.
+- **`shutdown`** (optional), played once when the engines cut (on touchdown). Use the turbines' whine only: a high-passed
+  spool-up played backwards works.
+
+**No free close recording of a CH-47 exists** (Freesound, searched 2026-11-21: distant flyovers with wind, birds or a
+dog). The user accepted "a heavy helicopter". The CH-47 is a UH-1 recorded within 20 m (OroborosNZ 157722, CC BY 4.0:
+credit it in `HELICOPTER_CREDITS.md`), slowed to 0.93 with the low end raised. The flight loop lays two stretches of
+the take over each other, so two rotors beat against each other. Read a take's rotor beat from its envelope (blade
+passes a second: a UH-1 about 10.5, a Sea King about 17) to tell the aircraft and its distance before using it. Use the
+preview Ogg (`-hq.ogg`, better than the MP3), and drop an original WAV or FLAC into the cache when you have one.
+`Ch47SoundClientGameTest` checks every layer plays on an active channel.
+
 ## 8. Lights and HUD
 
 - **Lights** go in `AircraftLights` at the real lamp positions in model pixels. Put the searchlight lens on a real
@@ -970,6 +1185,17 @@ when there is one; the PLZ-05's ride has some.
   gone and the rear looking worse, and both were put back as in yftm.20 (2026-11-17), with a shimmer. Before
   re-modelling a part a glow sits in, compare day and night screenshots of the old and new look from the reported
   angle, and keep the glow at its old size and brightness unless asked.
+- **Give every helicopter a roll pivot at its middle** (`render_pivot_y`, or `rotateOffsetHeight`). The shared strafe
+  sway kicks the hull against a strafe before it banks. About a pivot on the ground, the CH-47's cockpit and rotors
+  slid the wrong way first: "it goes right a little bit before going left" (the user, 2026-11-21). The Mi-28 turns about
+  1.8 m, and the CH-47 now about its cabin's middle, at the pilot's eye. Every pose (drawing, cabin, seats, lights,
+  hitboxes) takes the same height. A big airframe can take less of the kick (`strafeSwayScale`).
+  `Ch47FlightFeelClientGameTest` measures the view's wrong-way slide against the Mi-28's.
+- **A cabin's lamps run on the battery.** `Kind.CABIN`, `JUMP_RED` and `JUMP_GREEN` (`AircraftLights.onBattery`)
+  work with the engines off, so people standing in the CH-47 have light. Cabin lamps light only at night. Keep them
+  out of LambDynamicLights: the whole model takes one light level, so a cabin lamp lit the outside of the hull too.
+  Lamps in the texture are dark lenses, and the light set lights them. Formation strips are a night light
+  (`Strip.nightOnly`): by day the CH-47's showed as neon-green bars on the hull.
 - **Cockpit light is a night light.** `Kind.COCKPIT` spill is drawn additive over the whole model; by day it painted the
   AH-6's windscreen pillar lime, and under Photon it bloomed the Mi-28's frame orange. On aircraft it follows
   `AircraftLights.nightSwitch` and is cut to `SHADER_COCKPIT_SPILL` under a shader pack (`VehicleLightsLayer`); the
@@ -1181,6 +1407,17 @@ a label that flickers shows only across frames. Each problem found becomes a foc
 ```
 Before launching, check no other session is building in this checkout: a compile replaces `build/classes` under a
 running client (`NoClassDefFoundError` for a class that exists).
+
+**Two players.** Anything one player does that another sees (people aboard a moving vehicle, seats, blocks placed in a
+cabin, a slung load, sounds heard from outside) is played with two pack clients over LAN (the Chinook's two-player
+pass, 2026-11-25, found five faults one client never showed). Start the first client as above with
+`--args="--username Pilot"`, join the world, then `/jegoffline` (dev clients have no real session, so a second one is
+refused by an online world) and `/publish true creative 25570`. `python -I design/playtest/second_client.py Walker
+25570` starts a second client from the first one's command line in `build/run/packClient2`, with its own mcpfabric
+bridge on port 25600 and the LAN world in its server list (`session.worlds` names it `mp:...`); drive it with
+`MCP_RUN=build/run/packClient2 python -I design/playtest/mcp.py ...`. Both share the first's classes: no build while they
+run. Put the player who must not die in survival: creative players take no damage, which hid a fatal one. Kill each
+client by its own PID (the java.exe whose command line holds `jegn-...` and `packClient` or `packClient2`).
 
 **Bisecting the pack.** `-PpackExclude=shaders` currently crashes on start ("Global terrain uniforms have not been
 updated", Iris and Voxy) and `-PpackExclude=etf` fails to load (a pack mod requires EMF). To tell whether a fault is

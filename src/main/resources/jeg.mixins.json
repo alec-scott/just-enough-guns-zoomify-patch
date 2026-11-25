@@ -19,7 +19,8 @@
     "EnchantmentHelperGunEnchantMixin",
     "EnchantCommandGunEnchantMixin",
     "EnchantmentLootingOnGunsMixin",
-    "CarryOnVehiclePlacementMixin"
+    "CarryOnVehiclePlacementMixin",
+    "cabin.ServerGamePacketListenerCabinMixin"
   ],
   "client": [
     "AbstractClientPlayerMixin",
@@ -45,7 +46,13 @@
     "VehicleGameRendererMixin",
     "VehicleSoundEngineMixin",
     "FogRendererFarDrawMixin",
-    "HumanoidModelDualMinigunMixin"
+    "HumanoidModelDualMinigunMixin",
+    "cabin.EntityMoveCabinMixin",
+    "cabin.MinecraftCabinUseMixin",
+    "cabin.ClientPacketListenerCabinMixin",
+    "cabin.LocalPlayerCabinPickMixin",
+    "cabin.LivingEntityCabinWalkMixin",
+    "cabin.ClientLevelCabinEffectsMixin"
   ],
   "injectors": {
     "defaultRequire": 1

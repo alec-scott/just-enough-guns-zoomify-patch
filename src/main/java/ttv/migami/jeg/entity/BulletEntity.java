@@ -192,7 +192,8 @@ public class BulletEntity extends Projectile {
         this.entityData.set(DATA_TRAIL_LENGTH, stats.clampedTrailLength());
         this.entityData.set(DATA_SIZE, stats.clampedProjectileSize());
         this.entityData.set(DATA_EXPLOSIVE_AMMO, explosiveAmmo);
-        this.setVelocityAndRotation(velocity);
+        // From someone standing in a moving cabin, the round leaves with the cabin's motion too (vehicle/cabin).
+        this.setVelocityAndRotation(level.isClientSide() ? velocity : velocity.add(ttv.migami.jeg.vehicle.cabin.CabinNetwork.carriedVelocity(shooter)));
         this.setNoGravity(false);
         // DO NOT use noPhysics for flare gun - it prevents proper ticking
         this.refreshDimensions();
@@ -401,6 +402,10 @@ public class BulletEntity extends Projectile {
 
         // SERVER SIDE: Full collision detection with continuous penetration checking
         if (!this.level().isClientSide()) {
+            // A walk-in cabin's walls and the blocks aboard stop rounds fired inside it (vehicle/cabin/CabinNetwork).
+            if (ttv.migami.jeg.vehicle.cabin.CabinNetwork.clipRound((ServerLevel) this.level(), currentPos, nextPos, this)) {
+                return;
+            }
             Vec3 remainingMotion = motion;
             Vec3 searchStart = currentPos;
             boolean ignoreLeavesForGun = !gunId.equals(FLAMETHROWER_ID);
@@ -895,6 +900,11 @@ public class BulletEntity extends Projectile {
     @Override
     protected boolean canHitEntity(Entity entity) {
         if (!super.canHitEntity(entity)) {
+            return false;
+        }
+        // A round fired by someone standing in a vehicle's cabin never strikes that vehicle (guide: rounds never strike
+        // their own vehicle); the cabin's walls stop it instead, the open ramp and door let it out.
+        if (!this.level().isClientSide() && ttv.migami.jeg.vehicle.cabin.CabinNetwork.ownerAboard(this.getOwner(), entity)) {
             return false;
         }
 
@@ -1842,7 +1852,14 @@ public class BulletEntity extends Projectile {
         double closestDistanceSqr = Double.MAX_VALUE;
         Entity owner = this.getOwner();
 
-        for (Entity entity : this.level().getEntities(this, searchBox, this::canHitEntity)) {
+        java.util.List<Entity> candidates = new java.util.ArrayList<>(this.level().getEntities(this, searchBox, this::canHitEntity));
+        // Long vehicles whose origin lies outside the sections searched (a round at a Chinook's nose passed through it).
+        for (VehicleEntity vehicle : ttv.migami.jeg.vehicle.util.LargeVehicles.meeting(this.level(), searchBox)) {
+            if (!candidates.contains(vehicle) && this.canHitEntity(vehicle)) {
+                candidates.add(vehicle);
+            }
+        }
+        for (Entity entity : candidates) {
             // Avoid pellet-to-pellet collisions for multi-projectile weapons.
             if (entity instanceof BulletEntity) {
                 continue;

@@ -27,7 +27,11 @@ public final class HudPanel {
     private record Gauge(int icon, Component label, float ratio, int colour, Component value, int valueColour,
                          boolean slider, float band, float tick) implements Row {}
 
-    private record Value(int icon, Component label, Component value, int colour, boolean right) implements Row {}
+    private record Value(int icon, Component label, Component value, int colour, boolean right, boolean afterBars) implements Row {
+        Value(int icon, Component label, Component value, int colour, boolean right) {
+            this(icon, label, value, colour, right, false);
+        }
+    }
 
     private record Note(int icon, Component text, int colour) implements Row {}
 
@@ -81,6 +85,12 @@ public final class HudPanel {
     /** A reading set against the card's right edge, so it never shifts as its digits change (a speed). */
     public HudPanel reading(int icon, Component label, Component value, int colour) {
         this.rows.add(new Value(icon, label, value, colour, true));
+        return this;
+    }
+
+    /** A reading that starts where the bars' readings do (a speed under hull and energy bars), so they line up. */
+    public HudPanel readingAfterBars(int icon, Component label, Component value, int colour) {
+        this.rows.add(new Value(icon, label, value, colour, false, true));
         return this;
     }
 
@@ -167,7 +177,7 @@ public final class HudPanel {
                 case Header header -> PAD_X + 7 + HudKit.width(this.font, header.text())
                         + (header.right() == null ? 0 : 10 + HudKit.width(this.font, header.right())) + PAD_X;
                 case Gauge gauge -> column + BAR_W + VALUE_GAP + this.valueWidth(gauge.value()) + PAD_X;
-                case Value value -> column + this.valueWidth(value.value()) + PAD_X;
+                case Value value -> column + (value.afterBars() ? BAR_W + VALUE_GAP : 0) + this.valueWidth(value.value()) + PAD_X;
                 case Note note -> PAD_X + (note.icon() >= 0 ? ICON_SPACE : 0) + HudKit.width(this.font, note.text()) + PAD_X;
                 case Hints hints -> PAD_X + this.hintsWidth(hints) + PAD_X;
                 case Divider divider -> 0;
@@ -217,7 +227,8 @@ public final class HudPanel {
                 case Value value -> {
                     HudKit.icon(g, value.icon(), x + PAD_X, cy, HudKit.MUTED);
                     HudKit.text(g, this.font, value.label(), x + PAD_X + ICON_SPACE, cy, HudKit.MUTED);
-                    if (value.right() || numeric(value.value())) HudKit.rightAligned(g, this.font, value.value(), right, cy, value.colour());
+                    if (value.afterBars()) HudKit.text(g, this.font, value.value(), column + BAR_W + VALUE_GAP, cy, value.colour());
+                    else if (value.right() || numeric(value.value())) HudKit.rightAligned(g, this.font, value.value(), right, cy, value.colour());
                     else HudKit.text(g, this.font, value.value(), column, cy, value.colour());
                 }
                 case Note note -> {

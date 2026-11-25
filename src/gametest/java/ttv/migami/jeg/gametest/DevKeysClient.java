@@ -40,6 +40,7 @@ public final class DevKeysClient implements ClientModInitializer {
 
     @Override
     public void onInitializeClient() {
+        ChinookDevTools.init();
         ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) -> dispatcher.register(
                 LiteralArgumentBuilder.<FabricClientCommandSource>literal("jegkey")
                         .then(LiteralArgumentBuilder.<FabricClientCommandSource>literal("list").executes(DevKeysClient::list))

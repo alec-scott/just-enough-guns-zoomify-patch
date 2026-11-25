@@ -1,0 +1,77 @@
+{
+ "startup": {
+  "seconds": 19.89,
+  "rms": 0.076,
+  "peak": 0.846,
+  "rotor_hz": 18.0,
+  "source_syllabic": 0.136
+ },
+ "flight": {
+  "seconds": 24.61,
+  "rms": 0.139,
+  "peak": 0.779,
+  "rotor_hz": 10.0,
+  "source_syllabic": 0.012,
+  "seam_jump": 0.0315
+ },
+ "slap": {
+  "seconds": 11.57,
+  "rms": 0.127,
+  "peak": 0.857,
+  "rotor_hz": 11.8,
+  "source_syllabic": 0.005,
+  "seam_jump": 0.05
+ },
+ "engine_distant": {
+  "seconds": 39.36,
+  "rms": 0.138,
+  "peak": 0.939,
+  "rotor_hz": 12.5,
+  "source_syllabic": 0.014,
+  "seam_jump": 0.013
+ },
+ "shutdown": {
+  "seconds": 20.43,
+  "rms": 0.059,
+  "peak": 0.599,
+  "rotor_hz": 5.5,
+  "source_syllabic": 0.123
+ },
+ "doors": {
+  "ramp_hydraulic": {
+   "seconds": 9.0,
+   "rms": 0.099,
+   "peak": 0.5
+  },
+  "ramp_stop": {
+   "seconds": 1.8,
+   "rms": 0.115,
+   "peak": 0.969
+  },
+  "door_open": {
+   "seconds": 2.8,
+   "rms": 0.089,
+   "peak": 0.863
+  },
+  "door_close": {
+   "seconds": 2.1,
+   "rms": 0.062,
+   "peak": 0.883
+  },
+  "door_step": {
+   "seconds": 0.55,
+   "rms": 0.09,
+   "peak": 0.853
+  },
+  "gun_window": {
+   "seconds": 1.3,
+   "rms": 0.078,
+   "peak": 0.636
+  }
+ },
+ "ramp_beep": {
+  "seconds": 0.2,
+  "rms": 0.07,
+  "peak": 0.109
+ }
+}

@@ -151,6 +151,7 @@ public final class VehicleHudOverlay {
         Layer layer = new Layer(guiGraphics, minecraft, minecraft.font, vehicle,
                 Mth.floor(guiGraphics.guiWidth() / scale), Mth.floor(guiGraphics.guiHeight() / scale), scale);
         cardTopGui = -1;
+        pendingStrip = null;
         try {
             renderOperatorPanel(layer);
             renderCrew(layer);
@@ -191,8 +192,9 @@ public final class VehicleHudOverlay {
                     energy > 0.2F ? HudKit.INFO : HudKit.BAD, Component.literal(Math.round(energy * 100) + "%"), HudKit.TEXT);
         }
         if (moves(vehicle) && !vehicle.isJet()) {
-            // Speed in a fixed-width row: the number right-aligned in the card, which never resizes.
-            panel.reading(HudKit.ICON_SPEED, Component.translatable("hud.jeg.vehicle.speed_label"),
+            // Speed in the same column as the hull's and energy's readings (the user, 2026-11-26: it sat apart, against
+            // the card's right edge, while the others start after their bars).
+            panel.readingAfterBars(HudKit.ICON_SPEED, Component.translatable("hud.jeg.vehicle.speed_label"),
                     Component.literal(String.format(Locale.ROOT, "%.1f ", vehicleSpeedBlocksPerSecond(vehicle)))
                             .append(Component.translatable("hud.jeg.vehicle.speed_unit").withColor(HudKit.MUTED)), HudKit.TEXT);
         }
@@ -235,6 +237,11 @@ public final class VehicleHudOverlay {
         if (vehicleInfoInCorner(mc, vehicle)) {
             x = l.width() - HudKit.MARGIN - w;
             y = l.height() - HudKit.MARGIN - h;
+        } else if (helicopterHmd(mc, vehicle, focusedSight) && vehicle.cockpitViewDown() > 0.0F) {
+            // The view looks down at a full-width instrument panel (the CH-47's): the lower corners are its displays, so
+            // the card goes up over the windscreen, top right (the crew list has the top left).
+            x = l.width() - HudKit.MARGIN - w;
+            y = HudKit.MARGIN;
         } else if (helicopterHmd(mc, vehicle, focusedSight)) {
             // In a helicopter's first person the top middle is the helmet display's heading tape, the middle its speed and
             // height boxes, the bottom middle the instrument panel: the card takes the crew list's corner, bottom left
@@ -254,6 +261,68 @@ public final class VehicleHudOverlay {
             cardTopGui = l.toGui(y);
         }
         panel.draw(l.g(), x, y);
+        HudPanel strip = pendingStrip;
+        pendingStrip = null;
+        if (strip != null) {
+            boolean below = y + h + 4 + strip.height() < l.height() / 2;
+            strip.draw(l.g(), (l.width() - strip.width()) / 2, below ? y + h + 4 : HudKit.MARGIN);
+        }
+    }
+
+    /** The Chinook pilot's strip in a chase view, drawn under the status card once its place is known. */
+    private static HudPanel pendingStrip;
+
+    /**
+     * The Chinook pilot's strip: the ramp, the crew door, the sling and who is aboard, with the keys for each for a few
+     * seconds after boarding. It had none: a pilot saw no sign of its twenty-second
+     * start, nor which keys work the ramp and the sling (two-player play-test, 2026-11-25). Two short lines, so it fits
+     * between the crew list and the helmet display's speed box on a small screen.
+     */
+    private static void chinookRows(Layer l, HudPanel panel, ttv.migami.jeg.vehicle.entity.ChinookEntity chinook) {
+        Minecraft mc = l.mc();
+        // No engine start-up or shut-down readout: it starts as the other helicopters do, heard and seen in its rotors
+        // (the user, 2026-11-26: "remove the chinook startup time indicator and preserve it like the other helis").
+        int aboard = (int) chinook.getPassengers().stream().filter(p -> p != mc.player).count()
+                + ttv.migami.jeg.vehicle.cabin.CabinClient.othersAboard(chinook.getId());
+        int ramp = chinook.rampTarget();
+        boolean moving = chinook.rampMoving();
+        Component rampState = Component.translatable("hud.jeg.ch47.ramp_" + ramp);
+        boolean door = chinook.crewDoorTarget();
+        var sling = chinook.sling();
+        Component slingState;
+        int slingColour;
+        if (sling.state() == ttv.migami.jeg.vehicle.entity.ChinookSling.CARRYING && sling.loadEntityId() >= 0
+                && mc.level.getEntity(sling.loadEntityId()) instanceof VehicleEntity load) {
+            slingState = load.getName();
+            slingColour = HudKit.ACCENT;
+        } else if (sling.state() == ttv.migami.jeg.vehicle.entity.ChinookSling.HANGING && chinook.slingCandidate() >= 0
+                && mc.level.getEntity(chinook.slingCandidate()) instanceof VehicleEntity reachable) {
+            // The hook would take it now: one press hooks it.
+            slingState = Component.translatable("hud.jeg.ch47.sling_in_reach", reachable.getName(), HudKit.keyName(KeyBindings.VEHICLE_TOW));
+            slingColour = HudKit.OK;
+        } else {
+            boolean stowed = sling.state() == ttv.migami.jeg.vehicle.entity.ChinookSling.STOWED;
+            slingState = Component.translatable(stowed ? "hud.jeg.ch47.sling_stowed" : "hud.jeg.ch47.sling_lowered");
+            slingColour = stowed ? HudKit.MUTED : HudKit.WARN;
+        }
+        MutableComponent parts = Component.empty()
+                .append(Component.translatable("hud.jeg.ch47.ramp").withColor(HudKit.MUTED)).append(" ")
+                .append((moving ? Component.translatable("hud.jeg.ch47.moving", rampState) : rampState.copy())
+                        .withColor(moving ? HudKit.WARN : ramp == 0 ? HudKit.TEXT : HudKit.ACCENT))
+                .append("   ").append(Component.translatable("hud.jeg.ch47.door").withColor(HudKit.MUTED)).append(" ")
+                .append(Component.translatable(door ? "hud.jeg.ch47.door_open" : "hud.jeg.ch47.door_shut").withColor(door ? HudKit.ACCENT : HudKit.TEXT))
+                .append("   ").append(Component.translatable("hud.jeg.ch47.sling").withColor(HudKit.MUTED)).append(" ")
+                .append(slingState.copy().withColor(slingColour));
+        if (aboard > 0) {
+            parts.append("   ").append(Component.translatable("hud.jeg.ch47.aboard_n", aboard).withColor(HudKit.MUTED));
+        }
+        panel.note(HudKit.ICON_GEAR, parts, HudKit.TEXT);
+        float hints = hintAlpha(mc, chinook);
+        panel.hints(hints,
+                HudPanel.Hint.of(Component.translatable("hud.jeg.hint.collective"), HudKit.keyName(mc.options.keyJump), HudKit.keyName(KeyBindings.VEHICLE_BRAKE_DESCEND)));
+        panel.hints(hints,
+                HudPanel.Hint.of(Component.translatable("hud.jeg.hint.ramp"), HudKit.keyName(KeyBindings.VEHICLE_SWITCH_WEAPON)),
+                HudPanel.Hint.of(Component.translatable("hud.jeg.hint.sling"), HudKit.keyName(KeyBindings.VEHICLE_TOW)));
     }
 
     /** The damaged parts, named, or null when nothing is damaged. */
@@ -669,6 +738,21 @@ public final class VehicleHudOverlay {
             panel = mortarPanel(l, mortar);
         } else if (vehicle instanceof ttv.migami.jeg.vehicle.entity.ShellGunEntity gun && gun.laysGun(mc.player)) {
             panel = shellGunPanel(l, gun);
+        } else if (vehicle instanceof ttv.migami.jeg.vehicle.entity.ChinookEntity chinook && vehicle.getControllingPassenger() == mc.player) {
+            panel = new HudPanel(l.font()).minWidth(0);
+            chinookRows(l, panel, chinook);
+            if (helicopterHmd(mc, vehicle, isFocusedVehicleSight(vehicle))) {
+                // Top left, under the crew list: the status card has the top right and the helmet display's height box
+                // sits under it (a taller card covered it), the instrument panel fills the bottom.
+                // Always under the crew list's place, shown or not: higher, it ran into the heading tape's end.
+                int top = HudKit.MARGIN + crewPanel(mc, l.font(), vehicle).height() + 4;
+                panel.draw(l.g(), HudKit.MARGIN, top);
+                return;
+            }
+            // From the chase cameras the strip hangs under the status card (renderVehicleCard): at the bottom middle
+            // it covered the slung load, which hangs there in that view.
+            pendingStrip = panel;
+            return;
         }
         if (panel != null) {
             panel.draw(l.g(), HudKit.MARGIN, HudKit.MARGIN);

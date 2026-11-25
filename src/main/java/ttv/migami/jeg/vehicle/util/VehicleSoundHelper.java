@@ -37,6 +37,7 @@ public final class VehicleSoundHelper {
             Map.entry("bmp2", Reference.id("vehicle.bmp2.engine")),
             Map.entry("lav150", Reference.id("vehicle.lav150.engine")),
             Map.entry("mi28", Reference.id("vehicle.mi28.engine")),
+            Map.entry("ch47", Reference.id("vehicle.ch47.engine")),
             Map.entry("plz05", Reference.id("vehicle.plz05.engine")),
             Map.entry("yx100", Reference.id("vehicle.yx100.engine")),
             Map.entry("speedboat", Reference.id("vehicle.speedboat.engine")),

@@ -243,6 +243,8 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     private static final String TAG_LEFT_WHEEL_HEALTH = "LeftWheelHealth";
     private static final String TAG_RIGHT_WHEEL_HEALTH = "RightWheelHealth";
     private static final String TAG_ENGINE_HEALTH = "EngineHealth";
+    /** A helicopter's engines were running when it was saved (so one saved in flight doesn't load with them off). */
+    private static final String TAG_HELICOPTER_RUNNING = "HelicopterRunning";
     private static final String TAG_SUB_ENGINE_HEALTH = "SubEngineHealth";
     private static final String TAG_TURRET_HEALTH = "TurretHealth";
     private static final String TAG_PAINT = "Paint";
@@ -269,7 +271,8 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
             // The base defences have only a rest pose; asking for "idle" logged an error every frame (10,000+ lines a
             // minute with a sentry in view).
             "hpj11", "animation.hpj11.rest",
-            "sentry", "animation.sentry.rest"
+            "sentry", "animation.sentry.rest",
+            "ch47", "animation.ch47.idle"
     );
     private static final float PART_MAX_HEALTH = 10.0F;
     private static final float REPAIR_KIT_HULL_REPAIR = 12.0F;
@@ -336,6 +339,10 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     private static final double HELICOPTER_CLIMB_POWER = 0.105D;
     private static final double HELICOPTER_DESCENT_POWER = 0.06D;
     private static final double HELICOPTER_POWER_RESPONSE = 0.004D;
+    /** A helicopter idling on the ground (idlesOnGround) shuts down once descend is held this long, after it has stood
+     * {@link #GROUND_SHUTDOWN_SETTLE_TICKS} on the ground. */
+    public static final int GROUND_SHUTDOWN_HOLD_TICKS = 40;
+    private static final int GROUND_SHUTDOWN_SETTLE_TICKS = 20;
     private static final double HELICOPTER_PLAYER_TURN_RESPONSE = 1.75D;
     // Player flight: WASD set a target velocity relative to the heading; no input settles back to a hover.
     private static final double HELICOPTER_STRAFE_SPEED_RATIO = 0.6D;
@@ -468,6 +475,8 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     private final AnimatableInstanceCache geckoCache = GeckoLibUtil.createInstanceCache(this);
     private final CompoundTag persistentData = new CompoundTag();
     private final Map<UUID, Integer> seatAssignments = new HashMap<>();
+    /** Ground idle (idlesOnGround): ticks on the ground running, and ticks descend has been held there. */
+    private int groundTicks, groundShutdownTicks;
     /** How far above a player's feet they sit when riding; seat heights are set for this. */
     private static final double PLAYER_VEHICLE_ATTACHMENT_Y = net.minecraft.world.entity.EntityType.PLAYER.getDimensions().attachments()
             .get(net.minecraft.world.entity.EntityAttachment.VEHICLE, 0, 0.0F).y;
@@ -559,6 +568,8 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     private float subEngineHealth = PART_MAX_HEALTH;
     private float rollVelocity;
     private double swayStrafeSpeed;
+    /** On a client: whether it was predicting this vehicle's movement last tick (seedHelicopterPrediction on taking over). */
+    private boolean clientPredicting;
     private float heliTiltPitch;
     private float heliTiltPitchVelocity;
     private float heliTiltRoll;
@@ -820,7 +831,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
 
     private boolean usesCustomObbEntityCollision() {
         return switch (this.vehicleDataId().getPath()) {
-            case "lav150", "bmp2", "speedboat", "ah6", "mi28", "truck", "bulldozer" -> true;
+            case "lav150", "bmp2", "speedboat", "ah6", "mi28", "ch47", "truck", "bulldozer" -> true;
             default -> false;
         };
     }
@@ -1070,9 +1081,9 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
             GunStats stats = VehicleWeaponStats.get(weapon.weaponId());
             int magazineSize = stats == null ? 0 : Math.max(0, stats.magazineSize());
             int loaded = this.weaponLoadedAmmo(slot);
-            int reserve = this.countAmmo(weapon.ammoId());
+            int reserve = this.countAmmo(weapon);
             int transfer = Math.min(Math.max(0, magazineSize - loaded), reserve);
-            if (transfer > 0 && this.consumeAmmo(weapon.ammoId(), transfer)) {
+            if (transfer > 0 && this.consumeAmmo(weapon, transfer)) {
                 this.setWeaponLoadedAmmo(slot, loaded + transfer);
             }
         }
@@ -1468,6 +1479,53 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         return Mth.clamp(this.entityData.get(DATA_HELICOPTER_STARTUP) / (float) this.helicopterStartupTicks(), 0.0F, 1.0F);
     }
 
+    /**
+     * Whether this helicopter keeps running on the ground once started or landed, rotors at flight rpm and flat pitch,
+     * until the pilot holds descend there or leaves the seat. Off for the light helicopters, which cut their engines on
+     * touchdown; the Chinook's crew walk on and off with the rotors turning.
+     */
+    protected boolean idlesOnGround() {
+        return false;
+    }
+
+    /** Idling on the ground (idlesOnGround), as this side's flight model last ran. */
+    public boolean helicopterGroundIdle() {
+        return this.idlesOnGround() && this.onGround() && this.engineStartOver;
+    }
+
+    /** The rotor flight model's state, for dev probes (ChinookDevTools). */
+    public String helicopterDebugState() {
+        return String.format(java.util.Locale.ROOT, "ground %s groundTicks %d shutdown %d start %s over %s power %.4f rotor %.4f vert %d startup %.2f",
+                this.onGround(), this.groundTicks, this.groundShutdownTicks, this.engineStart, this.engineStartOver, this.enginePower,
+                this.propellerSpeed(), this.input.verticalAxis(), this.helicopterStartupProgress());
+    }
+
+    /** How far through the shut-down hold (descend held on the ground) the pilot is, 0 to 1. */
+    public float groundShutdownProgress() {
+        return Mth.clamp(this.groundShutdownTicks / (float) GROUND_SHUTDOWN_HOLD_TICKS, 0.0F, 1.0F);
+    }
+
+    /**
+     * How far the rotor turns this tick (radians) at this rotor power. The light helicopters spin with their power, so a
+     * climb spins them up; a rotor that is governed (the CH-47's) turns at one speed whatever the collective.
+     */
+    protected float rotorTurnPerTick(float rotorSpeed) {
+        return 30.0F * rotorSpeed;
+    }
+
+    /** Scales the commanded climb and descent rates (1 for the light helicopters: 10 m/s up, 11 down). */
+    protected double helicopterVerticalRateScale() {
+        return 1.0D;
+    }
+
+    /**
+     * Whether this entity stands in the vehicle's walk-in cabin (CabinVehicle): it is carried, so the hull's ramming and
+     * pushing pass it by, as they do its seated crew.
+     */
+    public boolean carriesAboard(Entity entity) {
+        return false;
+    }
+
     public void primeAiHelicopterSpawnHover() {
         if (this.vehicleData().defaults().vehicleType() != VehicleType.HELICOPTER) {
             return;
@@ -1588,10 +1646,23 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
      */
     @Nullable
     private ttv.migami.jeg.vehicle.util.VehicleGunReports.Report reportFor(VehicleWeaponInfo weapon) {
+        var own = this.ownGunReport(weapon);
+        if (own != null) {
+            return own;
+        }
         if (weapon.guided() || this.vehicleData().defaults().vehicleType() == VehicleType.HELICOPTER || this.isJet()) {
             return null;
         }
         return ttv.migami.jeg.vehicle.util.VehicleGunReports.forWeapon(weapon.weaponId());
+    }
+
+    /**
+     * A report this vehicle gives one of its guns itself, ahead of the rules above (the CH-47's door guns: machine guns
+     * on an aircraft, heard shot by shot, not through a helicopter's firing loop), or null.
+     */
+    @Nullable
+    protected ttv.migami.jeg.vehicle.util.VehicleGunReports.Report ownGunReport(VehicleWeaponInfo weapon) {
+        return null;
     }
 
     /** The data's index of the weapon firing now (synced), or -1. */
@@ -1609,7 +1680,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         return null;
     }
 
-    void setRoll(float roll) {
+    public void setRoll(float roll) {
         float wrapped = Mth.wrapDegrees(roll);
         this.entityData.set(DATA_ROLL, wrapped);
         if (this.level().isClientSide()) {
@@ -1742,9 +1813,23 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
             this.weaponFireInput = false;
         }
         if (player == this.getControllingPassenger()) {
+            // Count the weapon-switch key's presses as the packets arrive: a press whose down and up packets land in the
+            // same server tick never shows in this.input when the vehicle ticks (the Chinook's ramp missed X presses).
+            if (input.switchWeapon() && !this.input.switchWeapon()) {
+                this.driverSwitchPresses++;
+            }
             this.input = input;
         }
     }
+
+    /** Presses of the driver's weapon-switch key since the last call (server), for vehicles that use it for something else. */
+    protected int takeDriverSwitchPresses() {
+        int presses = this.driverSwitchPresses;
+        this.driverSwitchPresses = 0;
+        return presses;
+    }
+
+    private int driverSwitchPresses;
 
     public void processClientInput(Player player, VehicleInput input) {
         if (!this.level().isClientSide() || player.getVehicle() != this) {
@@ -2153,6 +2238,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
 
     @Override
     public void tick() {
+        ttv.migami.jeg.vehicle.util.LargeVehicles.track(this);
         this.rotaryGunAngleO = this.rotaryGunAngle;
         this.rotaryGunAngle += this.rotaryGunSpin() * this.rotaryGunSpin() * 54.0F;
         if (this.rotaryGunAngle >= 360.0F) {
@@ -2210,7 +2296,10 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
                 this.evictMobsFromDriverSeats();
             }
             this.clearStaleDriverInput();
-            this.tickServerMovement();
+            if (!this.isSlung()) {
+                // On a helicopter's sling the rope moves it (ChinookSling), not its own drive or gravity.
+                this.tickServerMovement();
+            }
             this.sendFarAircraftSound();
             this.tickHelicopterRotorGroundDamage();
             this.tickRammingDamage();
@@ -2230,6 +2319,10 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
             this.entityData.set(DATA_DECOY_COOLDOWN, this.decoyCooldown);
         } else if (this.shouldRunClientPrediction()) {
             VehicleType type = this.vehicleData().defaults().vehicleType();
+            if (!this.clientPredicting && type == VehicleType.HELICOPTER) {
+                this.seedHelicopterPrediction();
+            }
+            this.clientPredicting = true;
             if (this.isJet()) {
                 this.jetFlight.tick(false);
             } else if (type == VehicleType.BOAT) {
@@ -2239,6 +2332,16 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
             } else {
                 this.tickClientPredictedLandMovement();
             }
+        } else {
+            if (this.clientPredicting && this.level().isClientSide()
+                    && this.vehicleData().defaults().vehicleType() == VehicleType.HELICOPTER
+                    && (this.getInterpolation() == null || !this.getInterpolation().hasActiveInterpolation())) {
+                // The pilot just got up: until the server's states arrive, it flies on as it was flying. Left standing,
+                // it stalled a frame and surged to catch up (the CH-47 at 21 m/s, 2026-11-25).
+                Vec3 velocity = this.getDeltaMovement();
+                this.setPos(this.getX() + velocity.x, this.getY() + velocity.y, this.getZ() + velocity.z);
+            }
+            this.clientPredicting = false;
         }
         if (this.keepsCameraLevel()) {
             this.tickHelicopterCameraPitch();
@@ -2873,6 +2976,10 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
             if (this.keepsCameraLevel() && this.hasPlayerPassenger() && !this.onGround()) {
                 // The crew is still aboard with the pilot's seat empty: the engine stays on for the autopilot to hover.
                 this.input = VehicleInput.EMPTY;
+            } else if (this.autolandsUnattended() && !this.onGround() && this.engineStartOver && !this.isLowHealthDecayActive()) {
+                // Nobody aboard, running in the air: the engines stay on for the autopilot to set it down
+                // (autolandsUnattended). Clearing them here every tick dropped an empty CH-47 out of its hover.
+                this.input = VehicleInput.EMPTY;
             } else if (!this.level().isClientSide() && this.getPassengers().isEmpty()) {
                 this.clearControlState(false);
                 this.recentDismountSyncPlayerId = null;
@@ -2924,8 +3031,26 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         }
     }
 
+    /**
+     * The pilot's client, as they press dismount. A helicopter that holds its hover for its crew
+     * ({@link #holdsHoverWhenPilotLeaves}) keeps its engines on here too: clearing them reset this client's copy of the
+     * startup to cold, and the turbines' spool-down played while the server kept the hover (the user, 2026-11-21: "there
+     * is a noise indicating the helicopter is slowing down but it shouldn't as it should just be hovering").
+     */
     public void clearClientControlState() {
+        if (this.holdsHoverWhenPilotLeaves()) {
+            this.releasePilotControls();
+            return;
+        }
         this.clearControlState(true);
+    }
+
+    /** Only the pilot's hands come off the controls; the engines run on for the autopilot. */
+    private void releasePilotControls() {
+        this.input = VehicleInput.EMPTY;
+        this.weaponFireInput = false;
+        this.seekInput = false;
+        this.entityData.set(DATA_WEAPON_FIRING, false);
     }
 
     public void applySeatAssignments(Map<UUID, Integer> assignments) {
@@ -2995,7 +3120,14 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
             SyncedStateInterpolation interpolation = this.syncedStateInterpolation();
             if (interpolation != null) {
                 this.lastSyncedStateTick = this.tickCount;
-                interpolation.interpolateToSyncedState(new Vec3(x, y, z), yaw, pitch);
+                Vec3 target = new Vec3(x, y, z);
+                if (this.vehicleData().defaults().vehicleType() == VehicleType.HELICOPTER) {
+                    // Eased toward where it will be when the easing ends, not where it was: a helicopter drawn on
+                    // the synced states trailed them by the easing's three ticks, and taking over from the pilot's
+                    // prediction showed as the aircraft slowing from 21 to 6 m/s and gathering speed again (2026-11-25).
+                    target = target.add(new Vec3(motionX, motionY, motionZ).scale(InterpolationHandler.DEFAULT_INTERPOLATION_STEPS));
+                }
+                interpolation.interpolateToSyncedState(target, yaw, pitch);
             } else {
                 int lerpSteps = this.authoritativeVehicleStateSyncInterval(false);
                 super.lerpPositionAndRotationStep(lerpSteps > 0 ? lerpSteps : MOVING_DRIVER_STATE_SYNC_INTERVAL, x, y, z, yaw, pitch);
@@ -3003,6 +3135,34 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
             super.lerpMotion(new Vec3(motionX, motionY, motionZ));
             return;
         }
+        // A forced state that lands close to where the vehicle is drawn eases into it over the tick, as a handover after
+        // a pilot gets up mid-flight; only a real jump (a teleport) snaps.
+        boolean ease = this.level().isClientSide() && this.position().distanceToSqr(x, y, z) < 36.0D && !this.isJet();
+        SyncedStateInterpolation handover = ease && this.vehicleData().defaults().vehicleType() == VehicleType.HELICOPTER
+                && forceApply ? this.syncedStateInterpolation() : null;
+        if (handover != null) {
+            // A helicopter flying on: the server's state is a tick or so behind what this client predicted, so set back to
+            // it the aircraft stalled a frame and then surged to catch up. It eases on toward where the state says it will
+            // be, as the regular syncs do.
+            this.lastSyncedStateTick = this.tickCount;
+            handover.interpolateToSyncedState(new Vec3(x, y, z).add(new Vec3(motionX, motionY, motionZ)
+                    .scale(InterpolationHandler.DEFAULT_INTERPOLATION_STEPS)), yaw, pitch);
+            this.setDeltaMovement(motionX, motionY, motionZ);
+            if (this.level().isClientSide()) {
+                this.dismountLerpSuppressionTicks = DISMOUNT_LERP_SUPPRESSION_TICKS;
+                if (clientVehicleId() == this.getId() && !this.isLocalInstanceAuthoritative()) {
+                    clearClientVehicleState();
+                    if (this.holdsHoverWhenPilotLeaves()) {
+                        this.releasePilotControls();
+                    } else {
+                        this.clearControlState(false);
+                    }
+                }
+            }
+            return;
+        }
+        double fromX = this.getX(), fromY = this.getY(), fromZ = this.getZ();
+        float fromYaw = this.getYRot(), fromPitch = this.getXRot();
         this.setPos(x, y, z);
         this.setDeltaMovement(motionX, motionY, motionZ);
         this.setYRot(yaw);
@@ -3012,17 +3172,22 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
             this.rollO = roll;
         }
         this.updateVehicleBoundingBox();
-        this.yRotO = yaw;
-        this.xRotO = pitch;
-        this.xo = x;
-        this.yo = y;
-        this.zo = z;
+        this.yRotO = ease ? fromYaw : yaw;
+        this.xRotO = ease ? fromPitch : pitch;
+        this.xo = ease ? fromX : x;
+        this.yo = ease ? fromY : y;
+        this.zo = ease ? fromZ : z;
         this.needsSync = true;
         if (forceApply && this.level().isClientSide()) {
             this.dismountLerpSuppressionTicks = DISMOUNT_LERP_SUPPRESSION_TICKS;
             if (clientVehicleId() == this.getId() && !this.isLocalInstanceAuthoritative()) {
                 clearClientVehicleState();
-                this.clearControlState(false);
+                if (this.holdsHoverWhenPilotLeaves()) {
+                    // The former pilot's client: the engines stay on for the hover (clearClientControlState).
+                    this.releasePilotControls();
+                } else {
+                    this.clearControlState(false);
+                }
             }
         }
     }
@@ -3251,7 +3416,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
                 this.startWeaponReload(shooter);
                 return false;
             }
-        } else if (!this.hasAmmo(weapon.ammoId())) {
+        } else if (!this.hasAmmo(weapon)) {
             return false;
         }
         if (!this.vehicleGunReady(weapon)) {
@@ -3271,7 +3436,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
             int slot = this.selectedVehicleWeaponIndex(shooter);
             this.setWeaponLoadedAmmo(slot, this.weaponLoadedAmmo(slot) - 1);
             this.syncSelectedWeaponAmmoState();
-        } else if (!this.consumeAmmo(weapon.ammoId())) {
+        } else if (!this.consumeAmmo(weapon, 1)) {
             return false;
         }
         boolean helicopterGun = VehicleSoundHelper.isHelicopterGun(this, weapon);
@@ -3387,6 +3552,15 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         if (weapon.guided() || weaponPath.contains("rocket") || weaponPath.contains("missile")) {
             this.spawnVehicleMuzzleFlareParticle(serverLevel, new CannonMuzzleFlareOption(1.0F, 0.86F, 0.55F, 6, 0.70F, 1, 0.10F), muzzle, direction, 3, 0.08D, 0.18D);
             this.spawnVehicleMuzzleFlareParticle(serverLevel, new CannonMuzzleFlareOption(0.55F, 0.45F, 0.4F, 18, 0.82F, 2, 0.025F), muzzle, direction, 1, 0.0D, 0.10D);
+            return;
+        }
+        if (!weaponPath.endsWith("_hmg") && !weaponPath.endsWith("_rws") && this.seatGunMuzzle(weapon, direction) != null) {
+            // A rifle-calibre gun on a pintle with its gunner's eye just behind it (the Chinook's door guns): the small
+            // flash. The light machine gun's full flash, and even the pintle guns' medium one, filled the door gunner's
+            // view (play-tests 2026-11-20 and -21).
+            Vec3 forward = direction.normalize();
+            serverLevel.sendParticles(ModParticleTypes.SMALL_GUN_MUZZLE_FLASH.get(), muzzle.x, muzzle.y, muzzle.z, 0,
+                    forward.x, forward.y, forward.z, 0.12D);
             return;
         }
         if (weaponPath.endsWith("_hmg") || weaponPath.endsWith("_rws") || weaponPath.endsWith("_ciws") || weaponPath.startsWith("vehicle_sentry_")) {
@@ -3512,10 +3686,10 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         GunStats stats = VehicleWeaponStats.get(weapon.weaponId());
         boolean free = this.unmannedFireIsFree();
         if (stats == null || !this.canFireWeapon(weapon) || !this.vehicleGunReady(weapon)
-                || !free && (!this.hasEnergy(weapon.energyCost()) || !this.hasAmmo(weapon.ammoId()))) {
+                || !free && (!this.hasEnergy(weapon.energyCost()) || !this.hasAmmo(weapon))) {
             return false;
         }
-        if (!free && (!this.consumeEnergy(weapon.energyCost()) || !this.consumeAmmo(weapon.ammoId()))) {
+        if (!free && (!this.consumeEnergy(weapon.energyCost()) || !this.consumeAmmo(weapon, 1))) {
             return false;
         }
         Vec3 aim = direction.normalize();
@@ -3584,7 +3758,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         if (this.usesSharedVehicleReloadSystem(shooter)) {
             return this.selectedWeaponLoadedAmmo(shooter) > 0;
         }
-        return this.hasAmmo(weapon.ammoId());
+        return this.hasAmmo(weapon);
     }
 
     /**
@@ -4017,7 +4191,9 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         }
         boolean damaged = false;
         for (LivingEntity target : this.level().getEntitiesOfClass(LivingEntity.class, this.partBounds().inflate(0.25D, 0.15D, 0.25D))) {
-            if (!target.isAlive() || target.getVehicle() == this) {
+            // People standing in a walk-in cabin are inside the hull's boxes: a Chinook taking off killed one
+            // ("crushed by a vehicle", the two-player play-test 2026-11-25; the trials' creative players were immune).
+            if (!target.isAlive() || target.getVehicle() == this || this.carriesAboard(target)) {
                 continue;
             }
             if (this.usesCustomObbEntityCollision() && this.obbCollisionCorrection(target.getBoundingBox()) == null) {
@@ -4030,7 +4206,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         }
         for (VehicleEntity target : this.level().getEntitiesOfClass(VehicleEntity.class, this.partBounds().inflate(0.35D, 0.2D, 0.35D))) {
             if (target == this || target.isRemoved()
-                    || target.vehicleData().defaults().collisionLevel() == CollisionLevel.NONE) {
+                    || target.vehicleData().defaults().collisionLevel() == CollisionLevel.NONE || this.keepsClear(target)) {
                 continue;
             }
             if ((this.usesCustomObbEntityCollision() && this.obbCollisionCorrection(target.getBoundingBox()) == null)
@@ -4108,7 +4284,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         }
         for (VehicleEntity target : this.level().getEntitiesOfClass(VehicleEntity.class, this.partBounds().inflate(VEHICLE_ENTITY_COLLISION_SEARCH_EXPANSION))) {
             if (target == this || target.isRemoved() || target.noPhysics || this.getId() >= target.getId()
-                    || target.vehicleData().defaults().collisionLevel() == CollisionLevel.NONE) {
+                    || target.vehicleData().defaults().collisionLevel() == CollisionLevel.NONE || this.keepsClear(target)) {
                 continue;
             }
             Vec3 correction = this.vehicleEntityCollisionCorrection(target);
@@ -4263,6 +4439,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
                 && !entity.noPhysics
                 && entity.getVehicle() == null
                 && !this.hasPassenger(entity)
+                && !this.carriesAboard(entity)
                 && !(entity instanceof Player player && player.isSpectator());
     }
 
@@ -4344,8 +4521,21 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         }
     }
 
+    /** The rotor discs checked against the ground; a tandem helicopter (the Chinook) returns both. */
+    protected java.util.List<RotorContactInfo> rotorContacts() {
+        return java.util.List.of(this.upperMainRotorContactInfo());
+    }
+
     private boolean isUpperMainRotorTouchingGround() {
-        RotorContactInfo rotor = this.upperMainRotorContactInfo();
+        for (RotorContactInfo rotor : this.rotorContacts()) {
+            if (this.rotorDiscTouchesGround(rotor)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean rotorDiscTouchesGround(RotorContactInfo rotor) {
         if (rotor.radius() <= 0.0D) {
             return false;
         }
@@ -4574,13 +4764,34 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     }
 
     private int countAmmo(Identifier ammoId) {
+        return this.countAmmoIn(this.inventory, ammoId);
+    }
+
+    /** Rounds a weapon can draw on now: in its own store ({@link #ammoContainer}). */
+    private int countAmmo(VehicleWeaponInfo weapon) {
+        return this.countAmmoIn(this.ammoContainer(weapon), weapon.ammoId());
+    }
+
+    private boolean hasAmmo(VehicleWeaponInfo weapon) {
+        return this.countAmmo(weapon) > 0;
+    }
+
+    /**
+     * Where a weapon draws its rounds from: the vehicle's hold, unless it has a store of its own (each of the Chinook's
+     * door guns has its own ammunition can, so one gun's reload can't empty the other's supply).
+     */
+    protected net.minecraft.world.Container ammoContainer(VehicleWeaponInfo weapon) {
+        return this.inventory;
+    }
+
+    private int countAmmoIn(net.minecraft.world.Container container, Identifier ammoId) {
         Item ammo = this.resolveAmmoItem(ammoId);
         if (ammo == null) {
             return 0;
         }
         int count = 0;
-        for (int slot = 0; slot < this.inventory.getContainerSize(); slot++) {
-            ItemStack stack = this.inventory.getItem(slot);
+        for (int slot = 0; slot < container.getContainerSize(); slot++) {
+            ItemStack stack = container.getItem(slot);
             if (stack.is(ammo)) {
                 count += stack.getCount();
             }
@@ -4641,12 +4852,12 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
 
     private int selectedWeaponReserveAmmo() {
         VehicleWeaponInfo weapon = this.selectedWeapon();
-        return weapon == null ? 0 : this.countAmmo(weapon.ammoId());
+        return weapon == null ? 0 : this.countAmmo(weapon);
     }
 
     private int selectedWeaponReserveAmmo(Entity passenger) {
         VehicleWeaponInfo weapon = this.selectedWeapon(passenger);
-        return weapon == null ? 0 : this.countAmmo(weapon.ammoId());
+        return weapon == null ? 0 : this.countAmmo(weapon);
     }
 
     private int selectedWeaponMagazineSize() {
@@ -4703,7 +4914,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         int magazineSize = stats == null ? 0 : Math.max(0, stats.magazineSize());
         return magazineSize > 0
                 && this.weaponLoadedAmmo(slot) < magazineSize
-                && this.countAmmo(weapons.get(slot).ammoId()) > 0;
+                && this.countAmmo(weapons.get(slot)) > 0;
     }
 
     private boolean canReloadSelectedWeapon() {
@@ -4808,9 +5019,9 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         GunStats stats = VehicleWeaponStats.get(weapon.weaponId());
         int magazineSize = stats == null ? 0 : Math.max(0, stats.magazineSize());
         int loaded = this.weaponLoadedAmmo(slot);
-        int reserve = this.countAmmo(weapon.ammoId());
+        int reserve = this.countAmmo(weapon);
         int transfer = Math.min(Math.max(0, magazineSize - loaded), reserve);
-        if (transfer > 0 && this.consumeAmmo(weapon.ammoId(), transfer)) {
+        if (transfer > 0 && this.consumeAmmo(weapon, transfer)) {
             this.setWeaponLoadedAmmo(slot, loaded + transfer);
         }
         this.playWeaponReloadSound(weapon, stats, false);
@@ -4833,7 +5044,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         int selectedSlot = this.selectedVehicleWeaponIndex();
         VehicleWeaponInfo weapon = this.selectedWeapon();
         if (!this.usesSharedVehicleReloadSystem()) {
-            this.entityData.set(DATA_SELECTED_WEAPON_AMMO, weapon == null ? 0 : this.countAmmo(weapon.ammoId()));
+            this.entityData.set(DATA_SELECTED_WEAPON_AMMO, weapon == null ? 0 : this.countAmmo(weapon));
             this.entityData.set(DATA_SELECTED_WEAPON_RESERVE_AMMO, 0);
             this.entityData.set(DATA_SELECTED_WEAPON_RELOADING, false);
             this.entityData.set(DATA_SELECTED_WEAPON_RELOAD_TICKS, 0);
@@ -4875,8 +5086,8 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
                 reloading.append(',');
             }
             VehicleWeaponInfo weapon = weapons.get(slot);
-            loaded.append(this.usesSharedVehicleReloadSystem(slot) ? this.weaponLoadedAmmo(slot) : this.countAmmo(weapon.ammoId()));
-            reserve.append(this.usesSharedVehicleReloadSystem(slot) ? this.countAmmo(weapon.ammoId()) : 0);
+            loaded.append(this.usesSharedVehicleReloadSystem(slot) ? this.weaponLoadedAmmo(slot) : this.countAmmo(weapon));
+            reserve.append(this.usesSharedVehicleReloadSystem(slot) ? this.countAmmo(weapon) : 0);
             reloading.append(this.weaponReloadTicks(slot));
         }
         this.entityData.set(DATA_WEAPON_AMMO_BY_SLOT, loaded.toString());
@@ -4927,10 +5138,18 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     }
 
     private boolean consumeAmmo(Identifier ammoId, int amount) {
+        return this.consumeAmmoIn(this.inventory, ammoId, amount);
+    }
+
+    private boolean consumeAmmo(VehicleWeaponInfo weapon, int amount) {
+        return this.consumeAmmoIn(this.ammoContainer(weapon), weapon.ammoId(), amount);
+    }
+
+    private boolean consumeAmmoIn(net.minecraft.world.Container container, Identifier ammoId, int amount) {
         if (amount <= 0) {
             return true;
         }
-        if (this.countAmmo(ammoId) < amount) {
+        if (this.countAmmoIn(container, ammoId) < amount) {
             return false;
         }
         Item ammo = this.resolveAmmoItem(ammoId);
@@ -4938,19 +5157,19 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
             return false;
         }
         int remaining = amount;
-        for (int slot = 0; slot < this.inventory.getContainerSize(); slot++) {
-            ItemStack stack = this.inventory.getItem(slot);
+        for (int slot = 0; slot < container.getContainerSize(); slot++) {
+            ItemStack stack = container.getItem(slot);
             if (!stack.is(ammo)) {
                 continue;
             }
             int removed = Math.min(remaining, stack.getCount());
             stack.shrink(removed);
             if (stack.isEmpty()) {
-                this.inventory.setItem(slot, ItemStack.EMPTY);
+                container.setItem(slot, ItemStack.EMPTY);
             }
             remaining -= removed;
             if (remaining == 0) {
-                this.inventory.setChanged();
+                container.setChanged();
                 return true;
             }
         }
@@ -5473,7 +5692,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         }
         return new Vec3(
                 Mth.rotLerp(partialTick, this.yRotO, this.getYRot()),
-                this.cameraPitch(partialTick),
+                this.cameraPitch(partialTick) + this.cockpitViewDown(),
                 0.0D
         );
     }
@@ -6304,7 +6523,40 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
                 return true;
             }
         }
+        return this.hasCrewOffSeats();
+    }
+
+    /**
+     * People aboard who sit in no seat (standing in a walk-in cabin). They count as crew aboard: with the pilot's seat
+     * empty the helicopter's autopilot holds its hover for them rather than letting it fall. Known on both sides.
+     */
+    protected boolean hasCrewOffSeats() {
         return false;
+    }
+
+    /**
+     * Whether a pilot leaving the seat in flight leaves the engines running (for the crew still aboard, whom
+     * {@link #hasCrewOffSeats} then keeps in the autopilot's hover; with nobody aboard the usual shutdown follows).
+     */
+    protected boolean holdsHoverWhenPilotLeaves() {
+        return false;
+    }
+
+    /**
+     * Whether, running in the air with nobody aboard, it lands itself (its autopilot's descent, the landing assist near the
+     * ground) and then winds down, rather than shutting down where it is and falling.
+     */
+    protected boolean autolandsUnattended() {
+        return false;
+    }
+
+    /**
+     * Server: sends the helicopter's startup state again though it hasn't changed. A client that was flying it wrote
+     * its own copy while predicting, and with the pilot's seat empty nothing sends the server's again (only changes
+     * are sent), so that client would hear the engines stopped while the autopilot holds the hover.
+     */
+    protected void resendHelicopterStartup() {
+        this.entityData.set(DATA_HELICOPTER_STARTUP, this.entityData.get(DATA_HELICOPTER_STARTUP), true);
     }
 
     private Vec3 horizontalDirection(float yaw) {
@@ -6400,12 +6652,19 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     private void tickHelicopterMovement(EngineInfo engine, boolean consumeEnergy) {
         // With someone aboard but the pilot's seat empty (the pilot moved to the guns) the autopilot holds height and heading,
         // and lets any speed bleed off into a hover. Abandoned, or with the power gone, it still comes down.
-        boolean autopilot = this.getControllingPassenger() == null && this.hasPlayerPassenger() && !this.onGround()
+        boolean crewAboard = this.hasPlayerPassenger();
+        // Left with nobody aboard at all (the last one jumped, logged off, or the world loaded without them), one that
+        // lands itself (autolandsUnattended) comes down at its commanded descent and sets itself down, then winds down.
+        boolean autoland = this.getControllingPassenger() == null && !crewAboard && this.autolandsUnattended() && !this.onGround()
+                && this.engineStartOver && !this.isLowHealthDecayActive();
+        boolean autopilot = this.getControllingPassenger() == null && (crewAboard || autoland) && !this.onGround()
                 && this.engineStartOver && !this.isLowHealthDecayActive();
         if (autopilot) {
             this.input = VehicleInput.EMPTY;
         }
-        Vec3 velocity = this.getDeltaMovement();
+        // Anything outside pulling on the airframe (a load on a sling: ChinookSling#pull) acts before the controls answer.
+        this.heliExternalPull = this.externalAcceleration();
+        Vec3 velocity = this.getDeltaMovement().add(this.heliExternalPull);
         if (this.onGround() && velocity.y < 0.0D) {
             // Resting on the ground the hull is not falling. Gravity used to pile up here to full descent speed while the
             // rotor spun up, so the first moment of lift-off "landed" again at that speed: over a third of the AH-6's health
@@ -6420,7 +6679,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         boolean playerPilot = this.getControllingPassenger() instanceof Player;
         // Player pilots fly forward with W, so only the ascend key climbs; AI pilots keep forward-as-collective.
         boolean up = verticalAxis > 0 || (!playerPilot && forwardAxis > 0);
-        boolean down = verticalAxis < 0;
+        boolean down = verticalAxis < 0 || autoland;
         boolean back = forwardAxis < 0 || this.input.brake();
         double mobility = this.mobilityMultiplier();
         LivingEntity pilot = this.getControllingPassenger() instanceof LivingEntity living ? living : null;
@@ -6486,11 +6745,24 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
                 && this.engineStartOver
                 && this.vehicleHealth() > 0.1F * this.maxVehicleHealth()
                 && (!this.onGround() || up);
-        double targetVerticalSpeed = up ? HELICOPTER_CLIMB_SPEED : down ? -HELICOPTER_COMMANDED_DESCENT_SPEED : 0.0D;
+        double verticalRate = this.helicopterVerticalRateScale();
+        double targetVerticalSpeed = up ? HELICOPTER_CLIMB_SPEED * verticalRate : down ? -HELICOPTER_COMMANDED_DESCENT_SPEED * verticalRate : 0.0D;
         if (down && !up && altitude < HELICOPTER_LANDING_ASSIST_ALTITUDE) {
             double landingFactor = Mth.clamp(altitude / HELICOPTER_LANDING_ASSIST_ALTITUDE, 0.0D, 1.0D);
-            targetVerticalSpeed = -Mth.lerp(landingFactor, HELICOPTER_TOUCHDOWN_SPEED, HELICOPTER_COMMANDED_DESCENT_SPEED);
+            targetVerticalSpeed = -Mth.lerp(landingFactor, HELICOPTER_TOUCHDOWN_SPEED, HELICOPTER_COMMANDED_DESCENT_SPEED * verticalRate);
         }
+        // A helicopter that idles on the ground (idlesOnGround) keeps its rotors turning at flat pitch after its start
+        // and after every landing, until the pilot holds descend on the ground (after a second there, so the hold that
+        // landed it doesn't count) or leaves the seat.
+        if (this.idlesOnGround() && this.onGround() && pilot != null && this.engineStartOver) {
+            this.groundTicks++;
+            this.groundShutdownTicks = down && !up && this.groundTicks > GROUND_SHUTDOWN_SETTLE_TICKS ? this.groundShutdownTicks + 1 : 0;
+        } else {
+            this.groundTicks = 0;
+            this.groundShutdownTicks = 0;
+        }
+        boolean groundIdle = this.idlesOnGround() && this.onGround() && pilot != null && hasEnergy && !up
+                && this.engineStartOver && this.groundShutdownTicks < GROUND_SHUTDOWN_HOLD_TICKS;
         double turnResponse = playerPilot ? HELICOPTER_PLAYER_TURN_RESPONSE : 1.0D;
         if (!playerVerticalControl) {
             this.pilotAimPitch = 0.0F;
@@ -6641,8 +6913,12 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
             this.holdPowerTick = 0;
         }
 
+        if (groundIdle) {
+            // Flight rpm, flat pitch: no lift until the collective comes up.
+            this.enginePower = HELICOPTER_HOVER_POWER;
+        }
         // Once landed, the unpowered rotor coasts independently of engine power. Braking must not snap it to a stop.
-        boolean coasting = this.onGround() && !up && (this.engineStartOver || !this.engineStart);
+        boolean coasting = this.onGround() && !up && (this.engineStartOver || !this.engineStart) && !groundIdle;
         if (coasting) {
             this.enginePower = 0.0D;
             this.engineStart = false;
@@ -6652,7 +6928,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
                 ? Math.max(0.0F, currentRotorSpeed - (float) HELICOPTER_HOVER_POWER / this.helicopterShutdownTicks())
                 : Mth.lerp(0.18F, currentRotorSpeed, (float) this.enginePower);
         // The rotor winds up on the ground; collective cannot lift the helicopter before operating RPM.
-        float liftRotorSpeed = coasting || (this.engineStart && !this.engineStartOver) ? 0.0F : nextRotorSpeed;
+        float liftRotorSpeed = coasting || groundIdle || (this.engineStart && !this.engineStartOver) ? 0.0F : nextRotorSpeed;
         if (rotorIdleLocked) {
             nextRotorSpeed = 0.0F;
             liftRotorSpeed = 0.0F;
@@ -6662,7 +6938,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
             nextRotorSpeed = Math.max(nextRotorSpeed, HELICOPTER_DESCENT_ROTOR_SPEED);
         }
         this.entityData.set(DATA_PROPELLER_SPEED, rotorIdleLocked ? 0.0F : nextRotorSpeed * 0.9995F);
-        this.entityData.set(DATA_PROPELLER_ROT, rotorIdleLocked ? this.propellerRot() : this.propellerRot() + 30.0F * nextRotorSpeed);
+        this.entityData.set(DATA_PROPELLER_ROT, rotorIdleLocked ? this.propellerRot() : this.propellerRot() + this.rotorTurnPerTick(nextRotorSpeed));
 
         if (consumeEnergy && this.engineStart) {
             int cost = this.scaledEngineEnergyCost(engine, true, helicopterEnergyScale);
@@ -6736,7 +7012,8 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         Vec3 horizontal = new Vec3(current.x, 0.0D, current.z);
         double response = (forward == 0 && strafe == 0 ? HELICOPTER_BRAKING_RESPONSE : HELICOPTER_ACCELERATION_RESPONSE) * Mth.clamp(engine.playerAcceleration(), 0.05D, 4.0D);
         horizontal = horizontal.add(target.subtract(horizontal).scale(response));
-        double vertical = Mth.lerp(HELICOPTER_VERTICAL_RESPONSE, current.y, targetVerticalSpeed);
+        // Steered from the speed before any outside pull (a slung load), so a load doesn't make the hover sink.
+        double vertical = Mth.lerp(HELICOPTER_VERTICAL_RESPONSE, current.y - Math.min(0.0D, this.heliExternalPull.y), targetVerticalSpeed);
         return new Vec3(horizontal.x, vertical, horizontal.z);
     }
 
@@ -6767,8 +7044,77 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         this.setRoll(Mth.clamp(this.roll() + this.rollVelocity, -HELICOPTER_MAX_SWAY, HELICOPTER_MAX_SWAY));
     }
 
-    private static double weightyHelicopterWeight(EngineInfo engine, Config.HelicopterFlightSettings flight) {
-        return Mth.clamp(engine.playerWeight() * flight.weightMultiplier(), 0.5D, 3.0D);
+    private double weightyHelicopterWeight(EngineInfo engine, Config.HelicopterFlightSettings flight) {
+        return Mth.clamp(engine.playerWeight() * flight.weightMultiplier() * this.flightWeightScale(), 0.5D, 3.0D);
+    }
+
+    /**
+     * An acceleration from outside the helicopter's own flight, blocks a tick a tick, added each tick before its
+     * controls answer: a slung load's pull ({@code ChinookSling}). Computed alike on the server and the pilot's client.
+     */
+    protected Vec3 externalAcceleration() {
+        return Vec3.ZERO;
+    }
+
+    /** This tick's {@link #externalAcceleration()}, which the hover hold carries. */
+    private Vec3 heliExternalPull = Vec3.ZERO;
+
+    /** How much heavier the helicopter flies than its data says just now (a load on its sling). */
+    protected double flightWeightScale() {
+        return 1.0D;
+    }
+
+    // ---- Slung under a helicopter (the Chinook's cargo hook, ChinookSling) ----
+
+    private long slungUntil = Long.MIN_VALUE;
+    @Nullable private AABB slingBody;
+
+    /** Called each tick by the helicopter carrying this vehicle on its sling (server): its own movement is off. */
+    public void markSlung() {
+        this.slungUntil = this.level().getGameTime() + 2L;
+    }
+
+    /** Whether a helicopter's sling holds this vehicle now (server). */
+    public boolean isSlung() {
+        return this.level().getGameTime() <= this.slungUntil;
+    }
+
+    /** Whether a helicopter may take this vehicle on its sling (it must also be empty). */
+    public boolean canBeSlung() {
+        return true;
+    }
+
+    /** The extent of its body boxes in data coordinates (all its boxes if none is "body"), for a sling's legs. */
+    private AABB slingBody() {
+        if (this.slingBody == null) {
+            AABB body = null, all = null;
+            for (OBBInfo.Box box : this.obbBoxes()) {
+                AABB b = new AABB(box.x() - box.halfWidth(), box.y() - box.halfHeight(), box.z() - box.halfDepth(),
+                        box.x() + box.halfWidth(), box.y() + box.halfHeight(), box.z() + box.halfDepth());
+                all = all == null ? b : all.minmax(b);
+                if (box.part() == OBBInfo.Part.BODY) {
+                    body = body == null ? b : body.minmax(b);
+                }
+            }
+            AABB found = body != null ? body : all;
+            double half = this.getBbWidth() * 0.5D;
+            this.slingBody = found != null ? found : new AABB(-half, 0.0D, -half, half, this.getBbHeight(), half);
+        }
+        return this.slingBody;
+    }
+
+    /** How high above its origin a sling's legs take hold: the top of its body. */
+    public double slingLiftHeight() {
+        return this.slingBody().maxY;
+    }
+
+    /** Where a sling's four legs take hold, in data coordinates: its body's top corners, a little inboard. */
+    public java.util.List<Vec3> slingLiftPoints() {
+        AABB body = this.slingBody();
+        double cx = (body.minX + body.maxX) * 0.5D, cz = (body.minZ + body.maxZ) * 0.5D;
+        double hx = (body.maxX - body.minX) * 0.4D, hz = (body.maxZ - body.minZ) * 0.4D;
+        return java.util.List.of(new Vec3(cx + hx, body.maxY, cz + hz), new Vec3(cx - hx, body.maxY, cz + hz),
+                new Vec3(cx - hx, body.maxY, cz - hz), new Vec3(cx + hx, body.maxY, cz - hz));
     }
 
     /** Hull tilt in degrees whose sideways rotor push is {@code thrust} (the sine of the tilt). */
@@ -6802,6 +7148,14 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         }
     }
 
+    /**
+     * Degrees the pilot's view, pinned to the airframe in first person, looks below the airframe's own line: a seated
+     * pilot's natural eye line, the horizon in the upper part of the view and the instrument panel below it. 0 by default.
+     */
+    public float cockpitViewDown() {
+        return 0.0F;
+    }
+
     /** Camera pitch: steadied on helicopters, the hull's own pitch on everything else. */
     public float cameraPitch(float partialTick) {
         if (this.isJet()) {
@@ -6813,6 +7167,37 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     }
 
     /** Out of player control (landed, power loss, AI) the thrust tilt and rotor lag ease back to neutral. */
+    /**
+     * A client taking over a helicopter's flight (its player now the pilot) starts from the helicopter as it is: its
+     * attitude, at rest, and its engines as the server has them. Its own flight model still held what it had when that
+     * player last flew it: back in the pilot's seat from the co-pilot's, the nose snapped 10 degrees down and it lurched
+     * off at its old speed (the user's report, 2026-11-25: "the screen and whole chopper starts jumping around").
+     */
+    private void seedHelicopterPrediction() {
+        float pitch = this.getXRot();
+        this.heliTiltPitch = pitch;
+        this.heliShownTilt = pitch;
+        this.heliTiltPitchVelocity = 0.0F;
+        this.heliTiltRoll = this.roll();
+        this.heliTiltRollVelocity = 0.0F;
+        this.heliShownAim = 0.0F;
+        this.pilotAimPitch = 0.0F;
+        this.heliCameraTilt = pitch * WEIGHTY_CAMERA_TILT_SHARE;
+        this.heliYawRate = 0.0F;
+        this.heliLift = 0.0D;
+        this.manualRolling = false;
+        this.holdTick = 0;
+        this.holdPowerTick = 0;
+        float progress = this.helicopterStartupProgress();
+        this.engineStart = progress > 0.0F;
+        this.engineStartOver = progress >= 1.0F;
+        if (this.engineStartOver) {
+            this.enginePower = Math.max(this.enginePower, HELICOPTER_HOVER_POWER);
+        }
+        this.groundTicks = 0;
+        this.groundShutdownTicks = 0;
+    }
+
     private void settleWeightyHelicopterState() {
         this.heliTiltPitch *= 0.8F;
         this.heliTiltRoll = Mth.wrapDegrees(this.heliTiltRoll) * 0.8F;
@@ -6921,7 +7306,12 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
             // A flare at speed balloons upward as the forward momentum turns into height.
             verticalTarget += WEIGHTY_FLARE_BALLOON * Math.max(0.0D, -pitchThrust) * Mth.clamp(forwardSpeed / maxSpeed, 0.0D, 1.0D);
         }
-        double desiredLift = (verticalTarget - current.y) * WEIGHTY_VERTICAL_GAIN;
+        // The pilot assist also carries what pulls the airframe down from outside (a slung load), so with the collective
+        // left alone it hovers loaded as it does empty; the load's pull is capped under the spare lift (ChinookSling).
+        // The error is taken on the speed before that pull, or the hold settled climbing at the pull's own rate (0.17 m/s
+        // with an LAV-150, play-test 2026-11-21).
+        double pullDown = Math.min(0.0D, this.heliExternalPull.y);
+        double desiredLift = (verticalTarget - (current.y - pullDown)) * WEIGHTY_VERTICAL_GAIN - pullDown;
         this.heliLift += (desiredLift - this.heliLift) * WEIGHTY_LIFT_RESPONSE / weight;
         this.heliLift = Mth.clamp(this.heliLift, -WEIGHTY_GRAVITY, WEIGHTY_MAX_EXTRA_LIFT * WEIGHTY_GRAVITY);
         double thrust = WEIGHTY_GRAVITY + this.heliLift;
@@ -7002,8 +7392,16 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         float targetRoll = Mth.clamp(shownBank + turnBank, -WEIGHTY_MAX_BANK, WEIGHTY_MAX_BANK);
         this.rollVelocity += (float) ((targetRoll - this.roll()) * WEIGHTY_VISUAL_ROLL_SPRING / weight
                 - this.rollVelocity * WEIGHTY_VISUAL_ROLL_DAMPING / Math.sqrt(weight)
-                + leftAccelerationFraction * WEIGHTY_SWAY_INERTIA * weight);
+                + leftAccelerationFraction * WEIGHTY_SWAY_INERTIA * weight * this.strafeSwayScale());
         this.setRoll(Mth.clamp(this.roll() + this.rollVelocity, -HELICOPTER_MAX_SWAY, HELICOPTER_MAX_SWAY));
+    }
+
+    /**
+     * How much of the weighted sway a strafe starts with (the hull swinging the other way first, WEIGHTY_SWAY_INERTIA):
+     * 1 for most helicopters; less for a big airframe on which the kick reads as moving the wrong way.
+     */
+    protected double strafeSwayScale() {
+        return 1.0D;
     }
 
     private void warnHelicopterDangerousDescent(boolean forcedDescent, double altitude) {
@@ -7042,14 +7440,97 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     }
 
     void moveHelicopter(Vec3 velocity) {
+        velocity = this.cushionHelicopterDescent(velocity);
         Vec3 before = this.position();
         this.setDeltaMovement(velocity);
         this.move(MoverType.SELF, velocity);
+        this.restOnVehiclesBelow(before.y - this.getY());
         Vec3 moved = this.position().subtract(before);
         if (moved.lengthSqr() > 1.0E-7D || this.horizontalCollision || this.verticalCollision) {
             this.hurtMarked = true;
             this.needsSync = true;
         }
+    }
+
+    /** A helicopter's descent this tick, eased off over something it must not come down on (its own slung load). */
+    protected Vec3 cushionHelicopterDescent(Vec3 velocity) {
+        return velocity;
+    }
+
+    /**
+     * Whether this vehicle passes through {@code other} rather than colliding: a helicopter and the load on its sling
+     * (ChinookSling#keepsClearOf). Asked of both, so either may say so.
+     */
+    public boolean keepsClearOf(Entity other) {
+        return false;
+    }
+
+    private boolean keepsClear(Entity other) {
+        return this.keepsClearOf(other) || other instanceof VehicleEntity vehicle && vehicle.keepsClearOf(this);
+    }
+
+    /**
+     * A helicopter coming down onto another vehicle rests on its roof instead of sinking into it (the 2026-11-20
+     * play-through: a Chinook came down through an LAV-150 and stuck there; vehicle against vehicle only stopped closing
+     * speed sideways). Runs wherever the helicopter moves: the server, and the pilot's predicting client. {@code drop} is
+     * how far it just came down.
+     */
+    private void restOnVehiclesBelow(double drop) {
+        if (drop <= 0.0D || this.vehicleData().defaults().collisionLevel() == CollisionLevel.NONE) {
+            return;
+        }
+        double lift = 0.0D;
+        java.util.List<OBBInfo.Box> mine = this.posedHullBoxes(this.entityPushBoxes(), false);
+        for (VehicleEntity other : this.level().getEntitiesOfClass(VehicleEntity.class, this.getBoundingBox().expandTowards(0.0D, -1.0D, 0.0D),
+                v -> v != this && !v.isRemoved() && !v.noPhysics && !this.hasPassenger(v) && v.getVehicle() != this
+                        && v.vehicleData().defaults().collisionLevel() != CollisionLevel.NONE && !this.keepsClear(v))) {
+            for (OBBInfo.Box box : mine) {
+                lift = Math.max(lift, other.landingLift(this.worldBoxOf(box), drop));
+            }
+        }
+        if (lift > 0.0D) {
+            this.setPos(this.getX(), this.getY() + lift, this.getZ());
+            Vec3 velocity = this.getDeltaMovement();
+            this.setDeltaMovement(velocity.x, Math.max(0.0D, velocity.y), velocity.z);
+            this.setOnGround(true);
+        }
+    }
+
+    /** One of this vehicle's hull-aligned boxes as a world box round it. */
+    private AABB worldBoxOf(OBBInfo.Box box) {
+        double minX = Double.POSITIVE_INFINITY, minY = Double.POSITIVE_INFINITY, minZ = Double.POSITIVE_INFINITY;
+        double maxX = Double.NEGATIVE_INFINITY, maxY = Double.NEGATIVE_INFINITY, maxZ = Double.NEGATIVE_INFINITY;
+        for (int corner = 0; corner < 8; corner++) {
+            Vec3 at = this.position().add(this.rotateLocalOffset(
+                    box.x() + ((corner & 1) == 0 ? -box.halfWidth() : box.halfWidth()),
+                    box.y() + ((corner & 2) == 0 ? -box.halfHeight() : box.halfHeight()),
+                    box.z() + ((corner & 4) == 0 ? -box.halfDepth() : box.halfDepth())));
+            minX = Math.min(minX, at.x);
+            minY = Math.min(minY, at.y);
+            minZ = Math.min(minZ, at.z);
+            maxX = Math.max(maxX, at.x);
+            maxY = Math.max(maxY, at.y);
+            maxZ = Math.max(maxZ, at.z);
+        }
+        return new AABB(minX, minY, minZ, maxX, maxY, maxZ);
+    }
+
+    /**
+     * How far {@code box}, which has just come down by {@code drop}, must rise to sit on this vehicle's top; 0 when it
+     * isn't over this vehicle or was already below its top before the move.
+     */
+    private double landingLift(AABB box, double drop) {
+        LocalBounds bounds = this.toLocalBounds(box);
+        double lift = 0.0D;
+        for (OBBInfo.Box own : this.posedHullBoxes(this.entityPushBoxes(), false)) {
+            double top = own.y() + own.halfHeight();
+            boolean over = bounds.maxX() > own.x() - own.halfWidth() && bounds.minX() < own.x() + own.halfWidth()
+                    && bounds.maxZ() > own.z() - own.halfDepth() && bounds.minZ() < own.z() + own.halfDepth();
+            if (over && bounds.minY() < top && bounds.minY() + drop >= top - 0.05D) {
+                lift = Math.max(lift, top - bounds.minY());
+            }
+        }
+        return lift;
     }
 
     private void tickServerBoatMovement(EngineInfo engine) {
@@ -7370,15 +7851,14 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         return this.rotateLocalOffset(localX, localY, localZ, partialTick);
     }
 
-    /** First-person eye inside the hull: turned by the camera's roll, so a barrel roll keeps the eye in the cockpit. */
+    /**
+     * First-person eye inside the hull: at the seat with the hull's whole pose, roll included. Only the view's own roll
+     * stays level through ordinary sway (cameraRoll); the eye placed by that level roll stayed where an unbanked cockpit
+     * would be while the model banked round it, a metre and more on the CH-47 (its pilot's eye 2.5 m above the pivot),
+     * so swaying put the camera through the cockpit's posts and out of the airframe (the user, 2026-11-21).
+     */
     private Vec3 seatEyeOffsetWithPose(double localX, double localY, double localZ, float partialTick) {
-        if (!this.keepsCameraLevel()) {
-            return this.rotateLocalOffsetWithPose(localX, localY, localZ, partialTick);
-        }
-        Vec3 origin = this.interpolatedVehiclePosition(partialTick);
-        Vector4d worldPosition = this.vehiclePoseTransformWithRoll(partialTick, this.cameraRoll(partialTick))
-                .transform(new Vector4d(localX, localY, localZ, 1.0D));
-        return new Vec3(worldPosition.x - origin.x, worldPosition.y - origin.y, worldPosition.z - origin.z);
+        return this.rotateLocalOffsetWithPose(localX, localY, localZ, partialTick);
     }
 
     /** Offset of a camera that orbits the vehicle: turned by the camera's pitch, without roll. */
@@ -7489,6 +7969,11 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         Vector4d localOrigin = this.vehiclePoseRotation(partialTick).transform(new Vector4d(0.0D, 0.0D, 0.0D, 1.0D));
         Vector4d worldDirection = this.vehiclePoseRotation(partialTick).transform(new Vector4d(localX, localY, localZ, 1.0D));
         return new Vec3(worldDirection.x - localOrigin.x, worldDirection.y - localOrigin.y, worldDirection.z - localOrigin.z);
+    }
+
+    /** Data coordinates to the world at this point between ticks: the pose the model is drawn at (walk-in cabins use it). */
+    public Matrix4d localToWorld(float partialTick) {
+        return this.vehiclePoseTransform(partialTick);
     }
 
     private Matrix4d vehiclePoseTransform(float partialTick) {
@@ -7690,6 +8175,9 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         output.putFloat(TAG_LEFT_WHEEL_HEALTH, this.leftWheelHealth);
         output.putFloat(TAG_RIGHT_WHEEL_HEALTH, this.rightWheelHealth);
         output.putFloat(TAG_ENGINE_HEALTH, this.engineHealth);
+        if (this.vehicleData().defaults().vehicleType() == VehicleType.HELICOPTER) {
+            output.putBoolean(TAG_HELICOPTER_RUNNING, this.engineStart && this.engineStartOver);
+        }
         output.putFloat(TAG_SUB_ENGINE_HEALTH, this.subEngineHealth);
         output.putFloat(TAG_TURRET_HEALTH, this.turretHealth);
         net.minecraft.world.item.DyeColor paint = this.paint();
@@ -7730,6 +8218,19 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         this.leftWheelHealth = input.getFloatOr(TAG_LEFT_WHEEL_HEALTH, PART_MAX_HEALTH);
         this.rightWheelHealth = input.getFloatOr(TAG_RIGHT_WHEEL_HEALTH, PART_MAX_HEALTH);
         this.engineHealth = input.getFloatOr(TAG_ENGINE_HEALTH, PART_MAX_HEALTH);
+        // Engines running when saved run on: a CH-47 holding its hover for its crew when the world was saved loaded with
+        // them stopped, fell 60 m and was lost with what its cabin held (the user's test world, 2026-11-25). Saves from
+        // before this key: an airborne helicopter that lands itself (autolandsUnattended) is taken to have been running,
+        // only when loading a saved vehicle (not a fresh /summon, whose NBT is empty and onGround is false).
+        boolean savedVehicle = !input.getStringOr(TAG_VEHICLE_ID, "").isEmpty();
+        if (this.vehicleData().defaults().vehicleType() == VehicleType.HELICOPTER && this.wreckState() == WRECK_NONE
+                && input.getBooleanOr(TAG_HELICOPTER_RUNNING, savedVehicle && !this.onGround() && this.autolandsUnattended())) {
+            this.engineStart = true;
+            this.engineStartOver = true;
+            this.entityData.set(DATA_HELICOPTER_STARTUP, this.helicopterStartupTicks());
+            this.enginePower = Math.max(this.enginePower, HELICOPTER_HOVER_POWER);
+            this.entityData.set(DATA_PROPELLER_SPEED, Math.max(this.propellerSpeed(), (float) HELICOPTER_HOVER_POWER));
+        }
         this.subEngineHealth = input.getFloatOr(TAG_SUB_ENGINE_HEALTH, PART_MAX_HEALTH);
         this.turretHealth = input.getFloatOr(TAG_TURRET_HEALTH, PART_MAX_HEALTH);
         String paint = input.getStringOr(TAG_PAINT, "");
@@ -8081,7 +8582,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
             }
             float rotor = this.propellerSpeed() * 0.97F;
             this.entityData.set(DATA_PROPELLER_SPEED, rotor);
-            this.entityData.set(DATA_PROPELLER_ROT, this.propellerRot() + 30.0F * rotor);
+            this.entityData.set(DATA_PROPELLER_ROT, this.propellerRot() + this.rotorTurnPerTick(rotor));
             this.setDeltaMovement(velocity);
             this.move(MoverType.SELF, velocity);
             return;
@@ -8329,6 +8830,9 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     }
 
     private boolean isSeatOccupied(int seatIndex, @Nullable Entity except) {
+        if (this.seatBlocked(seatIndex)) {
+            return true;
+        }
         for (int index = 0; index < this.getPassengers().size(); index++) {
             Entity passenger = this.getPassengers().get(index);
             if (passenger != except && this.seatIndexForPassenger(passenger, index) == seatIndex) {
@@ -8575,7 +9079,7 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
 
     @Override
     public InteractionResult interact(Player player, InteractionHand hand, Vec3 hitLocation) {
-        if (this.isWrecked()) {
+        if (this.isWrecked() || this.isSlung()) {
             return InteractionResult.PASS;
         }
         if (this.consumeCarryOnPlacement(player)) {
@@ -8658,6 +9162,11 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         return Component.translatable("entity." + this.vehicleDataId().getNamespace() + "." + this.vehicleDataId().getPath());
     }
 
+    /** The hold key from a seat: the hold, unless the seat has a store of its own (a Chinook door gunner's ammo can). */
+    public void openHoldFor(ServerPlayer player) {
+        player.openMenu(this);
+    }
+
     @Override
     @Nullable
     public AbstractContainerMenu createMenu(int containerId, Inventory playerInventory, Player player) {
@@ -8717,6 +9226,11 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
             return true;
         }
         return seatIndex == 0 && seats.stream().noneMatch(SeatInfo::driver);
+    }
+
+    /** A seat that can't be taken just now though nobody is in it (a Chinook door gunner's place with cargo in it). Server. */
+    protected boolean seatBlocked(int seatIndex) {
+        return false;
     }
 
     private boolean canTakeSeat(Entity passenger, int seatIndex) {
@@ -8832,7 +9346,12 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         boolean preserveSeatAssignment = this.preservedSeatAssignments.remove(passenger.getUUID());
         if (controllingPassenger) {
             this.cancelWeaponReload();
-            this.clearControlState(true);
+            if (this.holdsHoverWhenPilotLeaves()) {
+                // The engines stay on for the autopilot: only the pilot's hands come off the controls.
+                this.releasePilotControls();
+            } else {
+                this.clearControlState(true);
+            }
         }
         if (passenger instanceof LivingEntity living) {
             living.fallDistance = 0.0F;
@@ -8847,7 +9366,10 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         this.syncSeatAssignments();
         if (controllingPassenger && syncPlayer != null) {
             this.recentDismountSyncPlayerId = syncPlayer.getUUID();
-            this.recentDismountSyncTicks = DISMOUNT_FOLLOWUP_SYNC_TICKS;
+            // A helicopter that flies on for its crew hands over once: a forced state every tick snapped it (and the
+            // camera of whoever stood in its cabin) to each tick's pose for two seconds, a judder as it levelled out
+            // (the CH-47 at 21 m/s, the user's report, 2026-11-25). Its regular, eased syncs follow.
+            this.recentDismountSyncTicks = this.holdsHoverWhenPilotLeaves() ? 0 : DISMOUNT_FOLLOWUP_SYNC_TICKS;
             NetworkHandler.broadcastForcedVehicleState(this);
         }
         if (controllingPassenger && this.vehicleData().defaults().vehicleType() == VehicleType.LAND) {
@@ -8985,6 +9507,12 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         return true;
     }
 
+    /** A helicopter and its slung load pass through each other (keepsClearOf), in every move either makes. */
+    @Override
+    public boolean canCollideWith(Entity other) {
+        return !this.keepsClear(other) && super.canCollideWith(other);
+    }
+
     @Override
     public boolean canBeCollidedWith(@Nullable Entity other) {
         return !this.isRemoved()
@@ -9009,7 +9537,8 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     public void push(double x, double y, double z) {
     }
 
-    private record RotorContactInfo(double centerX, double centerY, double centerZ, double radius) {
+    /** A rotor disc checked against the ground: its hub in vehicle data coordinates and its radius (blocks). */
+    public record RotorContactInfo(double centerX, double centerY, double centerZ, double radius) {
     }
 
     private record ArmorHit(float finalDamage, boolean penetrated) {

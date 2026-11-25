@@ -214,7 +214,7 @@ public final class NetworkHandler {
 
     private static void handleVehicleOpenMenu(VehicleOpenMenuPayload payload, ServerPlayer player) {
         if (player.getVehicle() instanceof VehicleEntity vehicle && vehicle.getId() == payload.vehicleId()) {
-            player.openMenu(vehicle);
+            vehicle.openHoldFor(player);
         }
     }
 

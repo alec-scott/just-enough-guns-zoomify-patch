@@ -87,6 +87,13 @@ abstract class AbstractVehicleGeoRenderer<T extends VehicleEntity> extends GeoEn
             renderState.z = towed.position().z;
             renderState.yaw = towed.yaw();
         }
+        // On a Chinook's sling: where the rope puts it from the Chinook's smooth pose (ChinookSling.clientLoadPosition).
+        var slung = ttv.migami.jeg.vehicle.entity.ChinookSling.clientLoadPosition(vehicle, partialTick);
+        if (slung != null) {
+            renderState.x = slung.x;
+            renderState.y = slung.y;
+            renderState.z = slung.z;
+        }
     }
 
     @Override
@@ -276,6 +283,7 @@ abstract class AbstractVehicleGeoRenderer<T extends VehicleEntity> extends GeoEn
         }
         switch (vehicle.vehicleDataId().getPath()) {
             case "ah6" -> updateHelicopterRotors(vehicle, partialTick, snapshots);
+            case "ch47" -> Ch47Renderer.pose(vehicle, partialTick, snapshots);
             case "bmp2" -> {
                 updateTurret(vehicle, partialTick, snapshots, -74.0F, 7.5F);
                 // The muzzle flashes show only while that gun fires, flickering shot to shot (the generic idle left

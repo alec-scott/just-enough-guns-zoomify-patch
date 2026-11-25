@@ -108,6 +108,10 @@
     {
       "id": "jeg:yx100",
       "required": false
+    },
+    {
+      "id": "jeg:ch47",
+      "required": false
     }
   ]
 }

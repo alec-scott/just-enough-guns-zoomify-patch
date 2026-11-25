@@ -1,0 +1,319 @@
+{
+  "model": "jeg:entity/vehicle/ch47",
+  "units_per_block": 16,
+  "front": "-Z in the model, +Z in vehicle data",
+  "reference": "Boeing CH-47F Chinook, 1:1, its cabin grown to 3 x 3 m inside (grow)",
+  "length_m": 15.73,
+  "fuselage_length_m": 15.5,
+  "width_m": 4.51,
+  "height_m": 6.28,
+  "rotors": [
+    {
+      "name": "front",
+      "hub": [
+        0.0,
+        5.3125,
+        5.9688
+      ],
+      "radius": 9.15,
+      "blades": 3,
+      "direction": 1,
+      "phase": 0.0
+    },
+    {
+      "name": "rear",
+      "hub": [
+        0.0,
+        6.625,
+        -5.9688
+      ],
+      "radius": 9.15,
+      "blades": 3,
+      "direction": -1,
+      "phase": 60.0
+    }
+  ],
+  "cabin": {
+    "floor_y": 1.0,
+    "inside_half_width": 1.5,
+    "outside_half_width": 1.6875,
+    "inside_height": 3.0,
+    "front_z": 5.0625,
+    "rear_z": -4.125,
+    "cells_along": 9,
+    "cell_length": 1.0208333333333333
+  },
+  "ramp": {
+    "hinge": [
+      0.0,
+      1.0,
+      -4.125
+    ],
+    "length": 2.0,
+    "closed_deg": 62.0
+  },
+  "crew_door": {
+    "z": [
+      4.125,
+      4.9375
+    ],
+    "top": 2.875,
+    "slide": 0.9375,
+    "side": "right (-X in the model and data)"
+  },
+  "gun_window": {
+    "z": [
+      4.25,
+      4.9375
+    ],
+    "y": [
+      1.8125,
+      2.625
+    ],
+    "side": "left (+X in the model and data)"
+  },
+  "door_guns": {
+    "right": [
+      -1.4062,
+      2.2812,
+      4.5312
+    ],
+    "left": [
+      1.4062,
+      2.2812,
+      4.5938
+    ],
+    "muzzle_from_trunnion": 0.9125
+  },
+  "hook": [
+    0.0,
+    0.5375,
+    0.625
+  ],
+  "seats": {
+    "pilot": [
+      -0.85,
+      1.0,
+      6.75
+    ],
+    "copilot": [
+      0.85,
+      1.0,
+      6.75
+    ]
+  },
+  "pilot_eye": [
+    -0.85,
+    2.1875,
+    6.75
+  ],
+  "lights": {
+    "anti_collision_top": [
+      0.0,
+      6.5,
+      -6.2188
+    ],
+    "anti_collision_belly": [
+      0.0,
+      0.5625,
+      -1.3438
+    ],
+    "nav_left_red": [
+      2.2375,
+      1.4062,
+      3.375
+    ],
+    "nav_right_green": [
+      -2.2375,
+      1.4062,
+      3.375
+    ],
+    "tail_white": [
+      0.0,
+      6.0625,
+      -7.125
+    ],
+    "landing": [
+      [
+        0.725,
+        0.625,
+        6.375
+      ],
+      [
+        -0.725,
+        0.625,
+        6.375
+      ]
+    ]
+  },
+  "model_bounds": [
+    [
+      -2.2563,
+      0.2875,
+      8.5
+    ],
+    [
+      2.2562,
+      6.5625,
+      -7.2313
+    ]
+  ],
+  "hitbox": [
+    {
+      "part": "body",
+      "covers": "cockpit",
+      "x": 0.0,
+      "y": 2.3438,
+      "z": 6.7188,
+      "half_width": 1.5375,
+      "half_height": 1.7188,
+      "half_depth": 1.6562
+    },
+    {
+      "part": "body",
+      "covers": "belly",
+      "x": 0.0,
+      "y": 0.8,
+      "z": 0.4688,
+      "half_width": 1.6875,
+      "half_height": 0.2,
+      "half_depth": 4.5938
+    },
+    {
+      "part": "body",
+      "covers": "roof",
+      "x": 0.0,
+      "y": 4.3125,
+      "z": 0.4688,
+      "half_width": 1.6875,
+      "half_height": 0.3125,
+      "half_depth": 4.5938
+    },
+    {
+      "part": "body",
+      "covers": "wall",
+      "x": -1.5938,
+      "y": 2.5,
+      "z": 5.0,
+      "half_width": 0.0938,
+      "half_height": 1.5,
+      "half_depth": 0.0625
+    },
+    {
+      "part": "body",
+      "covers": "crew door",
+      "x": -1.5938,
+      "y": 1.9375,
+      "z": 4.5312,
+      "half_width": 0.0938,
+      "half_height": 0.9375,
+      "half_depth": 0.4062
+    },
+    {
+      "part": "body",
+      "covers": "wall",
+      "x": -1.5938,
+      "y": 3.4375,
+      "z": 4.5312,
+      "half_width": 0.0938,
+      "half_height": 0.5625,
+      "half_depth": 0.4062
+    },
+    {
+      "part": "body",
+      "covers": "wall",
+      "x": -1.5938,
+      "y": 2.5,
+      "z": -0.625,
+      "half_width": 0.0938,
+      "half_height": 1.5,
+      "half_depth": 4.75
+    },
+    {
+      "part": "body",
+      "covers": "wall",
+      "x": 1.5938,
+      "y": 2.5,
+      "z": -0.1562,
+      "half_width": 0.0938,
+      "half_height": 1.5,
+      "half_depth": 5.2188
+    },
+    {
+      "part": "body",
+      "covers": "sponson",
+      "x": -1.9625,
+      "y": 1.0813,
+      "z": 0.125,
+      "half_width": 0.275,
+      "half_height": 0.4813,
+      "half_depth": 3.875
+    },
+    {
+      "part": "body",
+      "covers": "sponson",
+      "x": 1.9625,
+      "y": 1.0813,
+      "z": 0.125,
+      "half_width": 0.275,
+      "half_height": 0.4813,
+      "half_depth": 3.875
+    },
+    {
+      "part": "body",
+      "covers": "ramp",
+      "x": 0.0,
+      "y": 2.5,
+      "z": -4.625,
+      "half_width": 1.5,
+      "half_height": 1.5,
+      "half_depth": 0.5
+    },
+    {
+      "part": "main_engine",
+      "covers": "forward pylon",
+      "x": 0.0,
+      "y": 4.5938,
+      "z": 6.125,
+      "half_width": 1.1,
+      "half_height": 0.5312,
+      "half_depth": 1.125
+    },
+    {
+      "part": "main_engine",
+      "covers": "aft pylon",
+      "x": 0.0,
+      "y": 5.2812,
+      "z": -5.4375,
+      "half_width": 1.6875,
+      "half_height": 1.2812,
+      "half_depth": 1.6875
+    },
+    {
+      "part": "sub_engine",
+      "covers": "engine",
+      "x": -2.0375,
+      "y": 4.5,
+      "z": -5.5,
+      "half_width": 0.4688,
+      "half_height": 0.4688,
+      "half_depth": 1.625
+    },
+    {
+      "part": "sub_engine",
+      "covers": "engine",
+      "x": 2.0375,
+      "y": 4.5,
+      "z": -5.5,
+      "half_width": 0.4688,
+      "half_height": 0.4688,
+      "half_depth": 1.625
+    }
+  ],
+  "bones": 25,
+  "cuboids": 196,
+  "texture": [
+    4096,
+    1824
+  ]
+}

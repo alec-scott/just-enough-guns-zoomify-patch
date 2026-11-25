@@ -20,6 +20,12 @@ public final class VehicleGunReports {
     private static final Report COAX = new Report("vehicle.gun.coax", 1.6F);
     /** The sentry's 7.62 mm: a real Negev's report (design/sentry/prepare_audio.py). */
     private static final Report SENTRY = new Report("vehicle.gun.sentry", 2.0F);
+    /**
+     * The CH-47's door guns, voiced as an MG34 (the user, 2026-11-25): a real belt-fed machine gun's report (SBW's M60)
+     * made heavier for the 7.92x57 round (design/chinook/prepare_door_gun.py; no MG34 recording under a checkable
+     * licence exists).
+     */
+    public static final Report DOOR_GUN = new Report("vehicle.gun.door_gun", 2.1F);
 
     private VehicleGunReports() {}
 

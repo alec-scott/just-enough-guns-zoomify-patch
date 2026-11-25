@@ -68,6 +68,7 @@ public final class FabricEntrypoint implements ModInitializer {
 
         // Fabric-specific hooks.
         NetworkHandler.initCommon();
+        ttv.migami.jeg.vehicle.cabin.CabinNetwork.init();
         FabricCreativeTabs.init();
         FabricRecipeUnlock.init();
         FabricEntityInit.init();

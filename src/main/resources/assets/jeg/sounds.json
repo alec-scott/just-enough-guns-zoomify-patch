@@ -1966,6 +1966,54 @@
       }
     ]
   },
+  "vehicle.ch47.ramp_hydraulic": {
+    "subtitle": "subtitle.jeg.vehicle.ch47.ramp_hydraulic",
+    "sounds": [{ "name": "jeg:vehicle/ch47/ramp_hydraulic", "attenuation_distance": 48 }]
+  },
+  "vehicle.ch47.ramp_stop": {
+    "subtitle": "subtitle.jeg.vehicle.ch47.ramp_stop",
+    "sounds": [{ "name": "jeg:vehicle/ch47/ramp_stop", "attenuation_distance": 48 }]
+  },
+  "vehicle.ch47.ramp_beep": {
+    "subtitle": "subtitle.jeg.vehicle.ch47.ramp_beep",
+    "sounds": [{ "name": "jeg:vehicle/ch47/ramp_beep", "attenuation_distance": 24 }]
+  },
+  "vehicle.ch47.door_open": {
+    "subtitle": "subtitle.jeg.vehicle.ch47.door_open",
+    "sounds": [{ "name": "jeg:vehicle/ch47/door_open", "attenuation_distance": 32 }]
+  },
+  "vehicle.ch47.door_close": {
+    "subtitle": "subtitle.jeg.vehicle.ch47.door_close",
+    "sounds": [{ "name": "jeg:vehicle/ch47/door_close", "attenuation_distance": 32 }]
+  },
+  "vehicle.ch47.door_step": {
+    "subtitle": "subtitle.jeg.vehicle.ch47.door_step",
+    "sounds": [{ "name": "jeg:vehicle/ch47/door_step", "attenuation_distance": 24 }]
+  },
+  "vehicle.ch47.gun_window": {
+    "subtitle": "subtitle.jeg.vehicle.ch47.gun_window",
+    "sounds": [{ "name": "jeg:vehicle/ch47/gun_window", "attenuation_distance": 24 }]
+  },
+  "vehicle.ch47.startup": {
+    "subtitle": "subtitle.jeg.vehicle.engine",
+    "sounds": [{ "name": "jeg:vehicle/ch47/startup", "attenuation_distance": 160 }]
+  },
+  "vehicle.ch47.engine": {
+    "subtitle": "subtitle.jeg.vehicle.engine",
+    "sounds": [{ "name": "jeg:vehicle/ch47/flight", "attenuation_distance": 160 }]
+  },
+  "vehicle.ch47.engine_distant": {
+    "subtitle": "subtitle.jeg.vehicle.engine",
+    "sounds": [{ "name": "jeg:vehicle/ch47/engine_distant", "attenuation_distance": 1024 }]
+  },
+  "vehicle.ch47.slap": {
+    "subtitle": "subtitle.jeg.vehicle.engine",
+    "sounds": [{ "name": "jeg:vehicle/ch47/slap", "attenuation_distance": 160 }]
+  },
+  "vehicle.ch47.shutdown": {
+    "subtitle": "subtitle.jeg.vehicle.engine",
+    "sounds": [{ "name": "jeg:vehicle/ch47/shutdown", "attenuation_distance": 160 }]
+  },
   "vehicle.mi28.startup": {
     "subtitle": "subtitle.jeg.vehicle.engine",
     "sounds": [{ "name": "jeg:vehicle/mi28/startup", "attenuation_distance": 128 }]
@@ -2496,6 +2544,38 @@
     "sounds": [
       {
         "name": "jeg:vehicle/gun/coax/fire_interior"
+      }
+    ]
+  },
+  "vehicle.gun.door_gun.fire": {
+    "subtitle": "subtitle.jeg.vehicle.fire",
+    "sounds": [
+      {
+        "name": "jeg:vehicle/gun/door_gun/fire"
+      },
+      {
+        "name": "jeg:vehicle/gun/door_gun/fire",
+        "pitch": 0.96
+      },
+      {
+        "name": "jeg:vehicle/gun/door_gun/fire",
+        "pitch": 1.04
+      }
+    ]
+  },
+  "vehicle.gun.door_gun.fire_distant": {
+    "subtitle": "subtitle.jeg.vehicle.fire",
+    "sounds": [
+      {
+        "name": "jeg:vehicle/gun/door_gun/fire_distant"
+      }
+    ]
+  },
+  "vehicle.gun.door_gun.fire_interior": {
+    "subtitle": "subtitle.jeg.vehicle.fire",
+    "sounds": [
+      {
+        "name": "jeg:vehicle/gun/door_gun/fire_interior"
       }
     ]
   },

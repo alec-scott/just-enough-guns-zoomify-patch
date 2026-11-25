@@ -380,7 +380,14 @@ public final class VehicleInputHandler {
             turnY = -turnY;
         }
         minecraft.getTutorial().onMouse(turnX, turnY);
-        player.turn(turnX, turnY);
+        if (VehicleCameraHandler.isFreeLookActive(vehicle) && PilotHeadLook.applies(player, vehicle)) {
+            // A helicopter pilot looks about within the cockpit: the head turns against the airframe, not the world.
+            PilotHeadLook.turn(player, vehicle, turnX, turnY);
+            player.setYRot(vehicle.getYRot() + PilotHeadLook.yaw());
+            player.setXRot(vehicle.cameraPitch(1.0F) + vehicle.cockpitViewDown() + PilotHeadLook.pitch());
+        } else {
+            player.turn(turnX, turnY);
+        }
 
         var seat = vehicle.vehicleData().defaults().seats().get(seatIndex);
         clampSeatView(player, vehicle, seat);
@@ -416,7 +423,7 @@ public final class VehicleInputHandler {
         if (isViewLockedToAircraft(player, vehicle, seat)) {
             // Interpolate the pilot with the aircraft; pinning both values to the latest tick makes the model step while turning.
             previousYaw = vehicle.yRotO;
-            previousPitch = Mth.clamp(vehicle.cameraPitch(0.0F), seat.minPitch(), seat.maxPitch());
+            previousPitch = Mth.clamp(vehicle.cameraPitch(0.0F) + vehicle.cockpitViewDown(), seat.minPitch(), seat.maxPitch());
         }
         player.setYRot(targetYaw);
         player.yRotO = previousYaw;
@@ -455,7 +462,7 @@ public final class VehicleInputHandler {
 
     private static float aircraftBoundPitch(LocalPlayer player, VehicleEntity vehicle, ttv.migami.jeg.vehicle.data.subdata.SeatInfo seat) {
         if (isViewLockedToAircraft(player, vehicle, seat)) {
-            return Mth.clamp(vehicle.cameraPitch(1.0F), seat.minPitch(), seat.maxPitch());
+            return Mth.clamp(vehicle.cameraPitch(1.0F) + vehicle.cockpitViewDown(), seat.minPitch(), seat.maxPitch());
         }
         return Mth.clamp(player.getXRot(), seat.minPitch(), seat.maxPitch());
     }

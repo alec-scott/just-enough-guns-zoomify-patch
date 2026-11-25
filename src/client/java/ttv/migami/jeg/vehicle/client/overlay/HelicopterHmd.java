@@ -46,6 +46,12 @@ final class HelicopterHmd {
         int height = Mth.floor(g.guiHeight() / scale);
         int cx = width / 2;
         int cy = height / 2;
+        if (mc.options.getCameraType().isFirstPerson() && heli.cockpitViewDown() > 0.0F) {
+            // The view looks down at the panel (VehicleEntity.cockpitViewDown): the boxes mark the aircraft's line ahead,
+            // that far above the screen's centre, over the windscreen rather than over the displays.
+            double halfFov = Math.toRadians(mc.options.fov().get() / 2.0D);
+            cy -= (int) Math.round(Math.tan(Math.toRadians(heli.cockpitViewDown())) / Math.tan(halfFov) * height / 2.0D);
+        }
         headingTape(g, font, cx, Mth.wrapDegrees(mc.gameRenderer.getMainCamera().yRot()));
 
         // Airspeed, boxed left of the reticle.
@@ -54,7 +60,8 @@ final class HelicopterHmd {
 
         // Height above the ground and the climb rate, boxed right of it.
         double altitude = heli.onGround() ? 0.0D : heli.exactAltitudeAboveGround();
-        double climb = heli.getDeltaMovement().y * 20.0D;
+        // On the ground its velocity still carries the tick's gravity: the gunner read "▼1.2" parked (2026-11-25).
+        double climb = heli.onGround() ? 0.0D : heli.getDeltaMovement().y * 20.0D;
         valueBox(g, font, cx + BOX_OFFSET, cy - 6, String.valueOf(Math.round(altitude)), "ALT M", GREEN);
         String vs = String.format(Locale.ROOT, "%s%.1f", climb >= 0.05D ? "▲" : climb <= -0.05D ? "▼" : " ", Math.abs(climb));
         // A fast drop near the ground is the thing to watch: amber.

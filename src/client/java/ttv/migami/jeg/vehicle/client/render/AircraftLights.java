@@ -46,7 +46,21 @@ public final class AircraftLights {
         /** A road vehicle's tail lamp: dim as a tail light, bright while braking. */
         BRAKE,
         /** A road vehicle's reversing lamp: on only while it reverses. */
-        REVERSE
+        REVERSE,
+        /**
+         * A lamp inside a walk-in cabin (the CH-47's dome lights): on at night, on the battery, so it lights the cabin for
+         * the people in it with the engines off.
+         */
+        CABIN,
+        /** The red jump light over a ramp: flashes while the ramp travels (ChinookEntity#jumpLightRed). On the battery. */
+        JUMP_RED,
+        /** The green jump light over a ramp: steady while the ramp stands open. On the battery. */
+        JUMP_GREEN
+    }
+
+    /** Lights that work on the battery: whenever the aircraft isn't a wreck, engines or no engines. */
+    public static boolean onBattery(Kind kind) {
+        return kind == Kind.CABIN || kind == Kind.JUMP_RED || kind == Kind.JUMP_GREEN;
     }
 
     /**
@@ -85,7 +99,10 @@ public final class AircraftLights {
      * A formation light: a flat strip of soft light on the skin, from {@code z0} to {@code z1} along the airframe and
      * {@code height} tall, on the side its {@code x} is (facing outwards).
      */
-    public record Strip(float x, float y, float z0, float z1, float height, int colour) {
+    public record Strip(float x, float y, float z0, float z1, float height, int colour, boolean nightOnly) {
+        public Strip(float x, float y, float z0, float z1, float height, int colour) {
+            this(x, y, z0, z1, height, colour, false);
+        }
     }
 
     /**
@@ -107,6 +124,16 @@ public final class AircraftLights {
 
         LightSet(List<PointLight> lights, Searchlight searchlight) {
             this(lights, searchlight, List.of(), null, false);
+        }
+
+        /** Some of its lights work with the engines off ({@link #onBattery}). */
+        public boolean hasBatteryLights() {
+            for (PointLight light : this.lights) {
+                if (onBattery(light.kind())) {
+                    return true;
+                }
+            }
+            return false;
         }
     }
 
@@ -300,6 +327,37 @@ public final class AircraftLights {
     ), new RotorTips(List.of("wing", "wing2", "wing3", "wing4", "wing5"),
             new Vector3f(0.0F, 71.5F, 159.0F), new Vector3f(0.0F, 71.5F, -3.8F), 0xFFE6BE));
 
+    /**
+     * The CH-47 (design/chinook/generate.py, render space = the authored model grown: +X its right, nose to -Z). Outside:
+     * red and green position lights on the sponsons, the white tail light, red anti-collision beacons on the aft pylon
+     * and the belly, night formation strips along the fuselage and both pylons, the landing lights under the nose (the
+     * beam, at night) and the cockpit's instrument glow. Inside: the three dome lights at night, and the jump lights
+     * over the ramp, red flashing while it travels and green while it stands open (the user, 2026-11-21: "add
+     * appropriate lighting inside and outside of the heli"). The lenses are dark glass in the texture; these light them.
+     */
+    private static final int CABIN_WHITE = 0xFFE4C4;
+    private static final LightSet CH47 = new LightSet(List.of(
+            new PointLight(Kind.POSITION, -36.2F, 22.5F, -54.0F, RED, 0.4F, 1.4F, 0.45F, 0.0F),
+            new PointLight(Kind.POSITION, 36.2F, 22.5F, -54.0F, GREEN, 0.4F, 1.4F, 0.45F, 0.0F),
+            new PointLight(Kind.POSITION, 0.0F, 89.0F, 115.9F, WHITE, 0.34F, 1.1F, 0.35F, 0.0F),
+            new PointLight(Kind.BEACON, 0.0F, 105.4F, 99.5F, RED, 0.85F, 2.2F, 0.7F, 0.0F),
+            new PointLight(Kind.BEACON, 0.0F, 8.2F, 21.5F, RED, 0.8F, 2.0F, 0.6F, 0.5F),
+            new PointLight(Kind.COCKPIT, 0.0F, 33.0F, -112.0F, 0x78FF96, 0.0F, 1.2F, 0.24F, 0.0F),
+            new PointLight(Kind.CABIN, 0.0F, 62.5F, -56.5F, CABIN_WHITE, 0.16F, 3.6F, 0.36F, 0.0F),
+            new PointLight(Kind.CABIN, 0.0F, 62.5F, -7.5F, CABIN_WHITE, 0.16F, 3.6F, 0.36F, 0.0F),
+            new PointLight(Kind.CABIN, 0.0F, 62.5F, 41.5F, CABIN_WHITE, 0.16F, 3.6F, 0.36F, 0.0F),
+            new PointLight(Kind.JUMP_RED, -9.6F, 62.0F, 64.8F, RED, 0.24F, 2.2F, 0.32F, 0.0F),
+            new PointLight(Kind.JUMP_GREEN, 9.6F, 62.0F, 64.8F, GREEN, 0.24F, 2.2F, 0.3F, 0.0F)
+    // The two landing lights: one beam between them and no lens glare of its own (a pair, as the road vehicles' headlamps).
+    ), new Searchlight(0.0F, 8.6F, -102.0F, 16.0F, 14.0F, 70.0F, SEARCH_WHITE, false, false), List.of(
+            new Strip(-27.12F, 45.0F, -60.0F, -20.0F, 1.0F, FORMATION_GREEN, true),
+            new Strip(27.12F, 45.0F, -60.0F, -20.0F, 1.0F, FORMATION_GREEN, true),
+            new Strip(-22.02F, 82.5F, 86.0F, 96.0F, 1.0F, FORMATION_GREEN, true),
+            new Strip(22.02F, 82.5F, 86.0F, 96.0F, 1.0F, FORMATION_GREEN, true),
+            new Strip(-17.72F, 70.5F, -104.0F, -88.0F, 1.0F, FORMATION_GREEN, true),
+            new Strip(17.72F, 70.5F, -104.0F, -88.0F, 1.0F, FORMATION_GREEN, true)
+    ), null);
+
     /** Sky light above which the night lights switch off, and below which they switch on (15 by day, 4 at night). */
     private static final float NIGHT_OFF_SKY_LIGHT = 11.5F;
     private static final float NIGHT_ON_SKY_LIGHT = 10.5F;
@@ -338,6 +396,7 @@ public final class AircraftLights {
             case "a10" -> A10;
             case "ah6" -> AH6;
             case "mi28" -> MI28;
+            case "ch47" -> CH47;
             default -> null;
         };
     }
@@ -362,6 +421,17 @@ public final class AircraftLights {
     }
 
     /** The beams' switch at dusk, 0 off to 1 on, easing up over a few ticks when it is thrown. */
+    /** The CH-47's dome lamps: where they are in its model (blocks) and how far each lights the cabin (blocks). */
+    public static float[][] ch47CabinLamps() {
+        java.util.List<float[]> lamps = new java.util.ArrayList<>();
+        for (PointLight light : CH47.lights()) {
+            if (light.kind() == Kind.CABIN) {
+                lamps.add(new float[]{light.x() / 16.0F, light.y() / 16.0F, light.z() / 16.0F, light.spillRadius() * 1.6F});
+            }
+        }
+        return lamps.toArray(new float[0][]);
+    }
+
     public static float nightSwitch(float partialTick) {
         return Mth.lerp(partialTick, nightRampO, nightRamp);
     }
@@ -400,6 +470,13 @@ public final class AircraftLights {
             return vehicle.clientBraking() || vehicle.clientReversing() ? 1.0F : 0.28F;
         } else if (light.kind() == Kind.REVERSE) {
             return vehicle.clientReversing() ? 1.0F : 0.0F;
+        }
+        if (vehicle instanceof ttv.migami.jeg.vehicle.entity.ChinookEntity chinook) {
+            if (light.kind() == Kind.JUMP_RED) return chinook.jumpLightRed() ? 1.0F : 0.0F;
+            if (light.kind() == Kind.JUMP_GREEN) return chinook.jumpLightGreen() ? 1.0F : 0.0F;
+        }
+        if (light.kind() == Kind.CABIN) {
+            return nightRamp;
         }
         return flash(light, seconds, seed);
     }
@@ -543,13 +620,15 @@ public final class AircraftLights {
         if (!isPowered(vehicle) || set.lights().isEmpty()) {
             return;
         }
+        // Lamps inside a cabin aren't world lights: the whole model takes one light level, so a cabin lamp lit the
+        // outside of the hull with it; and a flashing jump light would rebuild the chunks round it twice a second.
         Matrix4f toWorld = modelToWorld(vehicle, 1.0F);
         float seconds = (vehicle.tickCount) / 20.0F;
         float seed = (vehicle.getId() * 0.37F) % 1.0F;
         int index = 0;
         for (PointLight light : set.lights()) {
             if (index >= MAX_LAMP_SPOTS) break;
-            if (light.kind() == Kind.COCKPIT || light.kind() == Kind.STROBE) continue;
+            if (light.kind() == Kind.COCKPIT || light.kind() == Kind.STROBE || onBattery(light.kind())) continue;
             float on = flash(vehicle, light, seconds, seed);
             if (on <= 0.3F) continue;
             Vector3f at = toWorld.transformPosition(new Vector3f(light.x() / 16.0F, light.y() / 16.0F, light.z() / 16.0F));
