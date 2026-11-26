@@ -402,6 +402,14 @@ look (`VehicleLookCompareClientGameTest` shows both). Glass is any partly transp
 splits it out of the texture (painted ones too) and `VehicleGlassLayer` draws only it, translucent. So give glass an
 alpha between 1 and 254, and every other pixel 0 or 255.
 
+**Lit vertex by vertex.** Minecraft lights an entity with one value read at its origin, so a vehicle nosed into a
+hangar was lit wholly as daylight, the half under the roof as bright as the cab in the sun (plain under Photon, whose
+interiors are far darker than vanilla's; 2026-11-26). `VehicleVertexLight` gives each vertex of the model and its glass
+the sky light of the block it is in (a vertex inside a solid block takes the brightest open block round it); block
+light stays the renderer's own unless the vertex's block is brighter, so the FSV-6's room lamp and LambDynamicLights
+still light the whole vehicle. A layer that draws the model again with `passInfo.packedLight()` should wrap its buffer
+in `VehicleVertexLight.wrap` the same way.
+
 **Materials and paint:**
 - Real colours, a little weathering, and a separate material per finish: paint, bare steel, rubber, glass, lamps.
 - The paint mask works per texture pixel. Use `separate_finishes` and the derived `unpainted_parts` so no
@@ -1169,6 +1177,19 @@ preview Ogg (`-hq.ogg`, better than the MP3), and drop an original WAV or FLAC i
   for real, leave the drawn version out under shaders (`ShaderPacks.inUse()`; spots light the ground through
   `LambDynamicLightsCompat`), as `VehicleLightsLayer` does for the pool. Check every light at night from outside with
   the user's shader pack: Photon by default (`-PpackShaders`), with their options from `pack-config/shaderpacks/`.
+- **Only white lamps light the world.** World light has no colour: vanilla's is warm and a shader pack tints all block
+  light one colour, so the AH-6's red and green position lights lit the ground yellow-orange under Photon
+  (2026-11-26). `AircraftLights.addLampSpots` passes only near-white lamps (`whiteLamp`) to LambDynamicLights; a
+  coloured lamp keeps its glow and its drawn spill on the airframe.
+- **Photon's own faults, not ours.** On the pack's Photon 1.3b, everything a 26.1 shader pack draws in its translucent
+  pass vanished wherever Voxy LOD terrain was behind it: the A-10's nozzle glow, the cockpit screens (`RenderTypes.eyes`),
+  held items' enchantment glint. Fixed in the user's Photon fork (`Marco-Cigna/photon`, branch `yftm`, a backport of
+  upstream #609), with a lit enchantment glint. Test vehicle glows against distant ground (from altitude) as well as
+  against the sky.
+- **Frame rate in the pack client.** `/jegfps <seconds>` (`DevKeysClient`) prints the average and slowest second and
+  the median and 99th-percentile frame time. Set `inactivityFpsLimit:"minimized"`, `maxFps:260` and
+  `enableVsync:false` in `build/run/packClient/options.txt` first: mcpfabric's input doesn't count as a player's, so
+  the game drops to 30 fps as if AFK.
 - **Moving a bone about Y or Z: mind GeckoLib's mirrored X.** The model's +X (the pilot's right) is -X in the
   frame bones turn in, so a rotation about X keeps its sign but one about Y or Z is reversed: the bush plane's rudder
   turns into a right turn with a *negative* `setRotY`. Drive control surfaces from the attitude rates every client sees

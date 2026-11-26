@@ -629,12 +629,26 @@ public final class AircraftLights {
         for (PointLight light : set.lights()) {
             if (index >= MAX_LAMP_SPOTS) break;
             if (light.kind() == Kind.COCKPIT || light.kind() == Kind.STROBE || onBattery(light.kind())) continue;
+            // World light has no colour of its own: vanilla's is warm and a shader pack tints every block light one
+            // colour, so a red or green lamp lit the ground and airframe yellow-orange (the AH-6 under Photon,
+            // 2026-11-26). Only a white lamp lights its surroundings; a coloured one keeps its glow and its drawn spill.
+            if (!whiteLamp(light.colour())) continue;
             float on = flash(vehicle, light, seconds, seed);
             if (on <= 0.3F) continue;
             Vector3f at = toWorld.transformPosition(new Vector3f(light.x() / 16.0F, light.y() / 16.0F, light.z() / 16.0F));
             float luminance = LAMP_LUMINANCE * Math.min(1.0F, on);
             SPOTS.put(searchlightKey(vehicle) + 1 + index++, new Spot(vehicle.position().add(at.x, at.y, at.z), 1.0F, luminance));
         }
+    }
+
+    /** A lamp near enough white that the world's uncoloured light stands for it: no channel under 60% of the brightest. */
+    static boolean whiteLamp(int colour) {
+        int r = (colour >> 16) & 0xFF;
+        int g = (colour >> 8) & 0xFF;
+        int b = colour & 0xFF;
+        int max = Math.max(r, Math.max(g, b));
+        int min = Math.min(r, Math.min(g, b));
+        return max > 0 && min >= max * 0.6F;
     }
 
     /** The searchlight spots lit this tick, by vehicle entity id. */

@@ -1,6 +1,7 @@
 package ttv.migami.jeg.vehicle.client.render;
 
 import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.mojang.math.Axis;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
@@ -8,11 +9,13 @@ import net.minecraft.client.renderer.culling.Frustum;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
 import net.minecraft.client.renderer.rendertype.RenderType;
 import net.minecraft.client.renderer.rendertype.RenderTypes;
+import net.minecraft.client.renderer.OrderedSubmitNodeCollector;
 import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.state.level.CameraRenderState;
 import net.minecraft.resources.Identifier;
 import net.minecraft.util.Mth;
 import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.Vec3;
 import com.geckolib.model.GeoModel;
 import com.geckolib.renderer.GeoEntityRenderer;
 import com.geckolib.renderer.base.RenderPassInfo;
@@ -119,6 +122,33 @@ abstract class AbstractVehicleGeoRenderer<T extends VehicleEntity> extends GeoEn
             passInfo.addBoneUpdater((info, snapshots) -> updateVehicleBones(vehicle, info.renderState().ageInTicks, snapshots));
         }
         super.preRenderPass(passInfo, collector);
+    }
+
+    /**
+     * GeckoLib's own submit, with the model lit vertex by vertex ({@link VehicleVertexLight}) instead of wholly by the
+     * light at the vehicle's origin.
+     */
+    @Override
+    public void submitRenderTasks(RenderPassInfo<VehicleRenderState> passInfo, OrderedSubmitNodeCollector collector, RenderType renderType) {
+        if (renderType == null) {
+            return;
+        }
+        int light = passInfo.packedLight();
+        int overlay = passInfo.packedOverlay();
+        int colour = passInfo.renderColor();
+        if (passInfo.model().isMissingno()) {
+            this.submitMissingModelRender(passInfo, collector);
+            return;
+        }
+        Vec3 camera = passInfo.cameraState().pos;
+        collector.submitCustomGeometry(passInfo.poseStack(), renderType, (pose, buffer) -> {
+            PoseStack poseStack = passInfo.poseStack();
+            poseStack.pushPose();
+            poseStack.last().set(pose);
+            VertexConsumer lit = VehicleVertexLight.wrap(buffer, camera, light);
+            passInfo.renderPosed(() -> passInfo.model().render(passInfo, lit, light, overlay, colour));
+            poseStack.popPose();
+        });
     }
 
     @Override

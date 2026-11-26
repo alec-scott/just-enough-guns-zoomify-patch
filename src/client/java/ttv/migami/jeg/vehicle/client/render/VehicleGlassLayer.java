@@ -33,12 +33,15 @@ final class VehicleGlassLayer<T extends VehicleEntity> extends GeoRenderLayer<T,
             return;
         }
         int light = passInfo.packedLight();
+        // Lit vertex by vertex as the hull is (VehicleVertexLight), so glass in a hangar is not daylight-bright.
+        net.minecraft.world.phys.Vec3 camera = passInfo.cameraState().pos;
         collector.submitCustomGeometry(passInfo.poseStack(), RenderTypes.entityTranslucent(glass), (pose, buffer) -> {
             PoseStack glassPose = new PoseStack();
             glassPose.last().set(pose);
+            com.mojang.blaze3d.vertex.VertexConsumer lit = VehicleVertexLight.wrap(buffer, camera, light);
             passInfo.renderPosed(() -> {
                 for (GeoBone bone : passInfo.model().topLevelBones()) {
-                    bone.render(passInfo, glassPose, buffer, light, OverlayTexture.NO_OVERLAY, 0xFFFFFFFF);
+                    bone.render(passInfo, glassPose, lit, light, OverlayTexture.NO_OVERLAY, 0xFFFFFFFF);
                 }
             });
         });
