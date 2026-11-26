@@ -262,17 +262,20 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     private static final double DESIGNATION_RADIUS = 7.0D;
     private static final String TAG_PERSISTENT_DATA = "PersistentData";
     private static final String GECKO_CONTROLLER = "Vehicle";
-    private static final Map<String, String> VEHICLE_IDLE_ANIMATIONS = Map.of(
-            "lav150", "animation.lav_150.idle",
-            "speedboat", "animation.speedboat.idle",
-            "tom6", "animation.tom6.idle",
-            "laser_tower", "animation.lt.idle",
-            "waveforce_tower", "animation.waveforce_tower.idle",
+    private static final Map<String, String> VEHICLE_IDLE_ANIMATIONS = Map.ofEntries(
+            Map.entry("lav150", "animation.lav_150.idle"),
+            Map.entry("speedboat", "animation.speedboat.idle"),
+            Map.entry("tom6", "animation.tom6.idle"),
+            Map.entry("laser_tower", "animation.lt.idle"),
+            Map.entry("waveforce_tower", "animation.waveforce_tower.idle"),
             // The base defences have only a rest pose; asking for "idle" logged an error every frame (10,000+ lines a
             // minute with a sentry in view).
-            "hpj11", "animation.hpj11.rest",
-            "sentry", "animation.sentry.rest",
-            "ch47", "animation.ch47.idle"
+            Map.entry("hpj11", "animation.hpj11.rest"),
+            Map.entry("sentry", "animation.sentry.rest"),
+            Map.entry("ch47", "animation.ch47.idle"),
+            Map.entry("pickup", "animation.pickup.idle"),
+            Map.entry("pickup_hmg", "animation.pickup_hmg.idle"),
+            Map.entry("pickup_tow", "animation.pickup_tow.idle")
     );
     private static final float PART_MAX_HEALTH = 10.0F;
     private static final float REPAIR_KIT_HULL_REPAIR = 12.0F;
@@ -831,7 +834,8 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
 
     private boolean usesCustomObbEntityCollision() {
         return switch (this.vehicleDataId().getPath()) {
-            case "lav150", "bmp2", "speedboat", "ah6", "mi28", "ch47", "truck", "bulldozer" -> true;
+            case "lav150", "bmp2", "speedboat", "ah6", "mi28", "ch47", "truck", "bulldozer",
+                 "pickup", "pickup_hmg", "pickup_rocket", "pickup_tow" -> true;
             default -> false;
         };
     }

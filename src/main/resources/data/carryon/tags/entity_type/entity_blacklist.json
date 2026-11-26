@@ -112,6 +112,22 @@
     {
       "id": "jeg:ch47",
       "required": false
+    },
+    {
+      "id": "jeg:pickup",
+      "required": false
+    },
+    {
+      "id": "jeg:pickup_hmg",
+      "required": false
+    },
+    {
+      "id": "jeg:pickup_rocket",
+      "required": false
+    },
+    {
+      "id": "jeg:pickup_tow",
+      "required": false
     }
   ]
 }

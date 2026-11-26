@@ -280,6 +280,19 @@ public final class AircraftLights {
             new PointLight(Kind.BRAKE, 16.2F, 23.1F, 45.0F, RED, .14F, 1.0F, .2F, 0)
     ), new Searchlight(0, 30.7F, -40.5F, 8, 24, 30, SEARCH_WHITE, false, false), List.of(), null, false);
 
+    /**
+     * The 4x4 pickup and its technicals (design/pickup): the two square headlamps either side of the grille with their
+     * beam, the tall tail lamps at the bed's rear corners (brightening as it brakes), and a reversing lamp in each.
+     */
+    private static final LightSet PICKUP = new LightSet(List.of(
+            new PointLight(Kind.POSITION, -12.2F, 11.2F, -48.6F, SEARCH_WHITE, .14F, 1.0F, .14F, 0),
+            new PointLight(Kind.POSITION, 12.2F, 11.2F, -48.6F, SEARCH_WHITE, .14F, 1.0F, .14F, 0),
+            new PointLight(Kind.BRAKE, -13.2F, 14.0F, 34.0F, RED, .12F, 1.0F, .2F, 0),
+            new PointLight(Kind.BRAKE, 13.2F, 14.0F, 34.0F, RED, .12F, 1.0F, .2F, 0),
+            new PointLight(Kind.REVERSE, -13.2F, 10.4F, 34.0F, WHITE, .12F, 1.2F, .2F, 0),
+            new PointLight(Kind.REVERSE, 13.2F, 10.4F, 34.0F, WHITE, .12F, 1.2F, .2F, 0)
+    ), new Searchlight(0, 11.2F, -48.7F, 8, 24, 30, SEARCH_WHITE, false, false), List.of(), null, false);
+
     private static final LightSet A10 = new LightSet(List.of(
             new PointLight(Kind.POSITION, -142.7F, 39.5F, -8.0F, RED, 0.5F, 1.8F, 0.55F, 0.0F),
             new PointLight(Kind.POSITION, 142.7F, 39.5F, -8.0F, GREEN, 0.5F, 1.8F, 0.55F, 0.0F),
@@ -393,6 +406,7 @@ public final class AircraftLights {
             case "speedboat" -> SPEEDBOAT;
             case "tom6" -> TOM6;
             case "lav150" -> LAV150;
+            case "pickup", "pickup_hmg", "pickup_rocket", "pickup_tow" -> PICKUP;
             case "a10" -> A10;
             case "ah6" -> AH6;
             case "mi28" -> MI28;

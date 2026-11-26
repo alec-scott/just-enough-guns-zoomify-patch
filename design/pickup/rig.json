@@ -1,0 +1,884 @@
+{
+  "pickup": {
+    "model": "jeg:entity/vehicle/pickup",
+    "source": "Superb Warfare sodayo_pick_up, CrawKatt/SuperbWarfareReFabricated@c5189d1 (used with the SBW team's permission)",
+    "units_per_block": 16,
+    "front": "-Z in the model, +Z in vehicle data",
+    "scale_from_source": 0.76,
+    "wheels": {
+      "wheel_front_left": {
+        "centre": [
+          0.7587,
+          0.381,
+          2.1662
+        ],
+        "radius_px": 6.125
+      },
+      "wheel_front_right": {
+        "centre": [
+          -0.7587,
+          0.381,
+          2.1662
+        ],
+        "radius_px": 6.125
+      },
+      "wheel_rear_left": {
+        "centre": [
+          0.7587,
+          0.381,
+          -0.9602
+        ],
+        "radius_px": 6.125
+      },
+      "wheel_rear_right": {
+        "centre": [
+          -0.7587,
+          0.381,
+          -0.9602
+        ],
+        "radius_px": 6.125
+      }
+    },
+    "wheel_block": {
+      "roll": [
+        {
+          "bones": [
+            "wheel_front_left",
+            "wheel_front_right",
+            "wheel_rear_left",
+            "wheel_rear_right"
+          ],
+          "radius": 6.125
+        }
+      ],
+      "steer": [
+        "wheel_front_left",
+        "wheel_front_right"
+      ],
+      "wheelbase": 3.1264
+    },
+    "model_bounds": [
+      [
+        -1.1518,
+        -0.0018,
+        -2.1374
+      ],
+      [
+        1.1518,
+        1.7994,
+        3.0628
+      ]
+    ],
+    "cab_bounds": [
+      [
+        -1.1518,
+        0.4201,
+        0.1571
+      ],
+      [
+        1.1518,
+        1.7994,
+        3.059
+      ]
+    ],
+    "bed_bounds": [
+      [
+        -0.9819,
+        0.4201,
+        -2.1334
+      ],
+      [
+        0.9819,
+        1.1061,
+        0.1596
+      ]
+    ],
+    "steering_wheel": [
+      0.447,
+      0.9786,
+      1.1098
+    ],
+    "door_left_hinge": [
+      0.8603,
+      1.0511,
+      1.384
+    ],
+    "door_right_hinge": [
+      -0.8603,
+      1.0511,
+      1.384
+    ],
+    "hitbox": [
+      {
+        "part": "body",
+        "covers": "cab",
+        "x": 0.0,
+        "y": 1.1097,
+        "z": 1.6081,
+        "half_width": 1.1518,
+        "half_height": 0.6896,
+        "half_depth": 1.4509
+      },
+      {
+        "part": "body",
+        "covers": "bed",
+        "x": 0.0,
+        "y": 0.7631,
+        "z": -0.9869,
+        "half_width": 0.9819,
+        "half_height": 0.343,
+        "half_depth": 1.1465
+      },
+      {
+        "part": "main_engine",
+        "covers": "engine under the bonnet",
+        "x": 0.0,
+        "y": 0.7322,
+        "z": 2.1935,
+        "half_width": 0.9819,
+        "half_height": 0.3591,
+        "half_depth": 0.7796
+      },
+      {
+        "part": "wheel_left",
+        "covers": "left wheels",
+        "x": 0.7587,
+        "y": 0.3819,
+        "z": 0.603,
+        "half_width": 0.1232,
+        "half_height": 0.3819,
+        "half_depth": 1.946
+      },
+      {
+        "part": "wheel_right",
+        "covers": "right wheels",
+        "x": -0.7587,
+        "y": 0.3819,
+        "z": 0.603,
+        "half_width": 0.1232,
+        "half_height": 0.3819,
+        "half_depth": 1.946
+      }
+    ],
+    "texture_size": [
+      1024,
+      832
+    ],
+    "coplanar_face_pairs": {
+      "in_source": 52,
+      "after_refit": 0
+    }
+  },
+  "pickup_hmg": {
+    "model": "jeg:entity/vehicle/pickup_hmg",
+    "source": "Superb Warfare sodayo_pick_up_hmg, CrawKatt/SuperbWarfareReFabricated@c5189d1 (used with the SBW team's permission)",
+    "units_per_block": 16,
+    "front": "-Z in the model, +Z in vehicle data",
+    "scale_from_source": 0.76,
+    "wheels": {
+      "wheel_front_left": {
+        "centre": [
+          0.7587,
+          0.381,
+          2.1662
+        ],
+        "radius_px": 6.125
+      },
+      "wheel_front_right": {
+        "centre": [
+          -0.7587,
+          0.381,
+          2.1662
+        ],
+        "radius_px": 6.125
+      },
+      "wheel_rear_left": {
+        "centre": [
+          0.7587,
+          0.381,
+          -0.9602
+        ],
+        "radius_px": 6.125
+      },
+      "wheel_rear_right": {
+        "centre": [
+          -0.7587,
+          0.381,
+          -0.9602
+        ],
+        "radius_px": 6.125
+      }
+    },
+    "wheel_block": {
+      "roll": [
+        {
+          "bones": [
+            "wheel_front_left",
+            "wheel_front_right",
+            "wheel_rear_left",
+            "wheel_rear_right"
+          ],
+          "radius": 6.125
+        }
+      ],
+      "steer": [
+        "wheel_front_left",
+        "wheel_front_right"
+      ],
+      "wheelbase": 3.1264
+    },
+    "elevation_degrees": [
+      -30.0,
+      60.0
+    ],
+    "turret_origin": [
+      0.0,
+      1.8435,
+      -0.9105
+    ],
+    "trunnion": [
+      -0.0,
+      1.8435,
+      -0.9105
+    ],
+    "barrel_offset_from_turret": [
+      -0.0,
+      0.0,
+      0.0
+    ],
+    "muzzle_rest": [
+      0.0,
+      2.0006,
+      0.4592
+    ],
+    "model_bounds": [
+      [
+        -1.1518,
+        -0.0018,
+        -2.1374
+      ],
+      [
+        1.1518,
+        2.1008,
+        3.0628
+      ]
+    ],
+    "cab_bounds": [
+      [
+        -1.1518,
+        0.4201,
+        0.1571
+      ],
+      [
+        1.1518,
+        1.7994,
+        3.059
+      ]
+    ],
+    "bed_bounds": [
+      [
+        -0.9819,
+        0.4201,
+        -2.1334
+      ],
+      [
+        0.9819,
+        1.1061,
+        0.1596
+      ]
+    ],
+    "steering_wheel": [
+      0.447,
+      0.9786,
+      1.1098
+    ],
+    "door_left_hinge": [
+      0.8603,
+      1.0511,
+      1.384
+    ],
+    "door_right_hinge": [
+      -0.8603,
+      1.0511,
+      1.384
+    ],
+    "hitbox": [
+      {
+        "part": "body",
+        "covers": "cab",
+        "x": 0.0,
+        "y": 1.1097,
+        "z": 1.6081,
+        "half_width": 1.1518,
+        "half_height": 0.6896,
+        "half_depth": 1.4509
+      },
+      {
+        "part": "body",
+        "covers": "bed",
+        "x": 0.0,
+        "y": 0.7631,
+        "z": -0.9869,
+        "half_width": 0.9819,
+        "half_height": 0.343,
+        "half_depth": 1.1465
+      },
+      {
+        "part": "main_engine",
+        "covers": "engine under the bonnet",
+        "x": 0.0,
+        "y": 0.7322,
+        "z": 2.1935,
+        "half_width": 0.9819,
+        "half_height": 0.3591,
+        "half_depth": 0.7796
+      },
+      {
+        "part": "wheel_left",
+        "covers": "left wheels",
+        "x": 0.7587,
+        "y": 0.3819,
+        "z": 0.603,
+        "half_width": 0.1232,
+        "half_height": 0.3819,
+        "half_depth": 1.946
+      },
+      {
+        "part": "wheel_right",
+        "covers": "right wheels",
+        "x": -0.7587,
+        "y": 0.3819,
+        "z": 0.603,
+        "half_width": 0.1232,
+        "half_height": 0.3819,
+        "half_depth": 1.946
+      },
+      {
+        "part": "body",
+        "covers": "weapon mount",
+        "x": -0.0,
+        "y": 1.131,
+        "z": -0.9105,
+        "half_width": 0.1713,
+        "half_height": 0.7125,
+        "half_depth": 0.1713
+      },
+      {
+        "part": "turret",
+        "covers": "weapon",
+        "x": 0.085,
+        "y": 1.9544,
+        "z": -0.5973,
+        "half_width": 0.2516,
+        "half_height": 0.1465,
+        "half_depth": 1.0565,
+        "follows": "turret"
+      }
+    ],
+    "texture_size": [
+      1024,
+      832
+    ],
+    "coplanar_face_pairs": {
+      "in_source": 43,
+      "after_refit": 0
+    }
+  },
+  "pickup_rocket": {
+    "model": "jeg:entity/vehicle/pickup_rocket",
+    "source": "Superb Warfare sodayo_pick_up_rocket, CrawKatt/SuperbWarfareReFabricated@c5189d1 (used with the SBW team's permission)",
+    "units_per_block": 16,
+    "front": "-Z in the model, +Z in vehicle data",
+    "scale_from_source": 0.76,
+    "wheels": {
+      "wheel_front_left": {
+        "centre": [
+          0.7587,
+          0.3783,
+          2.1639
+        ],
+        "radius_px": 6.317
+      },
+      "wheel_front_right": {
+        "centre": [
+          -0.7587,
+          0.381,
+          2.1662
+        ],
+        "radius_px": 6.125
+      },
+      "wheel_rear_left": {
+        "centre": [
+          0.7587,
+          0.381,
+          -0.9602
+        ],
+        "radius_px": 6.125
+      },
+      "wheel_rear_right": {
+        "centre": [
+          -0.7587,
+          0.381,
+          -0.9602
+        ],
+        "radius_px": 6.125
+      }
+    },
+    "wheel_block": {
+      "roll": [
+        {
+          "bones": [
+            "wheel_front_left",
+            "wheel_front_right",
+            "wheel_rear_left",
+            "wheel_rear_right"
+          ],
+          "radius": 6.173
+        }
+      ],
+      "steer": [
+        "wheel_front_left",
+        "wheel_front_right"
+      ],
+      "wheelbase": 3.1241
+    },
+    "elevation_degrees": [
+      10.0,
+      60.0
+    ],
+    "turret_origin": [
+      0.0,
+      1.4042,
+      -0.9785
+    ],
+    "trunnion": [
+      -0.0,
+      1.8982,
+      -1.1329
+    ],
+    "barrel_offset_from_turret": [
+      -0.0,
+      0.494,
+      -0.1544
+    ],
+    "muzzles_in_firing_order": [
+      [
+        -0.2778,
+        2.0833,
+        -0.5493
+      ],
+      [
+        -0.0925,
+        2.0833,
+        -0.5493
+      ],
+      [
+        0.0927,
+        2.0833,
+        -0.5493
+      ],
+      [
+        0.278,
+        2.0833,
+        -0.5493
+      ],
+      [
+        -0.278,
+        1.8981,
+        -0.5493
+      ],
+      [
+        -0.0927,
+        1.8981,
+        -0.5493
+      ],
+      [
+        0.0927,
+        1.8981,
+        -0.5493
+      ],
+      [
+        0.278,
+        1.8981,
+        -0.5493
+      ],
+      [
+        -0.278,
+        1.7128,
+        -0.5493
+      ],
+      [
+        -0.0927,
+        1.7128,
+        -0.5493
+      ],
+      [
+        0.0925,
+        1.7128,
+        -0.5493
+      ],
+      [
+        0.2778,
+        1.7128,
+        -0.5493
+      ]
+    ],
+    "handwheel_elevation_pivot": [
+      0.5943,
+      1.8426,
+      -0.997
+    ],
+    "model_bounds": [
+      [
+        -1.1518,
+        -0.0165,
+        -2.1374
+      ],
+      [
+        1.1518,
+        2.1687,
+        3.0628
+      ]
+    ],
+    "cab_bounds": [
+      [
+        -1.1518,
+        0.4252,
+        0.1571
+      ],
+      [
+        1.1518,
+        1.7994,
+        3.059
+      ]
+    ],
+    "bed_bounds": [
+      [
+        -0.9819,
+        0.4252,
+        -2.1334
+      ],
+      [
+        0.9819,
+        1.1061,
+        0.1596
+      ]
+    ],
+    "steering_wheel": [
+      0.447,
+      0.9786,
+      1.1098
+    ],
+    "door_left_hinge": [
+      0.8603,
+      1.0511,
+      1.384
+    ],
+    "door_right_hinge": [
+      -0.8603,
+      1.0511,
+      1.384
+    ],
+    "hitbox": [
+      {
+        "part": "body",
+        "covers": "cab",
+        "x": 0.0,
+        "y": 1.1123,
+        "z": 1.6081,
+        "half_width": 1.1518,
+        "half_height": 0.6871,
+        "half_depth": 1.4509
+      },
+      {
+        "part": "body",
+        "covers": "bed",
+        "x": 0.0,
+        "y": 0.7657,
+        "z": -0.9869,
+        "half_width": 0.9819,
+        "half_height": 0.3404,
+        "half_depth": 1.1465
+      },
+      {
+        "part": "main_engine",
+        "covers": "engine under the bonnet",
+        "x": 0.0,
+        "y": 0.7322,
+        "z": 2.1935,
+        "half_width": 0.9819,
+        "half_height": 0.3591,
+        "half_depth": 0.7796
+      },
+      {
+        "part": "wheel_left",
+        "covers": "left wheels",
+        "x": 0.7587,
+        "y": 0.3866,
+        "z": 0.6078,
+        "half_width": 0.1232,
+        "half_height": 0.3866,
+        "half_depth": 1.9509
+      },
+      {
+        "part": "wheel_right",
+        "covers": "right wheels",
+        "x": -0.7587,
+        "y": 0.3819,
+        "z": 0.603,
+        "half_width": 0.1232,
+        "half_height": 0.3819,
+        "half_depth": 1.946
+      },
+      {
+        "part": "body",
+        "covers": "weapon mount",
+        "x": 0.0,
+        "y": 0.969,
+        "z": -0.9785,
+        "half_width": 0.3705,
+        "half_height": 0.5064,
+        "half_depth": 0.3705
+      },
+      {
+        "part": "turret",
+        "covers": "weapon",
+        "x": 0.1251,
+        "y": 1.7865,
+        "z": -0.8937,
+        "half_width": 0.6037,
+        "half_height": 0.3822,
+        "half_depth": 0.6253,
+        "follows": "turret"
+      }
+    ],
+    "texture_size": [
+      2048,
+      640
+    ],
+    "coplanar_face_pairs": {
+      "in_source": 80,
+      "after_refit": 0
+    }
+  },
+  "pickup_tow": {
+    "model": "jeg:entity/vehicle/pickup_tow",
+    "source": "Superb Warfare sodayo_pick_up_tow, CrawKatt/SuperbWarfareReFabricated@c5189d1 (used with the SBW team's permission)",
+    "units_per_block": 16,
+    "front": "-Z in the model, +Z in vehicle data",
+    "scale_from_source": 0.76,
+    "wheels": {
+      "wheel_front_left": {
+        "centre": [
+          0.7587,
+          0.3783,
+          2.1639
+        ],
+        "radius_px": 6.317
+      },
+      "wheel_front_right": {
+        "centre": [
+          -0.7587,
+          0.381,
+          2.1662
+        ],
+        "radius_px": 6.125
+      },
+      "wheel_rear_left": {
+        "centre": [
+          0.7587,
+          0.381,
+          -0.9602
+        ],
+        "radius_px": 6.125
+      },
+      "wheel_rear_right": {
+        "centre": [
+          -0.7587,
+          0.381,
+          -0.9602
+        ],
+        "radius_px": 6.125
+      }
+    },
+    "wheel_block": {
+      "roll": [
+        {
+          "bones": [
+            "wheel_front_left",
+            "wheel_front_right",
+            "wheel_rear_left",
+            "wheel_rear_right"
+          ],
+          "radius": 6.173
+        }
+      ],
+      "steer": [
+        "wheel_front_left",
+        "wheel_front_right"
+      ],
+      "wheelbase": 3.1241
+    },
+    "elevation_degrees": [
+      -20.0,
+      20.0
+    ],
+    "turret_origin": [
+      0.0,
+      1.342,
+      -1.14
+    ],
+    "trunnion": [
+      -0.0,
+      1.4985,
+      -1.14
+    ],
+    "barrel_offset_from_turret": [
+      -0.0,
+      0.1565,
+      0.0
+    ],
+    "muzzle_rest": [
+      -0.0295,
+      1.5425,
+      -0.3474
+    ],
+    "sight_rest": [
+      -0.0,
+      1.4985,
+      -1.14
+    ],
+    "model_bounds": [
+      [
+        -1.1518,
+        -0.0165,
+        -2.1374
+      ],
+      [
+        1.1518,
+        1.7994,
+        3.0628
+      ]
+    ],
+    "cab_bounds": [
+      [
+        -1.1518,
+        0.4252,
+        0.1571
+      ],
+      [
+        1.1518,
+        1.7994,
+        3.059
+      ]
+    ],
+    "bed_bounds": [
+      [
+        -0.9819,
+        0.4252,
+        -2.1334
+      ],
+      [
+        0.9819,
+        1.1061,
+        0.1596
+      ]
+    ],
+    "steering_wheel": [
+      0.447,
+      0.9786,
+      1.1098
+    ],
+    "door_left_hinge": [
+      0.8603,
+      1.0511,
+      1.384
+    ],
+    "door_right_hinge": [
+      -0.8603,
+      1.0511,
+      1.384
+    ],
+    "hitbox": [
+      {
+        "part": "body",
+        "covers": "cab",
+        "x": 0.0,
+        "y": 1.1123,
+        "z": 1.6081,
+        "half_width": 1.1518,
+        "half_height": 0.6871,
+        "half_depth": 1.4509
+      },
+      {
+        "part": "body",
+        "covers": "bed",
+        "x": 0.0,
+        "y": 0.7657,
+        "z": -0.9869,
+        "half_width": 0.9819,
+        "half_height": 0.3404,
+        "half_depth": 1.1465
+      },
+      {
+        "part": "main_engine",
+        "covers": "engine under the bonnet",
+        "x": 0.0,
+        "y": 0.7322,
+        "z": 2.1935,
+        "half_width": 0.9819,
+        "half_height": 0.3591,
+        "half_depth": 0.7796
+      },
+      {
+        "part": "wheel_left",
+        "covers": "left wheels",
+        "x": 0.7587,
+        "y": 0.3866,
+        "z": 0.6078,
+        "half_width": 0.1232,
+        "half_height": 0.3866,
+        "half_depth": 1.9509
+      },
+      {
+        "part": "wheel_right",
+        "covers": "right wheels",
+        "x": -0.7587,
+        "y": 0.3819,
+        "z": 0.603,
+        "half_width": 0.1232,
+        "half_height": 0.3819,
+        "half_depth": 1.946
+      },
+      {
+        "part": "body",
+        "covers": "weapon mount",
+        "x": 0.1083,
+        "y": 0.9718,
+        "z": -1.14,
+        "half_width": 0.4138,
+        "half_height": 0.3702,
+        "half_depth": 0.4779
+      },
+      {
+        "part": "turret",
+        "covers": "weapon",
+        "x": 0.0463,
+        "y": 1.5002,
+        "z": -0.9899,
+        "half_width": 0.2007,
+        "half_height": 0.1582,
+        "half_depth": 0.6425,
+        "follows": "turret"
+      }
+    ],
+    "texture_size": [
+      1024,
+      832
+    ],
+    "coplanar_face_pairs": {
+      "in_source": 40,
+      "after_refit": 0
+    }
+  }
+}

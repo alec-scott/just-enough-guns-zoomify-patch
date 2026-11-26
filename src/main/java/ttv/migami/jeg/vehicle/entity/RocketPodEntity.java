@@ -1,0 +1,119 @@
+package ttv.migami.jeg.vehicle.entity;
+
+import java.util.ArrayList;
+import java.util.List;
+import net.minecraft.resources.Identifier;
+import net.minecraft.util.Mth;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.level.Level;
+import ttv.migami.jeg.Reference;
+import ttv.migami.jeg.vehicle.entity.base.VehicleEntity;
+import ttv.migami.jeg.vehicle.projectile.ShellEntity;
+import ttv.migami.jeg.vehicle.util.ShellBallistics;
+
+/**
+ * A Type 63 107 mm pod of twelve tubes, wherever it is mounted: on its own towed carriage (the Type-63) or in a pickup's
+ * bed (the rocket technical). The gunner lays it and a held trigger ripples the loaded tubes off in order, top row first;
+ * the crew reloads all twelve together. Rockets fly as shells (ShellEntity) with a short-burning motor, SBW's numbers.
+ */
+public abstract class RocketPodEntity extends ShellGunEntity {
+    public static final int TUBES = 12;
+    /** SBW's rockets: 10 blocks a tick, gravity 0.05 (about 2,000 blocks at 45 degrees). */
+    public static final ShellBallistics BALLISTICS = new ShellBallistics(10.0D, 0.05D, 400);
+    /** SBW's AP rocket: 500 on what it strikes, 100 within 5. */
+    public static final ShellEntity.Warhead AP = new ShellEntity.Warhead(5.0F, 100.0F, 500.0F, 4.0F, 0.0D, 0);
+    /** SBW's HE rocket: 200 direct, 200 within 12; blocks as power 6 (a mortar round is 8, but twelve come at once). */
+    public static final ShellEntity.Warhead HE = new ShellEntity.Warhead(12.0F, 200.0F, 200.0F, 6.0F, 0.0D, 0);
+    /** SBW's cluster rocket: 12 bomblets of 150 direct, 125 within 3 (6x damage and 5x blast over the count). */
+    public static final ShellEntity.Warhead BOMBLET = new ShellEntity.Warhead(3.0F, 300.0F * 5.0F / 12.0F, 300.0F * 6.0F / 12.0F, 1.5F, 0.0D, 0);
+    public static final ShellEntity.Warhead CM = new ShellEntity.Warhead(6.0F, 300.0F, 300.0F, 4.0F, 0.0D, 0,
+            new ShellEntity.Dispense(12, 8.0D, 0.4D, 0.6D, 3, 7, BOMBLET, new ShellBallistics(10.0D, 0.05D, 100)));
+    public static final Identifier HE_WEAPON = Reference.id("vehicle_type63_he");
+    public static final Identifier AP_WEAPON = Reference.id("vehicle_type63_ap");
+    public static final Identifier CM_WEAPON = Reference.id("vehicle_type63_cm");
+    private static final List<Shell> SHELLS = List.of(
+            new Shell(HE_WEAPON, HE, "hud.jeg.shell.he"),
+            new Shell(AP_WEAPON, AP, "hud.jeg.shell.ap"),
+            new Shell(CM_WEAPON, CM, "hud.jeg.shell.cluster_12"));
+    /** The rockets' bones, rocket_1 to rocket_12 in firing order (hidden as they go, see rocketsLoaded). */
+    public static final List<String> ROCKETS;
+
+    static {
+        List<String> rockets = new ArrayList<>();
+        for (int i = 1; i <= TUBES; i++) {
+            rockets.add("rocket_" + i);
+        }
+        ROCKETS = List.copyOf(rockets);
+    }
+
+    protected RocketPodEntity(EntityType<? extends VehicleEntity> type, Level level, String id) {
+        super(type, level, id, TUBES);
+    }
+
+    @Override
+    public ShellBallistics ballistics() {
+        return BALLISTICS;
+    }
+
+    @Override
+    public List<Shell> shells() {
+        return SHELLS;
+    }
+
+    /** Rockets don't recoil; the bones listed are the rockets themselves (hidden as they go, see rocketsLoaded). */
+    @Override
+    public List<String> recoilBones() {
+        return ROCKETS;
+    }
+
+    /** SBW's rocket spread: a ripple scatters over the target area. */
+    @Override
+    public double spread() {
+        return 0.5D;
+    }
+
+    @Override
+    public String reportSound() {
+        return "vehicle.type63";
+    }
+
+    @Override
+    public float reportLoudness() {
+        return 2.6F;
+    }
+
+    @Override
+    public float recoilPixels() {
+        return 0.0F;
+    }
+
+    @Override
+    public int recoilTicks() {
+        return 1;
+    }
+
+    /** Rockets still in the tubes for the gunner's (or else the first) shell type. */
+    public int rocketsLoaded() {
+        Entity gunner = this.getControllingPassenger();
+        return Mth.clamp(gunner == null ? this.vehicleWeaponSlotAmmo(0) : this.selectedVehicleWeaponAmmo(gunner), 0, TUBES);
+    }
+
+    /** The tubes empty in order and are reloaded all together, so the next to fire is the first still loaded. */
+    @Override
+    public int nextBarrel() {
+        return Mth.clamp(TUBES - this.rocketsLoaded(), 0, TUBES - 1);
+    }
+
+    /** On the server the tube's round has already been taken when the shot is made: the one fired is one further back. */
+    @Override
+    protected int barrelFiring(LivingEntity shooter) {
+        return Mth.clamp(TUBES - 1 - this.selectedVehicleWeaponAmmo(shooter), 0, TUBES - 1);
+    }
+
+    @Override
+    public boolean shellsAreRockets() {
+        return true;
+    }
+}

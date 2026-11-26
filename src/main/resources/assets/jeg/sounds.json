@@ -2835,6 +2835,100 @@
     "subtitle": "subtitle.jeg.vehicle.ground_engine_stop",
     "sounds": [{ "name": "jeg:vehicle/lav150/engine_stop_cab", "stream": false }]
   },
+  "vehicle.pickup.engine_idle": {
+    "subtitle": "subtitle.jeg.vehicle.engine",
+    "sounds": [
+      {
+        "name": "jeg:vehicle/pickup/engine_idle"
+      }
+    ]
+  },
+  "vehicle.pickup.engine_load": {
+    "subtitle": "subtitle.jeg.vehicle.engine",
+    "sounds": [
+      {
+        "name": "jeg:vehicle/pickup/engine_load"
+      }
+    ]
+  },
+  "vehicle.pickup.engine_cab_idle": {
+    "subtitle": "subtitle.jeg.vehicle.engine",
+    "sounds": [
+      {
+        "name": "jeg:vehicle/pickup/engine_cab_idle"
+      }
+    ]
+  },
+  "vehicle.pickup.engine_cab": {
+    "subtitle": "subtitle.jeg.vehicle.engine",
+    "sounds": [
+      {
+        "name": "jeg:vehicle/pickup/engine_cab"
+      }
+    ]
+  },
+  "vehicle.pickup.engine_distant": {
+    "subtitle": "subtitle.jeg.vehicle.engine",
+    "sounds": [
+      {
+        "name": "jeg:vehicle/pickup/engine_distant"
+      }
+    ]
+  },
+  "vehicle.pickup.engine_start": {
+    "subtitle": "subtitle.jeg.vehicle.ground_engine_start",
+    "sounds": [
+      {
+        "name": "jeg:vehicle/pickup/engine_start",
+        "stream": false
+      }
+    ]
+  },
+  "vehicle.pickup.engine_stop": {
+    "subtitle": "subtitle.jeg.vehicle.ground_engine_stop",
+    "sounds": [
+      {
+        "name": "jeg:vehicle/pickup/engine_stop",
+        "stream": false
+      }
+    ]
+  },
+  "vehicle.pickup.engine_start_cab": {
+    "subtitle": "subtitle.jeg.vehicle.ground_engine_start",
+    "sounds": [
+      {
+        "name": "jeg:vehicle/pickup/engine_start_cab",
+        "stream": false
+      }
+    ]
+  },
+  "vehicle.pickup.engine_stop_cab": {
+    "subtitle": "subtitle.jeg.vehicle.ground_engine_stop",
+    "sounds": [
+      {
+        "name": "jeg:vehicle/pickup/engine_stop_cab",
+        "stream": false
+      }
+    ]
+  },
+  "vehicle.pickup.door_open": {
+    "subtitle": "subtitle.jeg.vehicle.pickup.door_open",
+    "sounds": [
+      {
+        "name": "jeg:vehicle/pickup/door_open",
+        "attenuation_distance": 24
+      }
+    ]
+  },
+  "vehicle.pickup.door_close": {
+    "subtitle": "subtitle.jeg.vehicle.pickup.door_close",
+    "sounds": [
+      {
+        "name": "jeg:vehicle/pickup/door_close",
+        "attenuation_distance": 24
+      }
+    ]
+  },
   "vehicle.plz05.engine_start": {
     "subtitle": "subtitle.jeg.vehicle.ground_engine_start",
     "sounds": [{ "name": "jeg:vehicle/plz05/engine_start", "stream": false }]

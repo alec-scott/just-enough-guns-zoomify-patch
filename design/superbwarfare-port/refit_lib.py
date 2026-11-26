@@ -555,12 +555,14 @@ def glow_of(faces, size, materials_lit, colours, scale=1):
     return img
 
 
-def rebake_imported(geo, texture, texels=2, pad=2):
+def rebake_imported(geo, texture, texels=2, pad=2, boost=None):
     """An imported model (per-face UVs, faces sharing and stretching small texture patches: the A-10's 4 x 2 texel patch
     over a 20 px panel, its left and right halves on the same texels) given a texture of its own per face: each face gets
     a rectangle sized by the face itself at {texels} texels a model pixel, filled with its old paint resampled (nearest),
     and its UV moved there with the same signs, so every face looks as it did, its left and right apart and with room for
-    the detail pass. Returns (geometry, texture, faces): faces as bake_unique's, with bone, face and rect."""
+    the detail pass. {boost} ({bone: factor}) gives a bone's faces that many times the density: lettering on a small
+    plate (the pickup's number plates). Returns (geometry, texture, faces): faces as bake_unique's, with bone, face and
+    rect."""
     from PIL import Image
     data = copy.deepcopy(geo)
     desc = data["minecraft:geometry"][0]["description"]
@@ -579,10 +581,11 @@ def rebake_imported(geo, texture, texels=2, pad=2):
                 su, sv = f.get("uv_size", (0, 0))
                 if su == 0 or sv == 0:
                     continue
-                items.append({"bone": b["name"], "face": face, "f": f, "size": (max(w, 0.05), max(h, 0.05)),
+                k = (boost or {}).get(b["name"], 1)
+                items.append({"bone": b["name"], "face": face, "f": f, "size": (max(w, 0.05), max(h, 0.05)), "k": k,
                               "src": (min(u, u + su), min(v, v + sv), max(u, u + su), max(v, v + sv)),
                               "signs": (1 if su > 0 else -1, 1 if sv > 0 else -1),
-                              "tex": (max(1, math.ceil(max(w, 0.05) * texels - 1e-6)), max(1, math.ceil(max(h, 0.05) * texels - 1e-6)))})
+                              "tex": (max(1, math.ceil(max(w, 0.05) * texels * k - 1e-6)), max(1, math.ceil(max(h, 0.05) * texels * k - 1e-6)))})
     area = sum((i["tex"][0] + pad) * (i["tex"][1] + pad) for i in items)
     width = 64
     while width * width < area * 1.25:
@@ -608,8 +611,11 @@ def rebake_imported(geo, texture, texels=2, pad=2):
         w, h = item["size"]
         sx, sy = item["signs"]
         f = item["f"]
-        f["uv"] = [round(x0 / texels + (w if sx < 0 else 0.0), 4), round(y0 / texels + (h if sy < 0 else 0.0), 4)]
-        f["uv_size"] = [round(sx * w, 4), round(sy * h, 4)]
+        uw, uh = (x1 - x0) / texels, (y1 - y0) / texels
+        if item["k"] == 1:
+            uw, uh = w, h
+        f["uv"] = [round(x0 / texels + (uw if sx < 0 else 0.0), 4), round(y0 / texels + (uh if sy < 0 else 0.0), 4)]
+        f["uv_size"] = [round(sx * uw, 4), round(sy * uh, 4)]
         item["size"] = (w, h)
     desc["texture_width"], desc["texture_height"] = width / texels, height / texels
     for item in items:

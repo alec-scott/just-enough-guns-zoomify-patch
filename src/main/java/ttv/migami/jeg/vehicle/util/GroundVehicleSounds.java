@@ -18,13 +18,16 @@ import org.jetbrains.annotations.Nullable;
  *                     the loops wind up; -1 for none (the loops wind up at once, silently)
  */
 public record GroundVehicleSounds(float idleLoudness, float workLoudness, boolean tracked, boolean cab, int startCatchTicks) {
+    /** The pickup's engine, shared by the pickup and its technicals (design/pickup/prepare_audio.py). */
+    private static final GroundVehicleSounds PICKUP = new GroundVehicleSounds(0.6F, 1.2F, false, true, 28);
     private static final Map<String, GroundVehicleSounds> PROFILES = Map.of(
             "bmp2", new GroundVehicleSounds(1.0F, 1.7F, true, true, 60),
             "lav150", new GroundVehicleSounds(0.8F, 1.4F, false, true, 22),
             "plz05", new GroundVehicleSounds(1.1F, 1.8F, true, true, 20),
             "yx100", new GroundVehicleSounds(1.2F, 2.0F, true, true, 80),
             // An open helm behind a windscreen: no cab loop.
-            "speedboat", new GroundVehicleSounds(0.9F, 1.7F, false, false, 12));
+            "speedboat", new GroundVehicleSounds(0.9F, 1.7F, false, false, 12),
+            "pickup", PICKUP, "pickup_hmg", PICKUP, "pickup_rocket", PICKUP, "pickup_tow", PICKUP);
 
     /** Whether the vehicle has real start and stop recordings. */
     public boolean hasStart() {

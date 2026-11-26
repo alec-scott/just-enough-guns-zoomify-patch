@@ -308,6 +308,15 @@ public final class ModEntities {
     public static final DeferredHolder<EntityType<?>, EntityType<ttv.migami.jeg.vehicle.entity.HowitzerEntity>> HOWITZER = REGISTER.register("howitzer",
             () -> EntityType.Builder.<ttv.migami.jeg.vehicle.entity.HowitzerEntity>of(ttv.migami.jeg.vehicle.entity.HowitzerEntity::new, MobCategory.MISC)
                     .sized(2.2F, 1.7F).clientTrackingRange(14).updateInterval(1).build(entityKey("howitzer")));
+    /** The 4x4 pickup and its technicals (design/pickup/rig.json): unarmed, 12.7 mm, Type 63 rocket pod, TOW. */
+    public static final DeferredHolder<EntityType<?>, EntityType<ConfiguredVehicleEntity>> PICKUP = configuredVehicle("pickup", 2.3F, 2.0F);
+    public static final DeferredHolder<EntityType<?>, EntityType<ConfiguredVehicleEntity>> PICKUP_HMG = configuredVehicle("pickup_hmg", 2.3F, 2.0F);
+    public static final DeferredHolder<EntityType<?>, EntityType<ttv.migami.jeg.vehicle.entity.PickupRocketEntity>> PICKUP_ROCKET = REGISTER.register("pickup_rocket",
+            () -> EntityType.Builder.<ttv.migami.jeg.vehicle.entity.PickupRocketEntity>of(ttv.migami.jeg.vehicle.entity.PickupRocketEntity::new, MobCategory.MISC)
+                    .sized(2.3F, 2.0F).clientTrackingRange(14).updateInterval(1).build(entityKey("pickup_rocket")));
+    public static final DeferredHolder<EntityType<?>, EntityType<ttv.migami.jeg.vehicle.entity.PickupTowEntity>> PICKUP_TOW = REGISTER.register("pickup_tow",
+            () -> EntityType.Builder.<ttv.migami.jeg.vehicle.entity.PickupTowEntity>of(ttv.migami.jeg.vehicle.entity.PickupTowEntity::new, MobCategory.MISC)
+                    .sized(2.3F, 2.0F).clientTrackingRange(14).updateInterval(1).build(entityKey("pickup_tow")));
     /** The TOW launcher on its tripod (design/tow/rig.json). */
     public static final DeferredHolder<EntityType<?>, EntityType<ttv.migami.jeg.vehicle.entity.TowEntity>> TOW = REGISTER.register("tow",
             () -> EntityType.Builder.<ttv.migami.jeg.vehicle.entity.TowEntity>of(ttv.migami.jeg.vehicle.entity.TowEntity::new, MobCategory.MISC)

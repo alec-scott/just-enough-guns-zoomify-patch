@@ -1,0 +1,9 @@
+{
+  "result_vehicle": "jeg:pickup_hmg",
+  "ingredients": [
+    {"item": "minecraft:iron_ingot", "count": 24},
+    {"item": "minecraft:copper_ingot", "count": 8},
+    {"item": "minecraft:redstone", "count": 6},
+    {"item": "minecraft:glass_pane", "count": 4}
+  ]
+}

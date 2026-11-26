@@ -304,6 +304,10 @@ public final class FabricClientBootstrap {
         EntityRendererRegistry.register(ModEntities.TEST_AIRCRAFT.get(), VehicleGeoRenderer::new);
         EntityRendererRegistry.register(ModEntities.TRUCK.get(), ttv.migami.jeg.vehicle.client.render.SupportVehicleRenderer::new);
         EntityRendererRegistry.register(ModEntities.LAV150.get(), Lav150Renderer::new);
+        EntityRendererRegistry.register(ModEntities.PICKUP.get(), context -> new ttv.migami.jeg.vehicle.client.render.PickupRenderer<>(context, "pickup"));
+        EntityRendererRegistry.register(ModEntities.PICKUP_HMG.get(), context -> new ttv.migami.jeg.vehicle.client.render.PickupRenderer<>(context, "pickup_hmg"));
+        EntityRendererRegistry.register(ModEntities.PICKUP_ROCKET.get(), context -> new ttv.migami.jeg.vehicle.client.render.PickupRenderer<>(context, "pickup_rocket"));
+        EntityRendererRegistry.register(ModEntities.PICKUP_TOW.get(), context -> new ttv.migami.jeg.vehicle.client.render.PickupRenderer<>(context, "pickup_tow"));
         EntityRendererRegistry.register(ModEntities.SPEEDBOAT.get(), SpeedboatRenderer::new);
         EntityRendererRegistry.register(ModEntities.AH6.get(), Ah6Renderer::new);
         EntityRendererRegistry.register(ModEntities.CH47.get(), ttv.migami.jeg.vehicle.client.render.Ch47Renderer::new);
