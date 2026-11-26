@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.7.2+mc26.1.2.yftm.28 - 2026-11-26
+
+### Fixed
+- Vehicle glass and glowing parts draw again. Since the 26.1 update, windows and canopies had no tint and lamps, screens and lit panels didn't glow.
+
+### Changed
+- Performance: vehicles cost much less to draw, with the same look. A deployed, powered FSV-6 in view went from 54 to 82 fps, and a parked fleet of nine armoured vehicles from 82 to 101 fps with the pack's Photon (46 to 59 with stock Photon). Glass and glow are drawn only where a texture has them, lamp light on the bodywork is worked out once instead of over and over, and evenly lit vehicles skip per-vertex lighting.
+
 ## 1.7.2+mc26.1.2.yftm.27 - 2026-11-26
 
 ### Fixed
