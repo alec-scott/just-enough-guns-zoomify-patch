@@ -1,6 +1,6 @@
 # 4x4 pickup and technicals: status
 
-Pass 1, 2026-11-26. Brief: [BRIEF.md](BRIEF.md). Worktree branch `feature/sbw-candidates`, not released.
+Pass 1, 2026-11-26 (released in yftm.26); pass 2 the same day, below. Brief: [BRIEF.md](BRIEF.md); handover: [README.md](README.md).
 
 ## Built
 
@@ -30,12 +30,37 @@ Pass 1, 2026-11-26. Brief: [BRIEF.md](BRIEF.md). Worktree branch `feature/sbw-ca
   and flies 212 blocks. **`Type63ClientGameTest`** passes after the pod moved to `RocketPodEntity`.
 - Not the dedicated server, not multiplayer.
 
+## Pass 2: production fixes (2026-11-26, shipped after yftm.26)
+
+| Fault found | Fix | Where |
+| --- | --- | --- |
+| The rocket technical's chase camera turned grey through a ripple: the backblast drifted back over the camera | A rocket's backblast puffs thin out within 4 blocks of their edge; onlookers still see the full cloud. What is left in that view is the rockets' own trail ahead, gone in about 4 s | `MissileBlastRenderer` `nearFade` |
+| A villager in the cab sat 0.6 up by its feet, its head through the roof | A mob in an enclosed seat that is drawn sits no higher than a player (the rule applies to every such seat, the Mi-28's and CH-47's cockpits too; played only in the pickup); a villager's legs and robe are left out there on a vanilla client | `VehicleEntity.seatsMobInCab`, `VillagerModelSeatedMixin` |
+| Mobs in the bed floated 0.6 above it (the lift that stands a cow on the AH-6's bench) | `"floor_seats"`: the pickup's four bed seats and the technicals' gunners; a mob rides them as a player does | `pickup*.json`, `VehicleData.floorSeats` |
+| The cab doors swung open for a gunner climbing into the bed | The doors and their sounds count only the cab's riders | `VehicleEntity.cabOccupants`, `VehicleDoors`, `GroundVehicleAudio.cabDoors` |
+| No handover notes | [README.md](README.md): seats, keys, behaviour, regenerate commands | |
+| The ArmourTest sandbox had no pickups | Rebuilt: the four in a row behind the armour (z -14.5), their holds loaded (2, 6 and 2 stacks of ammunition) | `ArmourSandboxSetupClientGameTest` |
+
+**Played in the pack client (mcpfabric, Photon):** the 12.7 mm gunner's three views (first person through the M2's
+grips with a small flash; the chase camera, where the gun points away and the gunner's body hides it; the hull's action
+camera beside the gun); a 9-rocket ripple from the cab driver's chase camera before and after the backblast fix; a
+villager, zombies and a gunner aboard the 12.7 mm and the plain pickup (doors shut when the bed gunner boards; the bed
+riders seated on the bed's sides); the plain pickup at 40/150 (grey smoke column), destroyed (blast and dust), and its
+burning charred wreck.
+
+| Test (`-PwithPack`) | Result |
+| --- | --- |
+| `PickupCabClientGameTest` (new) | passes: the villager in seat 1, head top 1.70 above the hull under the 1.80 roof (it was 2.30), eyes 1.37 above the 1.10 sill, the client seating it at the same 1.70; a zombie gunner in seat 2 leaves the cab count at 1, feet 0.62 on the bed floor |
+| `PickupClientGameTest` | passes: all four turn on 8.6 blocks; the pod stops at 10 degrees, a 12-rocket ripple leaves 150/150; the TOW reaches 212 blocks, 150/150 |
+| `VehicleMobPassengerClientGameTest` (shared seat code) | passes: the AH-6's cow still sits 0.60 above the pilot's feet |
+| `ArmourSandboxSetupClientGameTest` | rebuilt `build/run/packClient/saves/ArmourTest` with the pickups |
+
 ## Not covered yet
 
 - **Listen:** the engine start, idle, working loop, cab loop and stop, and the door latch and slam (all new).
-- The chase camera sits in the rocket pod's backblast during a ripple (the smoke fills that view; the cab view stays
-  clear).
-- A mob in a cab seat (a villager) sits higher than a player and its head shows through the roof.
-- The 12.7 mm's flash size against the guide's "small in the gunner's view"; the bed riders' poses on the plain pickup;
-  the hull action camera for a standing gunner; damage smoke and the wreck; the player's full checklist in every view.
-- The ArmourTest sandbox rebuild with the pickups.
+- **Under Fresh Animations** a villager in the cab sits in its pose, shins down: they show below the door sill. The head
+  stays under the roof; lifting it to hide the shins would put the head through the roof again (a cab lower than a
+  seated Minecraft body, guide section 6). The vanilla-client leg hiding is not checked in game (the pack's EMF draws
+  villagers itself).
+- The chase camera puts the 12.7 mm behind its own gunner's back (the gun follows the view away from the camera).
+- Not the dedicated server, not multiplayer.

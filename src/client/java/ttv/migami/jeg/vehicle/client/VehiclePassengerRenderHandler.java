@@ -69,6 +69,11 @@ public final class VehiclePassengerRenderHandler {
         return true;
     }
 
+    /** Whether this render state's entity rides a vehicle's cab seat (a mob under a roof, VehicleEntity.seatsMobInCab). */
+    public static boolean seatedInCab(net.minecraft.client.renderer.entity.state.LivingEntityRenderState state) {
+        return state instanceof CabSeatedState cab && cab.jeg$seatedInCab();
+    }
+
     /** Station poses (the user's review, 2026-11-18): a standing gunner ("standing_seats") stands, a launcher's gunner ("grip_seats") holds it. */
     public static void standAtStation(net.minecraft.client.renderer.entity.state.LivingEntityRenderState state) {
         var level = net.minecraft.client.Minecraft.getInstance().level;

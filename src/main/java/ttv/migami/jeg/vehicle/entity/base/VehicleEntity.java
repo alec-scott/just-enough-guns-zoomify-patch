@@ -483,6 +483,8 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
     /** How far above a player's feet they sit when riding; seat heights are set for this. */
     private static final double PLAYER_VEHICLE_ATTACHMENT_Y = net.minecraft.world.entity.EntityType.PLAYER.getDimensions().attachments()
             .get(net.minecraft.world.entity.EntityAttachment.VEHICLE, 0, 0.0F).y;
+    /** A standing player's height: no rider's head in a cab seat comes higher than a player's would. */
+    private static final double PLAYER_HEIGHT = net.minecraft.world.entity.EntityType.PLAYER.getDimensions().height();
     /** The player whose right-click Carry On just used to put a carried mob aboard, and the game tick it happened. */
     @Nullable
     private UUID carryOnPlacer;
@@ -7662,6 +7664,15 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         // Seat heights are set for a player, whose attachment point (where they sit) is at the hips. Any other rider sits
         // by its own attachment point, as in a vanilla boat, so a mob's feet don't sink below the seat.
         double attachmentLift = PLAYER_VEHICLE_ATTACHMENT_Y - passenger.getVehicleAttachmentPoint(this).y;
+        if (this.vehicleData().floorSeats().contains(seat.index())) {
+            // A seat set at its floor (the pickup's bed): a mob on it as a player is. Lifted by its attachment point, the
+            // pickup's bed riders floated 0.6 above the bed (2026-11-26).
+            attachmentLift = 0.0D;
+        } else if (this.seatsMobInCab(passenger)) {
+            // Under a cab roof a mob sits no higher than a player: a villager in the pickup's cab sat 0.6 up by its feet,
+            // its head through the roof (2026-11-26). A mob shorter than a player keeps some lift, to see out.
+            attachmentLift = Math.min(attachmentLift, Math.max(0.0D, PLAYER_HEIGHT - passenger.getBbHeight()));
+        }
         Vec3 offset = this.seatOffset(seat, passenger instanceof Player ? 0.0D : attachmentLift, 1.0F);
         callback.accept(passenger, this.getX() + offset.x, this.getY() + offset.y, this.getZ() + offset.z);
         if (passenger instanceof LivingEntity living) {
@@ -8886,6 +8897,34 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
 
     public int getSeatIndex(Entity passenger) {
         return this.seatIndexForPassenger(passenger, this.getPassengers().indexOf(passenger));
+    }
+
+    /**
+     * Whether a mob rides in a seat that shows it under a roof (an enclosed seat that is drawn): it sits no higher than a
+     * player (positionRider), and a villager, which has no seated pose of its own, is drawn from the waist up
+     * (VillagerModelSeatedMixin).
+     */
+    public boolean seatsMobInCab(Entity passenger) {
+        int index = this.getPassengers().indexOf(passenger);
+        if (index < 0 || passenger instanceof Player) {
+            return false;
+        }
+        SeatInfo seat = this.seatForPassenger(passenger, index);
+        return seat.enclosed() && !seat.hidePassenger();
+    }
+
+    /**
+     * How many ride in the cab's seats (the enclosed ones), for doors that swing only when someone gets in or out of the
+     * cab: the pickup's doors swung open for a gunner climbing into the bed (2026-11-26).
+     */
+    public int cabOccupants() {
+        int count = 0;
+        for (int index = 0; index < this.getPassengers().size(); index++) {
+            if (this.seatForPassenger(this.getPassengers().get(index), index).enclosed()) {
+                count++;
+            }
+        }
+        return count;
     }
 
     @Nullable

@@ -224,6 +224,7 @@ public final class VehicleDataManager {
                 .withNoFirstPersonSeats(parseIntList(object, "no_first_person_seats"))
                 .withStandingSeats(parseIntList(object, "standing_seats"))
                 .withGripSeats(parseIntList(object, "grip_seats"))
+                .withFloorSeats(parseIntList(object, "floor_seats"))
                 .withMass(getDouble(object, "mass", Double.NaN));
     }
 

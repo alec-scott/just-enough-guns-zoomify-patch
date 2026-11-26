@@ -313,7 +313,7 @@ abstract class AbstractVehicleGeoRenderer<T extends VehicleEntity> extends GeoEn
         }
         if (vehicle.vehicleDataId().getPath().startsWith("pickup")) {
             // The cab doors swing out on their front hinges while someone boards or leaves (design/pickup/rig.json).
-            float doors = VehicleDoors.open(vehicle, partialTick) * 65.0F * Mth.DEG_TO_RAD;
+            float doors = VehicleDoors.open(vehicle, vehicle.cabOccupants(), partialTick) * 65.0F * Mth.DEG_TO_RAD;
             // Each swings out: the left door (+X) by a negative turn in GeckoLib's mirrored frame (positive swung it into
             // the cab, the user's review, 2026-11-26).
             swingAboutHinge(snapshots, "door_left", -doors, PICKUP_DOOR_PIVOT_X, PICKUP_DOOR_PIVOT_Z, PICKUP_DOOR_HINGE_X, PICKUP_DOOR_HINGE_Z);
@@ -332,7 +332,7 @@ abstract class AbstractVehicleGeoRenderer<T extends VehicleEntity> extends GeoEn
                 hideIf(snapshots, "cannon_flash", firing != 0 && firing != 2 || !flicker);
                 hideIf(snapshots, "coax_flash", firing != 1 || !flicker);
                 // The squad's rear doors swing open on their outer hinges while someone boards or leaves.
-                float doors = VehicleDoors.open(vehicle, partialTick) * 100.0F * Mth.DEG_TO_RAD;
+                float doors = VehicleDoors.open(vehicle, vehicle.getPassengers().size(), partialTick) * 100.0F * Mth.DEG_TO_RAD;
                 swingAboutHinge(snapshots, "rear_door_left", -doors, -13.30012F, 46.66886F, -16.5F, 50.5F);
                 swingAboutHinge(snapshots, "rear_door_right", doors, 13.30012F, 46.66886F, 16.5F, 50.5F);
             }
@@ -863,16 +863,16 @@ abstract class AbstractVehicleGeoRenderer<T extends VehicleEntity> extends GeoEn
     }
 
     /**
-     * Doors that open while someone boards or leaves (client side, from the passenger count): open over half a second,
-     * held two seconds, closed over three quarters of one. 0 shut, 1 open.
+     * Doors that open while someone boards or leaves (client side, from the count of those the doors let in: the BMP-2's
+     * whole squad, the pickup's cab): open over half a second, held two seconds, closed over three quarters of one. 0
+     * shut, 1 open.
      */
     static final class VehicleDoors {
         private static final java.util.Map<Integer, int[]> STATE = new java.util.HashMap<>();
         private static final int OPEN = 10, HOLD = 40, CLOSE = 15;
 
-        static float open(VehicleEntity vehicle, float partialTick) {
-            int[] s = STATE.computeIfAbsent(vehicle.getId(), id -> new int[]{vehicle.getPassengers().size(), Integer.MIN_VALUE / 2});
-            int count = vehicle.getPassengers().size();
+        static float open(VehicleEntity vehicle, int count, float partialTick) {
+            int[] s = STATE.computeIfAbsent(vehicle.getId(), id -> new int[]{count, Integer.MIN_VALUE / 2});
             if (count != s[0]) {
                 // Already open: keep them open rather than swinging them shut and open again.
                 float now = shape(vehicle.tickCount - s[1]);

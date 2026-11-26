@@ -253,7 +253,7 @@ public final class GroundVehicleAudio {
 
     /** A door's latch as the doors swing open for someone boarding or leaving, and its slam as they shut. */
     private static void cabDoors(Minecraft mc, VehicleEntity vehicle) {
-        int count = vehicle.getPassengers().size();
+        int count = vehicle.cabOccupants();
         int[] state = DOORS.computeIfAbsent(vehicle.getId(), id -> new int[]{count, Integer.MIN_VALUE});
         if (count != state[0]) {
             // Already open (a second person within the hold): no second latch, the slam waits for the last.

@@ -10,6 +10,7 @@
   "allow_free_cam": true,
   "has_decoy": false,
   "container_type": "small",
+  "floor_seats": [2, 3, 4, 5],
   "seats": [
     {"index": 0, "x": 0.45, "y": -0.25, "z": 0.62, "driver": true, "enclosed": true, "hide_passenger": false, "ban_hand": true, "min_pitch": -50.0, "max_pitch": 50.0, "min_yaw": -110.0, "max_yaw": 110.0},
     {"index": 1, "x": -0.45, "y": -0.25, "z": 0.62, "driver": false, "enclosed": true, "hide_passenger": false, "ban_hand": false, "min_pitch": -50.0, "max_pitch": 50.0, "min_yaw": -110.0, "max_yaw": 110.0},

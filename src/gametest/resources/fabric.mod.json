@@ -44,6 +44,7 @@
       "ttv.migami.jeg.gametest.TowClientGameTest",
       "ttv.migami.jeg.gametest.Type63ClientGameTest",
       "ttv.migami.jeg.gametest.PickupClientGameTest",
+      "ttv.migami.jeg.gametest.PickupCabClientGameTest",
       "ttv.migami.jeg.gametest.HowitzerClientGameTest",
       "ttv.migami.jeg.gametest.Plz05ClientGameTest",
       "ttv.migami.jeg.gametest.EnemyVehicleRaidClientGameTest",

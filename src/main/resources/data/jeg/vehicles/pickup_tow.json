@@ -10,6 +10,7 @@
   "allow_free_cam": true,
   "has_decoy": false,
   "container_type": "small",
+  "floor_seats": [2],
   "grip_seats": [2],
   "standing_seats": [2],
   "turret_riders": [2],

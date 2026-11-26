@@ -29,6 +29,15 @@ public abstract class LivingEntityRendererVehicleMixin {
         this.jeg$tilted = VehiclePassengerRenderHandler.tiltWithAircraft(renderState, poseStack);
     }
 
+    @Inject(
+            method = "extractRenderState(Lnet/minecraft/world/entity/LivingEntity;Lnet/minecraft/client/renderer/entity/state/LivingEntityRenderState;F)V",
+            at = @At("TAIL")
+    )
+    private void jeg$markCabSeat(net.minecraft.world.entity.LivingEntity entity, LivingEntityRenderState renderState, float partialTick, CallbackInfo ci) {
+        ((ttv.migami.jeg.vehicle.client.CabSeatedState) renderState).jeg$setSeatedInCab(
+                entity.getVehicle() instanceof ttv.migami.jeg.vehicle.entity.base.VehicleEntity vehicle && vehicle.seatsMobInCab(entity));
+    }
+
     /** Whether this submit pushed an aircraft's bank and pitch onto the pose, to pop at its end. */
     private boolean jeg$tilted;
 

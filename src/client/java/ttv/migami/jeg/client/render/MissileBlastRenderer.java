@@ -1165,6 +1165,8 @@ public final class MissileBlastRenderer {
         double x, y, z, px, py, pz, vx, vy, vz;
         float size, grow, rise, drag, alpha, grey, lit = 1.0F, rotation, spin;
         float r = 1.0F, g = 1.0F, b = 1.0F;
+        /** How far from its edge the puff thins out as the camera comes into it (blocks; 0 never). */
+        float nearFade;
         int life, age, variant;
         boolean fire;
     }
@@ -1257,7 +1259,9 @@ public final class MissileBlastRenderer {
             Vec3 back = muzzle.subtract(bore.scale(1.2D));
             for (int i = 0; i < 12; i++) {
                 Vec3 v = bore.scale(-(0.25D + random.nextDouble() * 0.55D)).add(jitter(random, 0.12D));
-                muzzlePuff(back, v, 0.7F * scale, 0.78F, random);
+                // Thinned out as the camera comes into it: the rocket technical's chase camera sits where the backblast
+                // drifts, and a ripple filled that whole view with grey (2026-11-26). Seen from aside it is all there.
+                muzzlePuff(back, v, 0.7F * scale, 0.78F, random).nearFade = BACKBLAST_NEAR_FADE;
             }
             for (int i = 0; i < 3; i++) {
                 muzzlePuff(muzzle, bore.scale(0.15D + random.nextDouble() * 0.2D).add(jitter(random, 0.04D)), 0.4F * scale, 0.8F, random);
@@ -1277,6 +1281,9 @@ public final class MissileBlastRenderer {
         }
         WISPS.add(new Wisp(gun.getId(), muzzle.subtract(gun.position()), 70));
     }
+
+    /** How far from a backblast puff's edge the camera sees through it (blocks). */
+    private static final float BACKBLAST_NEAR_FADE = 4.0F;
 
     private static Plume muzzlePuff(Vec3 at, Vec3 velocity, float size, float grey, RandomSource random) {
         Plume p = new Plume();
@@ -1358,6 +1365,12 @@ public final class MissileBlastRenderer {
             Vec3 rel = new Vec3(Mth.lerp(partialTick, p.px, p.x) - view.x, Mth.lerp(partialTick, p.py, p.y) - view.y,
                     Mth.lerp(partialTick, p.pz, p.z) - view.z);
             float size = p.size + p.grow * partialTick;
+            if (p.nearFade > 0.0F) {
+                fade *= (float) Mth.clamp((rel.length() - size * 0.5D) / p.nearFade, 0.0D, 1.0D);
+                if (fade <= 0.003F) {
+                    continue;
+                }
+            }
             Quad quad;
             if (p.fire) {
                 float[] c = fireColour(Math.min(1.0F, life * 1.15F), p.variant / 3.0F);

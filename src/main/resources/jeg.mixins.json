@@ -39,6 +39,8 @@
     "KeyMappingGunReloadMixin",
     "LocalPlayerVehiclePickMixin",
     "LivingEntityRendererVehicleMixin",
+    "LivingEntityRenderStateCabMixin",
+    "VillagerModelSeatedMixin",
     "EntityRendererHiddenPassengerMixin",
     "MinecraftVehicleHotbarMixin",
     "MouseHandlerVehicleMixin",

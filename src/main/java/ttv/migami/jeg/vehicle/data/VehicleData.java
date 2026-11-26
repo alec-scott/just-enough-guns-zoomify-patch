@@ -18,6 +18,7 @@ public final class VehicleData {
     private java.util.List<Integer> noFirstPersonSeats = java.util.List.of();
     private java.util.List<Integer> standingSeats = java.util.List.of();
     private java.util.List<Integer> gripSeats = java.util.List.of();
+    private java.util.List<Integer> floorSeats = java.util.List.of();
     private double mass = Double.NaN;
 
     public VehicleData(DefaultVehicleData defaults) {
@@ -96,6 +97,19 @@ public final class VehicleData {
     /** Seats whose rider holds the weapon with both hands ("grip_seats": the TOW's gunner on its grips). */
     public java.util.List<Integer> gripSeats() {
         return this.gripSeats;
+    }
+
+    /**
+     * Seats set at the floor ("floor_seats": the pickup's bed): a mob stands or sits on that floor as a player does,
+     * instead of by its own attachment point (a cow on the AH-6's bench stands on the cushion, a player's hips).
+     */
+    public java.util.List<Integer> floorSeats() {
+        return this.floorSeats;
+    }
+
+    public VehicleData withFloorSeats(java.util.List<Integer> seats) {
+        this.floorSeats = java.util.List.copyOf(seats);
+        return this;
     }
 
     public VehicleData withGripSeats(java.util.List<Integer> seats) {

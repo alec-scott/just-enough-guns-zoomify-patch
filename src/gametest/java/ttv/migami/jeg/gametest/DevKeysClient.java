@@ -74,6 +74,20 @@ public final class DevKeysClient implements ClientModInitializer {
                 LiteralArgumentBuilder.<FabricClientCommandSource>literal("jegfps")
                         .then(RequiredArgumentBuilder.<FabricClientCommandSource, Integer>argument("seconds", IntegerArgumentType.integer(1, 120))
                                 .executes(DevKeysClient::fps))));
+        // /jegturret: the riding vehicle's turret as this client draws it, and the seat, for play-tests.
+        ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) -> dispatcher.register(
+                LiteralArgumentBuilder.<FabricClientCommandSource>literal("jegturret").executes(context -> {
+                    var player = Minecraft.getInstance().player;
+                    if (player == null || !(player.getVehicle() instanceof ttv.migami.jeg.vehicle.entity.base.VehicleEntity vehicle)) {
+                        context.getSource().sendError(Component.literal("Not aboard a vehicle"));
+                        return 0;
+                    }
+                    context.getSource().sendFeedback(Component.literal(String.format(java.util.Locale.ROOT,
+                            "[jegturret] seat %d yaw %.1f pitch %.1f hull %.1f look %.1f/%.1f camera %s",
+                            vehicle.getSeatIndex(player), vehicle.turretYaw(1.0F), vehicle.turretPitch(1.0F), vehicle.getYRot(),
+                            player.getYRot(), player.getXRot(), Minecraft.getInstance().options.getCameraType())));
+                    return 1;
+                })));
         ClientTickEvents.START_CLIENT_TICK.register(DevKeysClient::moveCursor);
         ClientTickEvents.END_CLIENT_TICK.register(DevKeysClient::tick);
         ClientTickEvents.END_CLIENT_TICK.register(DevKeysClient::sampleFps);

@@ -860,7 +860,7 @@ check `isWrecked()`: a wreck still exists, can be shot and seen, but has no cont
 SBW's door bones pivot mid-door, not on their hinges. Don't move pivots by hand in the generated model (a refit run
 overwrites it); turn the bone in the renderer about the real hinge with `swingAboutHinge` (rotate about the pivot, then
 translate by (I - R)(H - P), in GeckoLib's X-mirrored frame). The BMP-2's rear doors open while someone boards or leaves
-(`VehicleDoors`, from the passenger count). Check the swing in a screenshot from behind at mid-travel.
+(`VehicleDoors`, from the count of those the doors let in). Check the swing in a screenshot from behind at mid-travel.
 
 The same applies to hinged parts of our own models. A part modelled reaching aft (model +Z), such as the Chinook's
 ramp, lifts its far edge with a **negative** X turn in GeckoLib. The generator's review renders use the opposite sense,
@@ -894,6 +894,21 @@ weapon:
   player is about 1.4 tall from the hips up. Put the seat where the eye sits at a real seated height (about 1.35 above
   the ground in a pickup: seat `y` -0.25 with the floor at 0.53). The legs then sit below the floor, hidden by the doors,
   and the head stays under the roof from every side.
+- **A mob in a cab seat sits where a player would** (2026-11-26, every vehicle). Riders other than players sit by their
+  own attachment point (so a mob's feet don't sink through an open seat), which put a villager 0.6 higher than a player
+  in the pickup's cab, its head through the roof. In an enclosed seat that is drawn (`enclosed`, not `hide_passenger`)
+  a mob now sits no higher than a player (`VehicleEntity.seatsMobInCab`; `PickupCabClientGameTest` holds the head under
+  the roof). A villager has no seated pose: on a vanilla client its legs and robe are left out in a cab seat
+  (`VillagerModelSeatedMixin`); under the pack, Fresh Animations seats it itself and its shins can show below the sill.
+- **Seats set at a floor: `"floor_seats"`.** The lift that stands a cow on the AH-6's bench (at a player's hips) floated
+  the pickup's bed riders 0.6 above the bed, where a seat's height is the floor a player's feet rest on. List such seats
+  in `"floor_seats"` (the pickup's bed, the technicals' gunners) and a mob rides them as a player does.
+- **Doors answer to the seats behind them.** `VehicleDoors.open` takes the count that swings them: the BMP-2's whole
+  squad, the pickup's cab alone (`VehicleEntity.cabOccupants`). Counting every passenger swung the pickup's cab doors open
+  for a gunner climbing into the bed.
+- **A backblast thins out around the camera.** A rocket's backblast puffs fade within 4 blocks of their edge
+  (`MissileBlastRenderer` `nearFade`): the rocket technical's chase camera sits where the backblast drifts, and a ripple
+  turned that whole view grey. Onlookers still see the full cloud; muzzle smoke and wrecks' smoke are unchanged.
 - **One engine's recordings for a family.** The four pickups share `sounds/vehicle/pickup/`
   (`GroundVehicleAudio.soundFamily`), and the cab doors play a real door's latch and slam as they swing.
 - **Take the memes out in the refit.** SBW's pickup carried a meme figurine on its dashboard, its meme name on the
