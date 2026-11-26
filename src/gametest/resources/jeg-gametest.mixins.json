@@ -1,0 +1,11 @@
+{
+  "required": true,
+  "package": "ttv.migami.jeg.gametest.mixin",
+  "compatibilityLevel": "JAVA_25",
+  "client": [
+    "WindowNoFocusMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

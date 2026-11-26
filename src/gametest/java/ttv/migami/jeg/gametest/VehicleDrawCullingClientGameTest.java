@@ -22,7 +22,8 @@ import ttv.migami.jeg.vehicle.client.render.VehicleDrawCulling;
 
 /**
  * The vehicle renderer's culling (VehicleDrawCulling: glass and glow cubes and quads with nothing on them left out, one
- * light for an evenly lit vehicle, no vertex light in the shadow pass, the lamp-spill reuse) must not change the picture.
+ * light for an evenly lit vehicle, no vertex light in the shadow pass, the lamp-spill reuse, GeckoLib cubes' zero-angle
+ * turns left out) must not change the picture.
  * Each vehicle with glass, a glow or cabin lamps is shot with each switch on and off, by day and at night, in the open and
  * half under a stone roof (where its vertices are lit differently). Without shaders the shots must match; with -PwithPack
  * the run checks the culling engages under Iris and Photon and logs the differences for reference. Throughout, every
@@ -101,10 +102,23 @@ public class VehicleDrawCullingClientGameTest implements FabricClientGameTest {
             }
             VehicleDrawCulling.set(true);
             context.runOnClient(mc -> mc.options.hideGui = false);
+            // The FSV-6 powered, a driver aboard, at night: its lamps light the spill pass, which leaves out every cube no
+            // lamp reaches (the parked CH-47's big cubes are all within its cabin lamps' reach). Still checked both ways.
+            server.runCommand("gamemode creative @a");
+            server.runCommand("time set midnight");
+            server.runOnServer(s -> {
+                var player = s.getPlayerList().getPlayers().getFirst();
+                var truck = s.overworld().getEntities(ModEntities.TRUCK.get(), e -> true).getFirst();
+                player.startRiding(truck, true, true);
+            });
+            context.waitTicks(ttv.migami.jeg.vehicle.entity.SupportVehicleEntity.START_TICKS + 40);
+            server.runOnServer(s -> s.getPlayerList().getPlayers().getFirst().stopRiding());
+            context.waitTicks(5);
             VehicleDrawCulling.spillCheck = false;
-            LOGGER.info("[vehicle-cull] lamp spill: {} faces drawn both ways, {} differed", VehicleDrawCulling.spillFacesChecked,
-                    VehicleDrawCulling.spillFacesDiffering);
-            if (VehicleDrawCulling.spillFacesChecked == 0 || VehicleDrawCulling.spillFacesDiffering > 0) {
+            LOGGER.info("[vehicle-cull] lamp spill: {} faces drawn both ways, {} differed or lit a cube out of reach; {} cubes out of reach",
+                    VehicleDrawCulling.spillFacesChecked, VehicleDrawCulling.spillFacesDiffering, VehicleDrawCulling.spillCubesSkipped);
+            if (VehicleDrawCulling.spillFacesChecked == 0 || VehicleDrawCulling.spillCubesSkipped == 0
+                    || VehicleDrawCulling.spillFacesDiffering > 0) {
                 throw new AssertionError("lamp-spill reuse: " + VehicleDrawCulling.spillFacesDiffering + " of "
                         + VehicleDrawCulling.spillFacesChecked + " faces drawn differently (must be 0 of more than 0)");
             }
@@ -138,12 +152,14 @@ public class VehicleDrawCullingClientGameTest implements FabricClientGameTest {
         boolean exact = !context.computeOnClient(mc -> ttv.migami.jeg.client.compat.ShaderPacks.inUse());
         StringBuilder line = new StringBuilder();
         int failures = 0;
-        boolean[][] configs = {{false, false, false}, {true, false, false}, {false, true, false}, {false, false, true},
-                {true, true, true}};
-        String[] labels = {"noise", "mask", "even", "shadow", "on"};
+        // Each switch by itself, then all: mask, even light, shadow pass, cube turns.
+        boolean[][] configs = {{false, false, false, false}, {true, false, false, false}, {false, true, false, false},
+                {false, false, true, false}, {false, false, false, true}, {true, true, true, true}};
+        String[] labels = {"noise", "mask", "even", "shadow", "turns", "on"};
+        boolean[] none = {false, false, false, false};
         for (int k = exact ? 1 : 0; k < configs.length; k++) {
-            Path off = shot(context, name, labels[k] + "_off", false, false, false);
-            Path with = shot(context, name, labels[k], configs[k][0], configs[k][1], configs[k][2]);
+            Path off = shot(context, name, labels[k] + "_off", none);
+            Path with = shot(context, name, labels[k], configs[k]);
             double share = differentShare(off, with);
             line.append(' ').append(labels[k]).append(' ').append(pct(share));
             if (exact && share > MAX_DIFFERENT) {
@@ -157,11 +173,12 @@ public class VehicleDrawCullingClientGameTest implements FabricClientGameTest {
         return failures > 0 ? 1 : 0;
     }
 
-    private static Path shot(ClientGameTestContext context, String name, String label, boolean mask, boolean even,
-                             boolean shadow) {
-        VehicleDrawCulling.quadMask = mask;
-        VehicleDrawCulling.evenLight = even;
-        VehicleDrawCulling.shadowPassLight = shadow;
+    /** A shot with the switches {mask, even light, shadow pass, cube turns} set. */
+    private static Path shot(ClientGameTestContext context, String name, String label, boolean[] on) {
+        VehicleDrawCulling.quadMask = on[0];
+        VehicleDrawCulling.evenLight = on[1];
+        VehicleDrawCulling.shadowPassLight = on[2];
+        VehicleDrawCulling.cubeTurns = on[3];
         context.waitTicks(10);
         return context.takeScreenshot("vehicle_cull_" + name + "_" + label);
     }

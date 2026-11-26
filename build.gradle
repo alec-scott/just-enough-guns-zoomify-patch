@@ -68,10 +68,14 @@ fabricApi {
 // ./gradlew runPackClient -PwithPack -Pminecraft_version=26.1.2 -Pfabric_version=0.155.3+26.1.2 -Ploader_version=0.20.1 --args="--quickPlaySingleplayer AircraftTest"
 // It fetches the same shader pack and resource packs as the pack game tests and switches them on.
 // The pack ships three shader packs; the user plays with Photon (their Prism instances' iris.properties), so that is the
-// default. -PpackShaders=reimagined or =unbound picks one of the Complementary packs instead.
+// default. -PpackShaders=reimagined or =unbound picks one of the Complementary packs instead; =photonYftm the pack's
+// Photon fork (github.com/Marco-Cigna/photon, entity shadows off by default). Its file name is the same in every release
+// (Iris keys settings to it): delete build/run/packClient/shaderpacks/photon-yftm.zip to fetch a newer one.
 def packShaderPacks = [
         photon    : ["photon_v1.3b.zip",
                      "https://cdn.modrinth.com/data/lLqFfGNs/versions/gUv7fBPN/photon_v1.3b.zip"],
+        photonYftm: ["photon-yftm.zip",
+                     "https://github.com/Marco-Cigna/photon/releases/download/v1.3b-yftm.2/photon-yftm.zip"],
         reimagined: ["ComplementaryReimagined_r5.9.3.zip",
                      "https://cdn.modrinth.com/data/HVnmMxH1/versions/Bqen1mJX/ComplementaryReimagined_r5.9.3.zip"],
         unbound   : ["ComplementaryUnbound_r5.9.3.zip",

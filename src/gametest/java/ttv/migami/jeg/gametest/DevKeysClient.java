@@ -41,6 +41,10 @@ public final class DevKeysClient implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
         ChinookDevTools.init();
+        // The window opens unfocused (WindowNoFocusMixin), out of the user's way: don't stop for the pause menu while it
+        // stays that way.
+        net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents.CLIENT_STARTED.register(
+                client -> client.options.pauseOnLostFocus = false);
         ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) -> dispatcher.register(
                 LiteralArgumentBuilder.<FabricClientCommandSource>literal("jegkey")
                         .then(LiteralArgumentBuilder.<FabricClientCommandSource>literal("list").executes(DevKeysClient::list))
@@ -84,6 +88,9 @@ public final class DevKeysClient implements ClientModInitializer {
                         .then(LiteralArgumentBuilder.<FabricClientCommandSource>literal("spill")
                                 .then(LiteralArgumentBuilder.<FabricClientCommandSource>literal("on").executes(context -> spill(context, true)))
                                 .then(LiteralArgumentBuilder.<FabricClientCommandSource>literal("off").executes(context -> spill(context, false))))
+                        .then(LiteralArgumentBuilder.<FabricClientCommandSource>literal("turns")
+                                .then(LiteralArgumentBuilder.<FabricClientCommandSource>literal("on").executes(context -> turns(context, true)))
+                                .then(LiteralArgumentBuilder.<FabricClientCommandSource>literal("off").executes(context -> turns(context, false))))
                         .then(LiteralArgumentBuilder.<FabricClientCommandSource>literal("check")
                                 .then(LiteralArgumentBuilder.<FabricClientCommandSource>literal("on").executes(context -> check(context, true)))
                                 .then(LiteralArgumentBuilder.<FabricClientCommandSource>literal("off").executes(context -> check(context, false))))));
@@ -128,11 +135,18 @@ public final class DevKeysClient implements ClientModInitializer {
         return 1;
     }
 
+    private static int turns(CommandContext<FabricClientCommandSource> context, boolean on) {
+        ttv.migami.jeg.vehicle.client.render.VehicleDrawCulling.cubeTurns = on;
+        context.getSource().sendFeedback(Component.literal("[jegcull] zero-angle cube turns skipped: " + on));
+        return 1;
+    }
+
     private static int check(CommandContext<FabricClientCommandSource> context, boolean on) {
         ttv.migami.jeg.vehicle.client.render.VehicleDrawCulling.spillCheck = on;
         String line = "[jegcull] spill check " + (on ? "on" : "off") + ": "
                 + ttv.migami.jeg.vehicle.client.render.VehicleDrawCulling.spillFacesChecked + " faces compared, "
-                + ttv.migami.jeg.vehicle.client.render.VehicleDrawCulling.spillFacesDiffering + " differed";
+                + ttv.migami.jeg.vehicle.client.render.VehicleDrawCulling.spillFacesDiffering + " differed or lit a cube out of reach, "
+                + ttv.migami.jeg.vehicle.client.render.VehicleDrawCulling.spillCubesSkipped + " cubes out of reach";
         context.getSource().sendFeedback(Component.literal(line));
         org.slf4j.LoggerFactory.getLogger("jegcull").info(line);
         return 1;

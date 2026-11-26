@@ -276,7 +276,7 @@ final class VehicleLightsLayer<T extends VehicleEntity> extends GeoRenderLayer<T
                         spillPose.last().set(pose);
                         SpillConsumer lit = new SpillConsumer(buffer, lights);
                         // Children skip whatever the battle damage hides.
-                        passInfo.renderPosed(() -> VehicleBones.drawAll(passInfo, spillPose, lit, 0x00F000F0));
+                        passInfo.renderPosed(() -> VehicleBones.drawAll(passInfo, spillPose, lit, 0x00F000F0, null, lit));
                     });
         }
 
@@ -592,7 +592,7 @@ final class VehicleLightsLayer<T extends VehicleEntity> extends GeoRenderLayer<T
      * the lights round it: brighter nearer, and on the side that faces the light ({@code wrap} lets some round the
      * back, as light does in a small cockpit). Each light is {x, y, z, r, g, b, intensity, radius, wrap}.
      */
-    private static final class SpillConsumer implements VertexConsumer {
+    private static final class SpillConsumer implements VertexConsumer, VehicleBones.CubeTest {
         private final VertexConsumer out;
         private final float[][] lights;
         private final float[] position = new float[12];
@@ -642,6 +642,50 @@ final class VehicleLightsLayer<T extends VehicleEntity> extends GeoRenderLayer<T
         /** At most this many cells along a face's side. */
         private static final int MAX_CELLS = 16;
 
+        /** Check mode: the cube being drawn is one {@link #wanted} would leave out, so it must come out dark. */
+        private boolean expectDark;
+
+        /**
+         * Whether any light can reach the cube (in its bone's frame {@code bone}): its sphere's middle in the camera's
+         * frame, its radius scaled by the bone's (Frobenius norm, never less than the largest stretch). A light farther
+         * than its radius plus three of the sphere's radii, plus the 0.1% pull and rounding {@link #gatherReach} allows,
+         * misses every face's own reach test (each face's middle is within one radius of the sphere's, its corners within
+         * two), so a cube with no light that near draws nothing, and GeckoLib needn't move its vertices.
+         */
+        @Override
+        public boolean wanted(com.geckolib.cache.model.cuboid.GeoCube cube, VehicleBones.Sphere sphere, org.joml.Matrix4f m) {
+            if (!VehicleDrawCulling.spillReuse && !VehicleDrawCulling.spillCheck) {
+                return true;
+            }
+            float x = sphere.x();
+            float y = sphere.y();
+            float z = sphere.z();
+            float cx = m.m00() * x + m.m10() * y + m.m20() * z + m.m30();
+            float cy = m.m01() * x + m.m11() * y + m.m21() * z + m.m31();
+            float cz = m.m02() * x + m.m12() * y + m.m22() * z + m.m32();
+            float scale = Mth.sqrt(m.m00() * m.m00() + m.m01() * m.m01() + m.m02() * m.m02() + m.m10() * m.m10() + m.m11() * m.m11()
+                    + m.m12() * m.m12() + m.m20() * m.m20() + m.m21() * m.m21() + m.m22() * m.m22());
+            float r = sphere.radius() * scale;
+            float margin = 3.0F * r + 0.001F * (Mth.sqrt(cx * cx + cy * cy + cz * cz) + r) + 0.05F;
+            boolean reach = false;
+            for (float[] light : this.lights) {
+                float limit = light[7] + margin;
+                if (square(light[0] - cx) + square(light[1] - cy) + square(light[2] - cz) < limit * limit) {
+                    reach = true;
+                    break;
+                }
+            }
+            if (!reach) {
+                VehicleDrawCulling.spillCubesSkipped++;
+            }
+            if (VehicleDrawCulling.spillCheck) {
+                // Drawn anyway, and flushed faces checked: none of it may come out lit.
+                this.expectDark = !reach;
+                return true;
+            }
+            return reach;
+        }
+
         private void flush() {
             if (VehicleDrawCulling.spillCheck) {
                 // Both ways, compared vertex by vertex: the reuse path must write exactly what the full one does.
@@ -650,7 +694,7 @@ final class VehicleLightsLayer<T extends VehicleEntity> extends GeoRenderLayer<T
                 this.flushTo(full, false);
                 this.flushTo(reused, true);
                 VehicleDrawCulling.spillFacesChecked++;
-                if (!full.sameAs(reused)) {
+                if (!full.sameAs(reused) || this.expectDark && !full.isEmpty()) {
                     VehicleDrawCulling.spillFacesDiffering++;
                 }
                 full.replay(this.out);
@@ -956,6 +1000,10 @@ final class VehicleLightsLayer<T extends VehicleEntity> extends GeoRenderLayer<T
             this.ints[i + 1] = overlay;
             this.ints[i + 2] = light;
             this.count++;
+        }
+
+        boolean isEmpty() {
+            return this.count == 0;
         }
 
         /** The same vertices, bit for bit, in the same order. */

@@ -109,24 +109,73 @@ final class VehicleBones {
      * each cube in its own push and pop, each child put in its frame and its position listeners told.
      */
     static void drawAll(RenderPassInfo<?> passInfo, PoseStack pose, VertexConsumer out, int light, @Nullable Plan plan) {
+        drawAll(passInfo, pose, out, light, plan, null);
+    }
+
+    /** Decides, for each cube in its bone's frame, whether it is drawn at all (the lamp spill: is any light in reach?). */
+    interface CubeTest {
+        boolean wanted(GeoCube cube, Sphere sphere, org.joml.Matrix4f bone);
+    }
+
+    /** All of a rotated cube lies within {@code radius} of its pivot ({@code x, y, z}), in its bone's frame. */
+    record Sphere(float x, float y, float z, float radius) {}
+
+    /** Each model's cubes' spheres, by cube (identity). Render thread only. */
+    private static final Map<BakedGeoModel, Map<GeoCube, Sphere>> SPHERES = new WeakHashMap<>();
+
+    /**
+     * A cube turns about its pivot, which keeps every vertex as far from the pivot as it was: so a sphere at the pivot
+     * reaching its farthest vertex holds the cube however it is turned. GeckoLib translates by the pivot over 16 in the
+     * frame the vertices are in, so both are in the same units.
+     */
+    private static Sphere sphere(Map<GeoCube, Sphere> spheres, GeoCube cube) {
+        Sphere sphere = spheres.get(cube);
+        if (sphere == null) {
+            float px = (float) (cube.pivot().x() / 16.0D);
+            float py = (float) (cube.pivot().y() / 16.0D);
+            float pz = (float) (cube.pivot().z() / 16.0D);
+            float far = 0.0F;
+            for (GeoQuad quad : cube.quads()) {
+                if (quad == null) {
+                    continue;
+                }
+                for (GeoVertex vertex : quad.vertices()) {
+                    float dx = vertex.posX() - px;
+                    float dy = vertex.posY() - py;
+                    float dz = vertex.posZ() - pz;
+                    far = Math.max(far, dx * dx + dy * dy + dz * dz);
+                }
+            }
+            sphere = new Sphere(px, py, pz, (float) Math.sqrt(far));
+            spheres.put(cube, sphere);
+        }
+        return sphere;
+    }
+
+    /** As above, with each cube also asked of {@code test} (null: all). */
+    static void drawAll(RenderPassInfo<?> passInfo, PoseStack pose, VertexConsumer out, int light, @Nullable Plan plan,
+                        @Nullable CubeTest test) {
+        boolean ours = plan != null || test != null;
+        Map<GeoCube, Sphere> spheres = test == null ? null : SPHERES.computeIfAbsent(passInfo.model(), m -> new IdentityHashMap<>());
         for (GeoBone bone : passInfo.model().topLevelBones()) {
             if (plan != null && !plan.bones.contains(bone)) {
                 continue;
             }
             pose.pushPose();
             RenderUtil.prepMatrixForBone(pose, bone);
-            if (plan == null) {
+            if (!ours) {
                 bone.render(passInfo, pose, out, light, OverlayTexture.NO_OVERLAY, 0xFFFFFFFF);
                 bone.renderChildren(passInfo, pose, out, light, OverlayTexture.NO_OVERLAY, 0xFFFFFFFF);
             } else {
-                drawBone(passInfo, bone, pose, out, light, plan);
-                drawChildren(passInfo, bone, pose, out, light, plan);
+                drawBone(passInfo, bone, pose, out, light, plan, test, spheres);
+                drawChildren(passInfo, bone, pose, out, light, plan, test, spheres);
             }
             pose.popPose();
         }
     }
 
-    private static void drawBone(RenderPassInfo<?> passInfo, GeoBone bone, PoseStack pose, VertexConsumer out, int light, Plan plan) {
+    private static void drawBone(RenderPassInfo<?> passInfo, GeoBone bone, PoseStack pose, VertexConsumer out, int light,
+                                 @Nullable Plan plan, @Nullable CubeTest test, @Nullable Map<GeoCube, Sphere> spheres) {
         if (!(bone instanceof CuboidGeoBone cuboid)) {
             bone.render(passInfo, pose, out, light, OverlayTexture.NO_OVERLAY, 0xFFFFFFFF);
             return;
@@ -135,26 +184,31 @@ final class VehicleBones {
             return;
         }
         for (GeoCube cube : cuboid.cubes) {
-            if (plan.cubes.contains(cube)) {
-                pose.pushPose();
-                cube.render(pose, out, light, OverlayTexture.NO_OVERLAY, 0xFFFFFFFF);
-                pose.popPose();
+            if (plan != null && !plan.cubes.contains(cube)) {
+                continue;
             }
+            if (test != null && !test.wanted(cube, sphere(spheres, cube), pose.last().pose())) {
+                continue;
+            }
+            pose.pushPose();
+            cube.render(pose, out, light, OverlayTexture.NO_OVERLAY, 0xFFFFFFFF);
+            pose.popPose();
         }
     }
 
-    private static void drawChildren(RenderPassInfo<?> passInfo, GeoBone bone, PoseStack pose, VertexConsumer out, int light, Plan plan) {
+    private static void drawChildren(RenderPassInfo<?> passInfo, GeoBone bone, PoseStack pose, VertexConsumer out, int light,
+                                     @Nullable Plan plan, @Nullable CubeTest test, @Nullable Map<GeoCube, Sphere> spheres) {
         if (bone.frameSnapshot != null && bone.frameSnapshot.areChildrenHidden()) {
             return;
         }
         for (GeoBone child : bone.children()) {
-            if (!plan.bones.contains(child)) {
+            if (plan != null && !plan.bones.contains(child)) {
                 continue;
             }
             pose.pushPose();
             RenderUtil.prepMatrixForBoneAndUpdateListeners(pose, child, passInfo);
-            drawBone(passInfo, child, pose, out, light, plan);
-            drawChildren(passInfo, child, pose, out, light, plan);
+            drawBone(passInfo, child, pose, out, light, plan, test, spheres);
+            drawChildren(passInfo, child, pose, out, light, plan, test, spheres);
             pose.popPose();
         }
     }

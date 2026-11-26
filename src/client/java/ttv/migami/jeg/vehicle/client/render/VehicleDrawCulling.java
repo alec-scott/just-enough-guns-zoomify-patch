@@ -17,6 +17,8 @@ public final class VehicleDrawCulling {
      * once ({@link VehicleLightsLayer}): the same vertices for less work.
      */
     public static volatile boolean spillReuse = true;
+    /** GeckoLib cubes skip their zero-angle turns (GeoCubeRotationMixin): the same matrices for fewer multiplies. */
+    public static volatile boolean cubeTurns = true;
     /** Tests: each spill face drawn both ways and compared vertex by vertex (slow; never on in play). */
     public static volatile boolean spillCheck;
 
@@ -28,6 +30,8 @@ public final class VehicleDrawCulling {
     /** Spill faces compared under {@link #spillCheck}, and those the two ways drew differently (must stay 0). */
     public static long spillFacesChecked;
     public static long spillFacesDiffering;
+    /** Cubes the lamp-spill pass left out because no light reaches them. */
+    public static long spillCubesSkipped;
 
     private VehicleDrawCulling() {}
 
@@ -37,5 +41,6 @@ public final class VehicleDrawCulling {
         evenLight = on;
         shadowPassLight = on;
         spillReuse = on;
+        cubeTurns = on;
     }
 }

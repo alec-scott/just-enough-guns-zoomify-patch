@@ -424,6 +424,13 @@ nothing on screen (`VehicleDrawCulling`; `/jegcull on|off` in the dev client for
 - The lamp-spill pass (`VehicleLightsLayer.SpillConsumer`) sums only the lights that can reach each face, and works out
   each corner of a face lit cell by cell once instead of once for each of the up to four cells round it. Same vertices,
   bit for bit: `/jegcull check on` draws every face both ways and counts any that differ.
+  It also leaves out whole cubes no light can reach (`VehicleBones.CubeTest`): a cube turns about its pivot, so a
+  sphere at the pivot out to its farthest vertex holds it however it is posed, and a light farther than its radius plus
+  three of the sphere's radii can't reach any of its faces. `/jegcull check` draws those cubes anyway and counts any
+  that come out lit (none of 155,682 on the deployed FSV-6).
+- GeckoLib turns every cube about Z, Y and X on every draw, a matrix multiply each, even at zero angle: 69% of the
+  vehicle models' per-cube turns are zero (96% of the FSV-6's). `GeoCubeRotationMixin` leaves the zero ones out; the
+  matrices come out the same, for every GeckoLib model in the game, not only vehicles.
 - No per-vertex light in Iris's shadow pass, which keeps depth, not lighting.
 - A vehicle whose last full pass found the same light at every vertex (out in the open) is drawn with that one light,
   re-checked every 4 ticks and whenever it moves to another block, turns 10 degrees or its own light changes.
@@ -434,6 +441,15 @@ off: 82 fps off, 101 on (11.5 ms to 9.0 ms). The mask leaves out 93% of the glas
 The FSV-6 deployed and powered (SupportTest, from (1, -58, -14) at noon, stock Photon) was the worst single vehicle:
 its room lamp keeps the spill pass busy day and night, and that pass was 42% of the render thread. 54 fps off, 82 with
 all of the above (median frame 16.9 ms to 11.2 ms); the spill reuse alone was 63 to 76.
+With the lamp-spill cube test and the zero-turn skip added (yftm Photon fork, same spot): 94 fps off, 140 on (9.6 ms to
+6.3 ms); the zero-turn skip alone was about 132 to 142 there and within noise at the ArmourTest fleet.
+Looked at and not worth it (2026-11-26): stripping cube faces hidden inside or against another cube of the same bone
+would remove 12% of the FSV-6's faces and 11% of the bulldozer's, under 1% on most other models, before checking that
+the covering cube is opaque. Vertex buffers aren't regrown each frame (no resizes in 5 s at the fleet; the profiler's
+`ByteBufferBuilder.ensureCapacity` time is the vertex writes themselves). What is left of a vehicle's cost is GeckoLib
+moving each vertex and Iris writing its extended vertex data, both per vertex drawn, and with the fleet in view the
+render thread is in Java only about half the time: the rest is the GPU, so CPU savings now show most with many
+vehicles, on slower CPUs, or around lit vehicles.
 `VehicleDrawCullingClientGameTest` shoots each glass or glow vehicle with each switch on and off, by day, at night and
 half under a roof. Without shaders the pictures must match exactly; under Photon they are only logged, because two
 shots with everything off already differ in up to 0.5% of pixels (dithering, and the scene drifting between shots).
@@ -1278,6 +1294,11 @@ preview Ogg (`-hq.ogg`, better than the MP3), and drop an original WAV or FLAC i
   would need its maps kept in step. Try one only if the pack turns Specular Mapping on for everyone: pilot it on one
   vehicle (the A-10), compare look and `/jegfps` against the current build, then decide for the fleet. Lamps and
   screens stay drawn either way, so the look without a shader pack is unchanged.
+- **Dev clients open in the background.** The game tests' and `runPackClient`'s window opens unfocused
+  (`WindowNoFocusMixin` in the gametest mod, never shipped) and doesn't pause when unfocused, so a run doesn't take the
+  keyboard or the mouse from whatever the user is doing; mcpfabric drives it all the same. Click into it to play.
+- **The pack's Photon fork:** `-PpackShaders=photonYftm` runs `photon-yftm.zip` from github.com/Marco-Cigna/photon (entity
+  shadows off by default); delete `build/run/packClient/shaderpacks/photon-yftm.zip` to fetch a newer release.
 - **Frame rate in the pack client.** `/jegfps <seconds>` (`DevKeysClient`) prints the average and slowest second and
   the median and 99th-percentile frame time. Set `inactivityFpsLimit:"minimized"`, `maxFps:260` and
   `enableVsync:false` in `build/run/packClient/options.txt` first: mcpfabric's input doesn't count as a player's, so

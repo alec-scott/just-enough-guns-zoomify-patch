@@ -146,6 +146,9 @@
       "ttv.migami.jeg.gametest.BulldozerClientGameTest"
     ]
   },
+  "mixins": [
+    "jeg-gametest.mixins.json"
+  ],
   "depends": {
     "jeg": "*",
     "fabric-client-gametest-api-v1": "*"

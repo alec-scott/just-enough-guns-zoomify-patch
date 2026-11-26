@@ -54,7 +54,8 @@
     "cabin.ClientPacketListenerCabinMixin",
     "cabin.LocalPlayerCabinPickMixin",
     "cabin.LivingEntityCabinWalkMixin",
-    "cabin.ClientLevelCabinEffectsMixin"
+    "cabin.ClientLevelCabinEffectsMixin",
+    "GeoCubeRotationMixin"
   ],
   "injectors": {
     "defaultRequire": 1
