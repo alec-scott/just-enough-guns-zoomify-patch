@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.7.2+mc26.1.2.yftm.29 - 2026-11-26
+
+### Changed
+- Performance: vehicles with their lamps on, the FSV-6 above all, are cheaper still to draw, with the same look. Lamp light is no longer worked out for parts of a vehicle no lamp reaches, and every GeckoLib model (vehicles and anything else using GeckoLib) skips cube turns that are zero. A deployed, powered FSV-6 in view went from 100 to 140 fps with the pack's Photon.
+
 ## 1.7.2+mc26.1.2.yftm.28 - 2026-11-26
 
 ### Fixed
