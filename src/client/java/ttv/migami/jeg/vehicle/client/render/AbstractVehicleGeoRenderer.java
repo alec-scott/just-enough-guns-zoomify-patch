@@ -141,12 +141,17 @@ abstract class AbstractVehicleGeoRenderer<T extends VehicleEntity> extends GeoEn
             return;
         }
         Vec3 camera = passInfo.cameraState().pos;
+        VehicleEntity vehicle = passInfo.renderState().vehicle;
         collector.submitCustomGeometry(passInfo.poseStack(), renderType, (pose, buffer) -> {
             PoseStack poseStack = passInfo.poseStack();
             poseStack.pushPose();
             poseStack.last().set(pose);
-            VertexConsumer lit = VehicleVertexLight.wrap(buffer, camera, light);
-            passInfo.renderPosed(() -> passInfo.model().render(passInfo, lit, light, overlay, colour));
+            // Decided when the draw runs: the same submission is drawn for the camera and for Iris's shadow map.
+            VehicleVertexLight.Draw draw = VehicleVertexLight.begin(buffer, camera, light, vehicle);
+            VertexConsumer out = draw.consumer();
+            int drawLight = draw.light();
+            passInfo.renderPosed(() -> passInfo.model().render(passInfo, out, drawLight, overlay, colour));
+            draw.endWholeModel();
             poseStack.popPose();
         });
     }

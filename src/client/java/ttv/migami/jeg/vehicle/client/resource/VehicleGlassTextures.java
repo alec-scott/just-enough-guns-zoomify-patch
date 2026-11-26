@@ -79,7 +79,7 @@ public final class VehicleGlassTextures {
 
     /** A copy of the texture's pixels: from the resource pack, or from a texture made at runtime (a paint job). */
     @Nullable
-    private static NativeImage read(Identifier texture) {
+    static NativeImage read(Identifier texture) {
         Minecraft minecraft = Minecraft.getInstance();
         var resource = minecraft.getResourceManager().getResource(texture);
         if (resource.isPresent()) {

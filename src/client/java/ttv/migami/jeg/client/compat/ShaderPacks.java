@@ -11,12 +11,13 @@ import net.fabricmc.loader.api.FabricLoader;
  * into a hard white blob; light effects that the pack lights for real are left to it.
  */
 public final class ShaderPacks {
-    private static final MethodHandle IN_USE = find();
+    private static final MethodHandle IN_USE = find("isShaderPackInUse");
+    private static final MethodHandle SHADOW_PASS = find("isRenderingShadowPass");
     private static final boolean DYNAMIC_LIGHTS = FabricLoader.getInstance().isModLoaded("lambdynlights");
 
     private ShaderPacks() {}
 
-    private static MethodHandle find() {
+    private static MethodHandle find(String method) {
         if (!FabricLoader.getInstance().isModLoaded("iris")) {
             return null;
         }
@@ -24,7 +25,7 @@ public final class ShaderPacks {
             Class<?> api = Class.forName("net.irisshaders.iris.api.v0.IrisApi");
             Object instance = api.getMethod("getInstance").invoke(null);
             return MethodHandles.publicLookup()
-                    .findVirtual(api, "isShaderPackInUse", MethodType.methodType(boolean.class))
+                    .findVirtual(api, method, MethodType.methodType(boolean.class))
                     .bindTo(instance);
         } catch (Throwable ignored) {
             return null;
@@ -32,11 +33,23 @@ public final class ShaderPacks {
     }
 
     public static boolean inUse() {
-        if (IN_USE == null) {
+        return call(IN_USE);
+    }
+
+    /**
+     * Iris is drawing the shadow map: only depth (and, for translucents, colour) is kept, so lighting work is wasted.
+     * Looked up once, so it is cheap enough to ask per draw.
+     */
+    public static boolean renderingShadowPass() {
+        return call(SHADOW_PASS);
+    }
+
+    private static boolean call(MethodHandle handle) {
+        if (handle == null) {
             return false;
         }
         try {
-            return (boolean) IN_USE.invokeExact();
+            return (boolean) handle.invokeExact();
         } catch (Throwable ignored) {
             return false;
         }

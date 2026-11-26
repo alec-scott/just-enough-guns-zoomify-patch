@@ -74,6 +74,19 @@ public final class DevKeysClient implements ClientModInitializer {
                 LiteralArgumentBuilder.<FabricClientCommandSource>literal("jegfps")
                         .then(RequiredArgumentBuilder.<FabricClientCommandSource, Integer>argument("seconds", IntegerArgumentType.integer(1, 120))
                                 .executes(DevKeysClient::fps))));
+        // /jegcull on|off: the vehicle renderer's culling (VehicleDrawCulling), for /jegfps A/B play-tests.
+        // /jegcull spill on|off: only the lamp-spill reuse. /jegcull check on|off: draw each spill face both ways and
+        // compare (reports how many faces differed; must be 0).
+        ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) -> dispatcher.register(
+                LiteralArgumentBuilder.<FabricClientCommandSource>literal("jegcull")
+                        .then(LiteralArgumentBuilder.<FabricClientCommandSource>literal("on").executes(context -> cull(context, true)))
+                        .then(LiteralArgumentBuilder.<FabricClientCommandSource>literal("off").executes(context -> cull(context, false)))
+                        .then(LiteralArgumentBuilder.<FabricClientCommandSource>literal("spill")
+                                .then(LiteralArgumentBuilder.<FabricClientCommandSource>literal("on").executes(context -> spill(context, true)))
+                                .then(LiteralArgumentBuilder.<FabricClientCommandSource>literal("off").executes(context -> spill(context, false))))
+                        .then(LiteralArgumentBuilder.<FabricClientCommandSource>literal("check")
+                                .then(LiteralArgumentBuilder.<FabricClientCommandSource>literal("on").executes(context -> check(context, true)))
+                                .then(LiteralArgumentBuilder.<FabricClientCommandSource>literal("off").executes(context -> check(context, false))))));
         // /jegturret: the riding vehicle's turret as this client draws it, and the seat, for play-tests.
         ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) -> dispatcher.register(
                 LiteralArgumentBuilder.<FabricClientCommandSource>literal("jegturret").executes(context -> {
@@ -100,6 +113,30 @@ public final class DevKeysClient implements ClientModInitializer {
     private static final java.util.List<Integer> FPS_SAMPLES = new java.util.ArrayList<>();
     private static final java.util.List<Long> FRAME_NS_SAMPLES = new java.util.ArrayList<>();
     private static int lastFpsSecond = -1;
+
+    private static int cull(CommandContext<FabricClientCommandSource> context, boolean on) {
+        ttv.migami.jeg.vehicle.client.render.VehicleDrawCulling.set(on);
+        context.getSource().sendFeedback(Component.literal("[jegcull] vehicle draw culling " + (on ? "on" : "off")
+                + " (so far: " + ttv.migami.jeg.vehicle.client.render.VehicleDrawCulling.quadsMasked + " quads masked, "
+                + ttv.migami.jeg.vehicle.client.render.VehicleDrawCulling.evenDraws + " one-light draws)"));
+        return 1;
+    }
+
+    private static int spill(CommandContext<FabricClientCommandSource> context, boolean on) {
+        ttv.migami.jeg.vehicle.client.render.VehicleDrawCulling.spillReuse = on;
+        context.getSource().sendFeedback(Component.literal("[jegcull] lamp-spill reuse " + (on ? "on" : "off")));
+        return 1;
+    }
+
+    private static int check(CommandContext<FabricClientCommandSource> context, boolean on) {
+        ttv.migami.jeg.vehicle.client.render.VehicleDrawCulling.spillCheck = on;
+        String line = "[jegcull] spill check " + (on ? "on" : "off") + ": "
+                + ttv.migami.jeg.vehicle.client.render.VehicleDrawCulling.spillFacesChecked + " faces compared, "
+                + ttv.migami.jeg.vehicle.client.render.VehicleDrawCulling.spillFacesDiffering + " differed";
+        context.getSource().sendFeedback(Component.literal(line));
+        org.slf4j.LoggerFactory.getLogger("jegcull").info(line);
+        return 1;
+    }
 
     private static int fps(CommandContext<FabricClientCommandSource> context) {
         fpsTicksLeft = IntegerArgumentType.getInteger(context, "seconds") * 20;

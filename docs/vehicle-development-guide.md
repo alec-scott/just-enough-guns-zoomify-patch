@@ -407,8 +407,43 @@ hangar was lit wholly as daylight, the half under the roof as bright as the cab 
 interiors are far darker than vanilla's; 2026-11-26). `VehicleVertexLight` gives each vertex of the model and its glass
 the sky light of the block it is in (a vertex inside a solid block takes the brightest open block round it); block
 light stays the renderer's own unless the vertex's block is brighter, so the FSV-6's room lamp and LambDynamicLights
-still light the whole vehicle. A layer that draws the model again with `passInfo.packedLight()` should wrap its buffer
-in `VehicleVertexLight.wrap` the same way.
+still light the whole vehicle. A layer that draws the model again with `passInfo.packedLight()` should take its buffer
+and light from `VehicleVertexLight.begin(...)` the same way (and call `end()` after); only the main pass, which draws the
+whole model, calls `endWholeModel()`.
+
+**Draw only what can be seen (2026-11-26).** Measured in the pack client with the ArmourTest fleet in view on an RTX
+3080 at 1440p: 161 fps with no vehicles near, 52 with about twenty in view under Photon (13 ms a frame; Photon's entity
+shadows were 6 of it, now off by default in the pack's Photon fork), and 126 against 515 without shaders, where the CPU
+sets the pace and the per-vertex light lookups were 18% of the render thread. So the renderer leaves out what changes
+nothing on screen (`VehicleDrawCulling`; `/jegcull on|off` in the dev client for `/jegfps` A/B runs):
+- The glass and glow layers redraw the whole model with a texture that is empty almost everywhere. `QuadMaskConsumer`
+  passes on only quads whose UV area has a pixel with alpha in it (`TextureCoverage`, a grid of 4-pixel cells, widened
+  by a cell each way). A new layer that redraws the model with a sparse texture should be masked the same way.
+  Before that, `VehicleBones.plan` leaves out whole cubes with no face on the texture (and bones with none below them):
+  GeckoLib moved every vertex of a cube before the mask dropped its quads, 10% of the render thread for each layer.
+- The lamp-spill pass (`VehicleLightsLayer.SpillConsumer`) sums only the lights that can reach each face, and works out
+  each corner of a face lit cell by cell once instead of once for each of the up to four cells round it. Same vertices,
+  bit for bit: `/jegcull check on` draws every face both ways and counts any that differ.
+- No per-vertex light in Iris's shadow pass, which keeps depth, not lighting.
+- A vehicle whose last full pass found the same light at every vertex (out in the open) is drawn with that one light,
+  re-checked every 4 ticks and whenever it moves to another block, turns 10 degrees or its own light changes.
+Result, measured 2026-11-26 in the pack client with glass and glow drawing again (see the next paragraph): the
+ArmourTest fleet in view from (0, -51, -38) at noon, `/jegfps 15` alternating `/jegcull on|off`, RTX 3080 at 1440p.
+Stock Photon v1.3b: 46 fps off, 59 on (median frame 20.6 ms to 15.9 ms). The pack's Photon fork, with entity shadows
+off: 82 fps off, 101 on (11.5 ms to 9.0 ms). The mask leaves out 93% of the glass and glow quads.
+The FSV-6 deployed and powered (SupportTest, from (1, -58, -14) at noon, stock Photon) was the worst single vehicle:
+its room lamp keeps the spill pass busy day and night, and that pass was 42% of the render thread. 54 fps off, 82 with
+all of the above (median frame 16.9 ms to 11.2 ms); the spill reuse alone was 63 to 76.
+`VehicleDrawCullingClientGameTest` shoots each glass or glow vehicle with each switch on and off, by day, at night and
+half under a roof. Without shaders the pictures must match exactly; under Photon they are only logged, because two
+shots with everything off already differ in up to 0.5% of pixels (dithering, and the scene drifting between shots).
+The test also fails if the culling never ran, so a pass can't come from it doing nothing.
+
+**Redrawing the model in a layer: draw the children too.** In GeckoLib 5.5 `GeoBone.render` draws only that bone's own
+cubes; its children come from `renderChildren`, and vehicle models keep their cubes in child bones under an empty root.
+The glass and glow layers called `render` on the top-level bones alone, so from the 26.1 port until 2026-11-26 they drew
+nothing: canopies were untinted holes and lamps never glowed. Use `VehicleBones.drawAll(passInfo, pose, consumer, light)`,
+which draws each bone as GeckoLib does (its frame, its cubes, its children).
 
 **Materials and paint:**
 - Real colours, a little weathering, and a separate material per finish: paint, bare steel, rubber, glass, lamps.

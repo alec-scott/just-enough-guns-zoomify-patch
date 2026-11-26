@@ -59,6 +59,7 @@
       "ttv.migami.jeg.gametest.Lav150WheelsClientGameTest",
       "ttv.migami.jeg.gametest.ArmourSandboxSetupClientGameTest",
       "ttv.migami.jeg.gametest.VehicleLookCompareClientGameTest",
+      "ttv.migami.jeg.gametest.VehicleDrawCullingClientGameTest",
       "ttv.migami.jeg.gametest.BulldozerFarSoundClientGameTest",
       "ttv.migami.jeg.gametest.SupportDeployClientGameTest",
       "ttv.migami.jeg.gametest.SupportModulesClientGameTest",

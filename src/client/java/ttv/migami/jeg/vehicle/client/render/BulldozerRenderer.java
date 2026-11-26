@@ -203,11 +203,7 @@ public final class BulldozerRenderer extends AbstractVehicleGeoRenderer<Bulldoze
     }
 
     private static boolean shadowPass() {
-        try {
-            Class<?> api = Class.forName("net.irisshaders.iris.api.v0.IrisApi");
-            return (boolean) api.getMethod("isRenderingShadowPass").invoke(api.getMethod("getInstance").invoke(null));
-        } catch (ReflectiveOperationException absent) {
-            return false; // Iris is optional.
-        }
+        // Iris is optional; the lookup is cached (it was a reflective lookup per call, twice a frame per dozer).
+        return ttv.migami.jeg.client.compat.ShaderPacks.renderingShadowPass();
     }
 }

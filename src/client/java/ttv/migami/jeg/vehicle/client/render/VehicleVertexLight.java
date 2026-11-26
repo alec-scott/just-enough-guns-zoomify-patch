@@ -10,6 +10,7 @@ import net.minecraft.util.Mth;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.LightLayer;
 import net.minecraft.world.phys.Vec3;
+import ttv.migami.jeg.vehicle.entity.base.VehicleEntity;
 
 /**
  * Lights a vehicle's model vertex by vertex. Minecraft draws an entity with one light value, read at its origin, so a
@@ -52,16 +53,103 @@ final class VehicleVertexLight implements VertexConsumer {
         this.cache.defaultReturnValue(-1);
     }
 
+    /** How long (ticks) a vehicle found evenly lit is drawn with that one light before it is looked at vertex by vertex again. */
+    static final int RECHECK_TICKS = 4;
     /**
-     * {@code buffer} lit vertex by vertex, or {@code buffer} itself where per-vertex light doesn't apply: no world (a
-     * vehicle drawn on a screen), or a full-bright draw (the assembling screen, glows).
+     * Vehicles whose last vertex-by-vertex pass found one light everywhere (the usual case, out in the open): drawn with
+     * that light, as GeckoLib draws any entity, until something could have changed it. Render thread only.
      */
-    static VertexConsumer wrap(VertexConsumer buffer, Vec3 camera, int vehicleLight) {
-        Level level = Minecraft.getInstance().level;
-        if (level == null || camera == null || vehicleLight == LightCoordsUtil.FULL_BRIGHT) {
-            return buffer;
+    private static final java.util.Map<VehicleEntity, Even> EVEN = new java.util.WeakHashMap<>();
+
+    /** The light every vertex had, and what it was found under: the vehicle's block, heading and own light. */
+    private record Even(int packed, int untilTick, long blockPos, int heading, int vehicleLight) {
+        boolean holds(VehicleEntity vehicle, int vehicleLight) {
+            return vehicle.tickCount < this.untilTick && vehicleLight == this.vehicleLight
+                    && vehicle.blockPosition().asLong() == this.blockPos && headingStep(vehicle) == this.heading;
         }
-        return new VehicleVertexLight(buffer, level, camera, vehicleLight);
+    }
+
+    /** The heading in 10-degree steps: turning moves the model's vertices into other blocks. */
+    private static int headingStep(VehicleEntity vehicle) {
+        return Mth.floor(Mth.wrapDegrees(vehicle.getYRot()) / 10.0F);
+    }
+
+    /** One draw of a vehicle's model: the buffer to write to and the light to give GeckoLib. */
+    static final class Draw {
+        private final VertexConsumer consumer;
+        private final int light;
+        private final VehicleVertexLight lit;
+        private final VehicleEntity vehicle;
+        private final int vehicleLight;
+
+        private Draw(VertexConsumer consumer, int light, VehicleVertexLight lit, VehicleEntity vehicle, int vehicleLight) {
+            this.consumer = consumer;
+            this.light = light;
+            this.lit = lit;
+            this.vehicle = vehicle;
+            this.vehicleLight = vehicleLight;
+        }
+
+        VertexConsumer consumer() {
+            return this.consumer;
+        }
+
+        int light() {
+            return this.light;
+        }
+
+        /** After a layer's draw (the glass): it only covers part of the model, so it can't say the whole is even. */
+        void end() {
+        }
+
+        /**
+         * After the main pass, which draws the whole model: if every vertex had the same light, remember it for
+         * {@link #RECHECK_TICKS} ticks; otherwise keep lighting vertex by vertex.
+         */
+        void endWholeModel() {
+            if (this.lit == null || this.vehicle == null) {
+                return;
+            }
+            if (this.lit.even()) {
+                EVEN.put(this.vehicle, new Even(this.lit.first, this.vehicle.tickCount + RECHECK_TICKS,
+                        this.vehicle.blockPosition().asLong(), headingStep(this.vehicle), this.vehicleLight));
+            } else {
+                EVEN.remove(this.vehicle);
+            }
+        }
+    }
+
+    /**
+     * How to draw a vehicle's model: lit vertex by vertex, or with one light where that changes nothing. One light is
+     * used for a full-bright draw (the assembling screen), with no world (a vehicle drawn on a screen), in Iris's shadow
+     * pass (which keeps depth, not lighting), and while the vehicle's last full pass found the same light at every
+     * vertex (re-checked every {@link #RECHECK_TICKS} ticks and whenever it moves to another block, turns or its own
+     * light changes). Measured 2026-11-26 without shaders, where the CPU sets the pace: the per-vertex lookups were 18%
+     * of the render thread with the ArmourTest fleet in view.
+     */
+    static Draw begin(VertexConsumer buffer, Vec3 camera, int vehicleLight, VehicleEntity vehicle) {
+        Level level = Minecraft.getInstance().level;
+        if (level == null || camera == null || vehicleLight == LightCoordsUtil.FULL_BRIGHT
+                || VehicleDrawCulling.shadowPassLight && ttv.migami.jeg.client.compat.ShaderPacks.renderingShadowPass()) {
+            return new Draw(buffer, vehicleLight, null, null, vehicleLight);
+        }
+        if (vehicle != null && VehicleDrawCulling.evenLight) {
+            Even even = EVEN.get(vehicle);
+            if (even != null && even.holds(vehicle, vehicleLight)) {
+                VehicleDrawCulling.evenDraws++;
+                return new Draw(buffer, even.packed(), null, null, vehicleLight);
+            }
+        }
+        VehicleVertexLight lit = new VehicleVertexLight(buffer, level, camera, vehicleLight);
+        return new Draw(lit, vehicleLight, lit, vehicle, vehicleLight);
+    }
+
+    /** The first light found this draw, and whether any other was. */
+    private int first = -1;
+    private boolean mixed;
+
+    private boolean even() {
+        return this.first != -1 && !this.mixed;
     }
 
     private int lightAt(float vx, float vy, float vz) {
@@ -95,6 +183,11 @@ final class VehicleVertexLight implements VertexConsumer {
         }
         packed = LightCoordsUtil.pack(Math.max(block, this.vehicleBlock), sky);
         this.cache.put(key, packed);
+        if (this.first == -1) {
+            this.first = packed;
+        } else if (packed != this.first) {
+            this.mixed = true;
+        }
         return packed;
     }
 

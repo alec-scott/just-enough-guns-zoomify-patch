@@ -275,17 +275,8 @@ final class VehicleLightsLayer<T extends VehicleEntity> extends GeoRenderLayer<T
                         PoseStack spillPose = new PoseStack();
                         spillPose.last().set(pose);
                         SpillConsumer lit = new SpillConsumer(buffer, lights);
-                        passInfo.renderPosed(() -> {
-                            // As GeckoLib draws a bone: into its frame, its own cubes, then its children (which skip
-                            // whatever the battle damage hides).
-                            for (GeoBone bone : passInfo.model().topLevelBones()) {
-                                spillPose.pushPose();
-                                RenderUtil.prepMatrixForBone(spillPose, bone);
-                                bone.render(passInfo, spillPose, lit, 0x00F000F0, OverlayTexture.NO_OVERLAY, 0xFFFFFFFF);
-                                bone.renderChildren(passInfo, spillPose, lit, 0x00F000F0, OverlayTexture.NO_OVERLAY, 0xFFFFFFFF);
-                                spillPose.popPose();
-                            }
-                        });
+                        // Children skip whatever the battle damage hides.
+                        passInfo.renderPosed(() -> VehicleBones.drawAll(passInfo, spillPose, lit, 0x00F000F0));
                     });
         }
 
@@ -611,9 +602,18 @@ final class VehicleLightsLayer<T extends VehicleEntity> extends GeoRenderLayer<T
         private int overlay;
         private int count;
 
+        /** The lights that can reach the face being drawn (indices into {@link #lights}), on the reuse path. */
+        private final int[] reach;
+        private int reachCount;
+        /** A face lit cell by cell, on the reuse path: its (n + 1) x (n + 1) corner points, each worked out once. */
+        private final float[] gridAt = new float[(MAX_CELLS + 1) * (MAX_CELLS + 1) * 3];
+        private final float[] gridTex = new float[(MAX_CELLS + 1) * (MAX_CELLS + 1) * 2];
+        private final int[] gridLit = new int[(MAX_CELLS + 1) * (MAX_CELLS + 1)];
+
         SpillConsumer(VertexConsumer out, float[][] lights) {
             this.out = out;
             this.lights = lights;
+            this.reach = new int[lights.length];
         }
 
         @Override
@@ -639,35 +639,74 @@ final class VehicleLightsLayer<T extends VehicleEntity> extends GeoRenderLayer<T
             }
         }
 
+        /** At most this many cells along a face's side. */
+        private static final int MAX_CELLS = 16;
+
         private void flush() {
+            if (VehicleDrawCulling.spillCheck) {
+                // Both ways, compared vertex by vertex: the reuse path must write exactly what the full one does.
+                Recorder full = new Recorder();
+                Recorder reused = new Recorder();
+                this.flushTo(full, false);
+                this.flushTo(reused, true);
+                VehicleDrawCulling.spillFacesChecked++;
+                if (!full.sameAs(reused)) {
+                    VehicleDrawCulling.spillFacesDiffering++;
+                }
+                full.replay(this.out);
+                return;
+            }
+            this.flushTo(this.out, VehicleDrawCulling.spillReuse);
+        }
+
+        /**
+         * One face. The full path works out every corner's light from every light. The reuse path (2026-11-26: the FSV-6's
+         * room lamp sent this pass to 42% of the render thread) writes the same vertices with less work: only the lights
+         * that can reach the face are summed (the others add nothing anywhere on it), and a face lit cell by cell works
+         * out each grid point once instead of once for each of the up to four cells round it.
+         */
+        private void flushTo(VertexConsumer target, boolean reuse) {
             float[] p = this.position;
             float edgeU = Mth.sqrt(square(p[3] - p[0]) + square(p[4] - p[1]) + square(p[5] - p[2]));
             float edgeV = Mth.sqrt(square(p[9] - p[0]) + square(p[10] - p[1]) + square(p[11] - p[2]));
-            int n = Math.min(16, Math.max(1, (int) Math.ceil(Math.max(edgeU, edgeV) / SPILL_CELL)));
-            if (n > 1 && this.nearLight(edgeU, edgeV)) {
+            int n = Math.min(MAX_CELLS, Math.max(1, (int) Math.ceil(Math.max(edgeU, edgeV) / SPILL_CELL)));
+            boolean cells = n > 1 && this.nearLight(edgeU, edgeV);
+            if (reuse) {
+                this.gatherReach();
+                if (this.reachCount == 0) {
+                    // No light reaches any point of it: every corner would come out dark, and a dark face isn't drawn.
+                    return;
+                }
+            }
+            if (cells) {
                 // A long face near a light (a cabin's cable run, a ceiling panel) is lit cell by cell: worked out only at
                 // its corners, one end's colour ran its whole length as a neon line, and a panel whose corners were all
                 // out of a lamp's reach stayed black round it (the CH-47's cabin at night, 2026-11-25). The cells are
                 // an n by n grid laid on the face's own two triangles (split along corners 0-2, as it is drawn), so on a
                 // face that isn't flat they stay on the drawn surface: laid on a bilinear patch, they sank behind it in
                 // dark jagged streaks.
-                for (int j = 0; j < n; j++) {
-                    for (int i = 0; i < n; i++) {
-                        this.cell(i / (float) n, j / (float) n, (i + 1) / (float) n, (j + 1) / (float) n);
+                if (reuse) {
+                    this.grid(target, n);
+                } else {
+                    for (int j = 0; j < n; j++) {
+                        for (int i = 0; i < n; i++) {
+                            this.cell(target, i / (float) n, j / (float) n, (i + 1) / (float) n, (j + 1) / (float) n);
+                        }
                     }
                 }
                 return;
             }
             boolean any = false;
             for (int i = 0; i < 4; i++) {
-                this.colour[i] = this.light(p[i * 3], p[i * 3 + 1], p[i * 3 + 2]);
+                this.colour[i] = reuse ? this.shade(p[i * 3], p[i * 3 + 1], p[i * 3 + 2], this.reach, this.reachCount)
+                        : this.light(p[i * 3], p[i * 3 + 1], p[i * 3 + 2]);
                 any |= (this.colour[i] >>> 24) > 1;
             }
             if (!any) {
                 return;
             }
             for (int i = 0; i < 4; i++) {
-                this.out.addVertex(p[i * 3], p[i * 3 + 1], p[i * 3 + 2],
+                target.addVertex(p[i * 3], p[i * 3 + 1], p[i * 3 + 2],
                         this.colour[i], this.uv[i * 2], this.uv[i * 2 + 1], this.overlay, 0x00F000F0,
                         this.normal[0], this.normal[1], this.normal[2]);
             }
@@ -693,36 +732,109 @@ final class VehicleLightsLayer<T extends VehicleEntity> extends GeoRenderLayer<T
             return false;
         }
 
-        /** One cell of the face, from (u0, v0) to (u1, v1) across it (corners 0-1 along u, 0-3 along v). */
-        private void cell(float u0, float v0, float u1, float v1) {
+        /**
+         * The lights that may reach some point drawn for this face, in their order. Every point drawn lies among the
+         * face's corners (a cell's corners are on its two triangles), pulled toward the camera by at most 0.1% of its
+         * distance ({@link #point}): so within the farthest corner's distance of the face's middle, plus that 0.1%, plus a
+         * margin for rounding. A light farther than that plus its radius adds nothing at any of them.
+         */
+        private void gatherReach() {
+            float[] p = this.position;
+            float cx = (p[0] + p[3] + p[6] + p[9]) * 0.25F;
+            float cy = (p[1] + p[4] + p[7] + p[10]) * 0.25F;
+            float cz = (p[2] + p[5] + p[8] + p[11]) * 0.25F;
+            float corner = 0.0F;
+            float far = 0.0F;
+            for (int k = 0; k < 4; k++) {
+                corner = Math.max(corner, square(p[k * 3] - cx) + square(p[k * 3 + 1] - cy) + square(p[k * 3 + 2] - cz));
+                far = Math.max(far, square(p[k * 3]) + square(p[k * 3 + 1]) + square(p[k * 3 + 2]));
+            }
+            float margin = Mth.sqrt(corner) + 0.001F * Mth.sqrt(far) + 0.01F;
+            int count = 0;
+            for (int k = 0; k < this.lights.length; k++) {
+                float[] light = this.lights[k];
+                float reach = light[7] + margin;
+                if (square(light[0] - cx) + square(light[1] - cy) + square(light[2] - cz) < reach * reach) {
+                    this.reach[count++] = k;
+                }
+            }
+            this.reachCount = count;
+        }
+
+        /** The cells of a face, as {@link #cell} draws them one by one, from a grid of corner points each lit once. */
+        private void grid(VertexConsumer target, int n) {
+            int side = n + 1;
+            for (int j = 0; j <= n; j++) {
+                for (int i = 0; i <= n; i++) {
+                    int q = j * side + i;
+                    this.point(i / (float) n, j / (float) n, this.gridAt, q * 3, this.gridTex, q * 2);
+                    this.gridLit[q] = this.shade(this.gridAt[q * 3], this.gridAt[q * 3 + 1], this.gridAt[q * 3 + 2],
+                            this.reach, this.reachCount);
+                }
+            }
+            for (int j = 0; j < n; j++) {
+                for (int i = 0; i < n; i++) {
+                    int q0 = j * side + i;
+                    int q1 = q0 + 1;
+                    int q2 = q0 + side + 1;
+                    int q3 = q0 + side;
+                    if ((this.gridLit[q0] >>> 24) <= 1 && (this.gridLit[q1] >>> 24) <= 1
+                            && (this.gridLit[q2] >>> 24) <= 1 && (this.gridLit[q3] >>> 24) <= 1) {
+                        continue;
+                    }
+                    this.gridVertex(target, q0);
+                    this.gridVertex(target, q1);
+                    this.gridVertex(target, q2);
+                    this.gridVertex(target, q3);
+                }
+            }
+        }
+
+        private void gridVertex(VertexConsumer target, int q) {
+            target.addVertex(this.gridAt[q * 3], this.gridAt[q * 3 + 1], this.gridAt[q * 3 + 2], this.gridLit[q],
+                    this.gridTex[q * 2], this.gridTex[q * 2 + 1], this.overlay, 0x00F000F0,
+                    this.normal[0], this.normal[1], this.normal[2]);
+        }
+
+        /**
+         * The point (s, t) across the face (s along corners 0-1, t along 0-3) on its two triangles, a hair toward the
+         * camera (positions are camera-relative), so the wash never loses the depth test to the face it lights; and its
+         * texture coordinates.
+         */
+        private void point(float s, float t, float[] at, int a, float[] tex, int b) {
+            // On triangle (0, 1, 2) below the diagonal, (0, 2, 3) above it.
+            float w0;
+            float w1;
+            float w2;
+            float w3;
+            if (s >= t) {
+                w0 = 1 - s;
+                w1 = s - t;
+                w2 = t;
+                w3 = 0;
+            } else {
+                w0 = 1 - t;
+                w1 = 0;
+                w2 = s;
+                w3 = t - s;
+            }
+            for (int c = 0; c < 3; c++) {
+                at[a + c] = (w0 * this.position[c] + w1 * this.position[3 + c] + w2 * this.position[6 + c] + w3 * this.position[9 + c]) * 0.999F;
+            }
+            for (int c = 0; c < 2; c++) {
+                tex[b + c] = w0 * this.uv[c] + w1 * this.uv[2 + c] + w2 * this.uv[4 + c] + w3 * this.uv[6 + c];
+            }
+        }
+
+        /** One cell of the face, from (u0, v0) to (u1, v1) across it (corners 0-1 along u, 0-3 along v): the full path. */
+        private void cell(VertexConsumer target, float u0, float v0, float u1, float v1) {
             float[][] corners = {{u0, v0}, {u1, v0}, {u1, v1}, {u0, v1}};
             float[] at = new float[12];
             float[] tex = new float[8];
             int[] lit = new int[4];
             boolean any = false;
             for (int k = 0; k < 4; k++) {
-                float s = corners[k][0], t = corners[k][1];
-                // On triangle (0, 1, 2) below the diagonal, (0, 2, 3) above it.
-                float w0, w1, w2, w3;
-                if (s >= t) {
-                    w0 = 1 - s;
-                    w1 = s - t;
-                    w2 = t;
-                    w3 = 0;
-                } else {
-                    w0 = 1 - t;
-                    w1 = 0;
-                    w2 = s;
-                    w3 = t - s;
-                }
-                for (int c = 0; c < 3; c++) {
-                    // A hair toward the camera (positions are camera-relative), so the wash never loses the depth test
-                    // to the face it lights.
-                    at[k * 3 + c] = (w0 * this.position[c] + w1 * this.position[3 + c] + w2 * this.position[6 + c] + w3 * this.position[9 + c]) * 0.999F;
-                }
-                for (int c = 0; c < 2; c++) {
-                    tex[k * 2 + c] = w0 * this.uv[c] + w1 * this.uv[2 + c] + w2 * this.uv[4 + c] + w3 * this.uv[6 + c];
-                }
+                this.point(corners[k][0], corners[k][1], at, k * 3, tex, k * 2);
                 lit[k] = this.light(at[k * 3], at[k * 3 + 1], at[k * 3 + 2]);
                 any |= (lit[k] >>> 24) > 1;
             }
@@ -730,16 +842,23 @@ final class VehicleLightsLayer<T extends VehicleEntity> extends GeoRenderLayer<T
                 return;
             }
             for (int k = 0; k < 4; k++) {
-                this.out.addVertex(at[k * 3], at[k * 3 + 1], at[k * 3 + 2], lit[k], tex[k * 2], tex[k * 2 + 1], this.overlay,
+                target.addVertex(at[k * 3], at[k * 3 + 1], at[k * 3 + 2], lit[k], tex[k * 2], tex[k * 2 + 1], this.overlay,
                         0x00F000F0, this.normal[0], this.normal[1], this.normal[2]);
             }
         }
 
+        /** The colour and strength of the light at a point, from every light. */
         private int light(float x, float y, float z) {
+            return this.shade(x, y, z, null, this.lights.length);
+        }
+
+        /** The light at a point from the first {@code count} lights, or those listed in {@code only}, in that order. */
+        private int shade(float x, float y, float z, int[] only, int count) {
             float r = 0.0F;
             float g = 0.0F;
             float b = 0.0F;
-            for (float[] light : this.lights) {
+            for (int k = 0; k < count; k++) {
+                float[] light = this.lights[only == null ? k : only[k]];
                 float dx = light[0] - x;
                 float dy = light[1] - y;
                 float dz = light[2] - z;
@@ -767,6 +886,99 @@ final class VehicleLightsLayer<T extends VehicleEntity> extends GeoRenderLayer<T
                     | (Math.round(r / max * 255.0F) << 16)
                     | (Math.round(g / max * 255.0F) << 8)
                     | Math.round(b / max * 255.0F);
+        }
+
+        @Override
+        public VertexConsumer addVertex(float x, float y, float z) {
+            return this;
+        }
+
+        @Override
+        public VertexConsumer setColor(int r, int g, int b, int a) {
+            return this;
+        }
+
+        @Override
+        public VertexConsumer setColor(int argb) {
+            return this;
+        }
+
+        @Override
+        public VertexConsumer setUv(float u, float v) {
+            return this;
+        }
+
+        @Override
+        public VertexConsumer setUv1(int u, int v) {
+            return this;
+        }
+
+        @Override
+        public VertexConsumer setUv2(int u, int v) {
+            return this;
+        }
+
+        @Override
+        public VertexConsumer setNormal(float x, float y, float z) {
+            return this;
+        }
+
+        @Override
+        public VertexConsumer setLineWidth(float width) {
+            return this;
+        }
+    }
+
+    /** The vertices a draw wrote, to compare two ways of drawing the same thing (VehicleDrawCulling.spillCheck). */
+    private static final class Recorder implements VertexConsumer {
+        private float[] floats = new float[8 * 64];
+        private int[] ints = new int[3 * 64];
+        private int count;
+
+        @Override
+        public void addVertex(float x, float y, float z, int argb, float u, float v, int overlay, int light,
+                              float nx, float ny, float nz) {
+            if ((this.count + 1) * 8 > this.floats.length) {
+                this.floats = java.util.Arrays.copyOf(this.floats, this.floats.length * 2);
+                this.ints = java.util.Arrays.copyOf(this.ints, this.ints.length * 2);
+            }
+            int f = this.count * 8;
+            int i = this.count * 3;
+            this.floats[f] = x;
+            this.floats[f + 1] = y;
+            this.floats[f + 2] = z;
+            this.floats[f + 3] = u;
+            this.floats[f + 4] = v;
+            this.floats[f + 5] = nx;
+            this.floats[f + 6] = ny;
+            this.floats[f + 7] = nz;
+            this.ints[i] = argb;
+            this.ints[i + 1] = overlay;
+            this.ints[i + 2] = light;
+            this.count++;
+        }
+
+        /** The same vertices, bit for bit, in the same order. */
+        boolean sameAs(Recorder other) {
+            if (this.count != other.count) {
+                return false;
+            }
+            for (int k = 0; k < this.count * 8; k++) {
+                if (Float.floatToRawIntBits(this.floats[k]) != Float.floatToRawIntBits(other.floats[k])) {
+                    return false;
+                }
+            }
+            return java.util.Arrays.equals(this.ints, 0, this.count * 3, other.ints, 0, this.count * 3);
+        }
+
+        void replay(VertexConsumer out) {
+            for (int k = 0; k < this.count; k++) {
+                int f = k * 8;
+                int i = k * 3;
+                out.addVertex(this.floats[f], this.floats[f + 1], this.floats[f + 2], this.ints[i], this.floats[f + 3],
+                        this.floats[f + 4], this.ints[i + 1], this.ints[i + 2], this.floats[f + 5], this.floats[f + 6],
+                        this.floats[f + 7]);
+            }
         }
 
         @Override

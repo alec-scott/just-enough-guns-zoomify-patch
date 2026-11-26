@@ -146,6 +146,7 @@ public final class DefaultVehicleResource {
             @Override
             public void onResourceManagerReload(ResourceManager resourceManager) {
                 EXISTS_CACHE.clear();
+                TextureCoverage.clear();
                 cachedResourceManager = resourceManager;
             }
         };
