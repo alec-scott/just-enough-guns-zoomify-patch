@@ -1369,8 +1369,10 @@ public final class VehicleHudOverlay {
     }
 
     private static boolean hasWeaponSelectorHud(VehicleEntity vehicle) {
+        // A land vehicle's single gun is listed too (the 12.7 mm technical's gunner saw no rounds left, 2026-11-26).
         return vehicle.hasVehicleWeapons() && (vehicle.hasFocusedDriverSightHud() || vehicle.vehicleData().defaults().weapons().size() > 1
-                || vehicle.vehicleData().defaults().vehicleType() == VehicleType.BOAT);
+                || vehicle.vehicleData().defaults().vehicleType() == VehicleType.BOAT
+                || vehicle.vehicleData().defaults().vehicleType() == VehicleType.LAND);
     }
 
     private static boolean isFocusedVehicleSight(VehicleEntity vehicle) {

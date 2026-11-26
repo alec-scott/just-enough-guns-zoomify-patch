@@ -255,6 +255,7 @@ public final class VehicleAssemblingScreen extends AbstractContainerScreen<Vehic
 
     /** The order within each category: light to heavy, utility last. */
     private static final List<String> ORDER = List.of(
+            "pickup", "pickup_hmg", "pickup_rocket", "pickup_tow",
             "lav150", "bmp2", "yx100", "plz05", "truck", "bulldozer",
             "ah6", "mi28", "ch47", "tom6", "a10",
             "speedboat",

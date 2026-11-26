@@ -311,6 +311,14 @@ abstract class AbstractVehicleGeoRenderer<T extends VehicleEntity> extends GeoEn
         if (wheels != null) {
             updateWheels(vehicle, wheels, partialTick, snapshots);
         }
+        if (vehicle.vehicleDataId().getPath().startsWith("pickup")) {
+            // The cab doors swing out on their front hinges while someone boards or leaves (design/pickup/rig.json).
+            float doors = VehicleDoors.open(vehicle, partialTick) * 65.0F * Mth.DEG_TO_RAD;
+            // Each swings out: the left door (+X) by a negative turn in GeckoLib's mirrored frame (positive swung it into
+            // the cab, the user's review, 2026-11-26).
+            swingAboutHinge(snapshots, "door_left", -doors, PICKUP_DOOR_PIVOT_X, PICKUP_DOOR_PIVOT_Z, PICKUP_DOOR_HINGE_X, PICKUP_DOOR_HINGE_Z);
+            swingAboutHinge(snapshots, "door_right", doors, -PICKUP_DOOR_PIVOT_X, PICKUP_DOOR_PIVOT_Z, -PICKUP_DOOR_HINGE_X, PICKUP_DOOR_HINGE_Z);
+        }
         switch (vehicle.vehicleDataId().getPath()) {
             case "ah6" -> updateHelicopterRotors(vehicle, partialTick, snapshots);
             case "ch47" -> Ch47Renderer.pose(vehicle, partialTick, snapshots);
@@ -412,6 +420,14 @@ abstract class AbstractVehicleGeoRenderer<T extends VehicleEntity> extends GeoEn
                     updateMortar(mortar, partialTick, snapshots);
                 }
             }
+            case "pickup_hmg" -> updateTurret(vehicle, partialTick, snapshots, -30.0F, 60.0F);
+            case "pickup_tow" -> {
+                updateTurret(vehicle, partialTick, snapshots, -20.0F, 20.0F);
+                hideIf(snapshots, "missile", weaponSlotAmmo(vehicle, "vehicle_tow_missile") < 1);
+                var mc = net.minecraft.client.Minecraft.getInstance();
+                hideIf(snapshots, "sight", mc.player != null && vehicle.passengerForSeat(ttv.migami.jeg.vehicle.entity.PickupTowEntity.GUNNER_SEAT) == mc.player
+                        && mc.options.getCameraType().isFirstPerson());
+            }
             case "tow" -> {
                 updateTurret(vehicle, partialTick, snapshots, -40.0F, 40.0F);
                 // The round shows in the tube while one is loaded.
@@ -429,10 +445,10 @@ abstract class AbstractVehicleGeoRenderer<T extends VehicleEntity> extends GeoEn
                         float recoil = gun.recoilPixels(barrel, partialTick);
                         snapshots.ifPresent(bones.get(barrel), snapshot -> snapshot.setTranslateZ(recoil));
                     }
-                    if (gun instanceof ttv.migami.jeg.vehicle.entity.Type63Entity type63) {
+                    if (gun instanceof ttv.migami.jeg.vehicle.entity.RocketPodEntity pod) {
                         // The tubes empty in order: rockets show only in the tubes still loaded.
-                        int fired = ttv.migami.jeg.vehicle.entity.Type63Entity.TUBES - type63.rocketsLoaded();
-                        for (int tube = 0; tube < ttv.migami.jeg.vehicle.entity.Type63Entity.TUBES; tube++) {
+                        int fired = ttv.migami.jeg.vehicle.entity.RocketPodEntity.TUBES - pod.rocketsLoaded();
+                        for (int tube = 0; tube < ttv.migami.jeg.vehicle.entity.RocketPodEntity.TUBES; tube++) {
                             hideIf(snapshots, "rocket_" + (tube + 1), tube < fired);
                         }
                         // The handwheels turn as the mount is laid: several turns over the elevation and traverse.
@@ -546,7 +562,11 @@ abstract class AbstractVehicleGeoRenderer<T extends VehicleEntity> extends GeoEn
             "bmp2", new String[]{"hull", "None_part_1"},
             "plz05", new String[]{"base"},
             "yx100", new String[]{"hull"},
-            "lav150", new String[]{"hull"});
+            "lav150", new String[]{"hull"},
+            "pickup", new String[]{"body"},
+            "pickup_hmg", new String[]{"body"},
+            "pickup_rocket", new String[]{"body"},
+            "pickup_tow", new String[]{"body"});
     /** The sprung bones' pivots (file pixels), where a second bone must turn about the hull's. */
     private static final java.util.Map<String, org.joml.Vector3f> SPRUNG_PIVOTS = java.util.Map.of(
             "bmp2/hull", new org.joml.Vector3f(0.0F, 11.64998F, 8.2125F),
@@ -788,6 +808,10 @@ abstract class AbstractVehicleGeoRenderer<T extends VehicleEntity> extends GeoEn
      * pivot P and is moved by (I - R)(H - P), so it turns about the hinge H instead. Coordinates are GeckoLib's (model
      * pixels with X mirrored from the Bedrock file), x and z only.
      */
+    /** The pickup's left door: its bone's pivot and the hinge at its front outer edge (model px, design/pickup/rig.json). */
+    private static final float PICKUP_DOOR_PIVOT_X = 13.765F, PICKUP_DOOR_PIVOT_Z = -22.144F;
+    private static final float PICKUP_DOOR_HINGE_X = 14.4F, PICKUP_DOOR_HINGE_Z = -23.25F;
+
     private static void swingAboutHinge(com.geckolib.renderer.base.BoneSnapshots snapshots, String bone, float angle,
                                         float pivotX, float pivotZ, float hingeX, float hingeZ) {
         if (angle == 0.0F) {

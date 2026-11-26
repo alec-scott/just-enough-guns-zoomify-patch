@@ -25,6 +25,10 @@ public final class VehicleAssemblyRecipeManager {
     private static final Identifier TEST_WHEEL_RECIPE = Reference.id("test_wheel_vehicle");
     private static final Set<Identifier> ENABLED_ASSEMBLY_VEHICLES = Set.of(
             Reference.id("lav150"),
+            Reference.id("pickup"),
+            Reference.id("pickup_hmg"),
+            Reference.id("pickup_rocket"),
+            Reference.id("pickup_tow"),
             Reference.id("bmp2"),
             Reference.id("truck"),
             Reference.id("bulldozer"),

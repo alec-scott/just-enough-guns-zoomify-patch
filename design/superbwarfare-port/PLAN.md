@@ -56,9 +56,58 @@ projectile renderers. The mortar shell is the one round model kept: it is loaded
 | Type-63 107 mm MLRS (towed) | refit | scale ~0.78; name 100 generic bones |
 | PLZ-05 155 mm SPH | refit | scale ~0.77; names |
 | YX-100 MBT | **refit** (was remodel) | scale 0.74, SBW's look kept as a science-fiction exception; main gun, coax, weapon station, the shared track driver |
+| AC-130H gunship (6 seats) | candidate, not started | triage; 105 mm, 40 mm and 25 mm cannons (AP and HE) |
+| M1A2 MBT (5 seats) | candidate, not started | triage; main gun (AP, HE, third type), .50 cal, 7.62 mm coax. Overlaps the YX-100's role |
+| T-90A MBT (3 seats) | candidate, not started | triage; main gun (AP, HE, third type), .50 cal, coax. Overlaps the YX-100's role |
+| ZTZ-99A MBT (5 seats) | candidate, not started | triage; main gun (AP, HE, third type), .50 cal, 5.8 mm coax. Overlaps the YX-100's role |
+| M2 Bradley IFV (7 seats) | candidate, not started | triage; 25 mm (AP, HE, third type), coax, TOW. Overlaps the BMP-2's role |
+| LAV-25 (5 seats) | candidate, not started | triage; 25 mm, coax, TOW (the Bradley's weapons) |
+| LAV-AD anti-air (5 seats) | candidate, not started | triage; 25 mm anti-air cannon, Stinger missiles |
+| Ju-87 Stuka dive bomber (2 seats) | candidate, not started | triage; 7.92 mm MG 17, SC 50 and SC 250 bombs |
+| J-16 fighter (2 seats) | candidate, **wait until upstream finishes it** | unfinished upstream (no English name yet); 30 mm GAU-8 cannon, AGM-65 |
+| "Sodayo TenEven9" pickup technical (2–8 seats, four versions) | **being built** (2026-11-26, [../pickup/BRIEF.md](../pickup/BRIEF.md)) | refit at 0.76 as the 4x4 pickup and three technicals (12.7 mm, 107 mm pod, TOW on a pedestal); SBW's memes taken out |
+| Kirov Airship (4 seats) | candidate, not started; **kept by the user as an exception** (2026-11-20) | triage; bombs, 4000 HP. A Red Alert unit, kept although the Prism Tank stays out |
+| KV-16 Ghost Fighter (8 seats) | candidate, not started; **kept by the user as an exception** (2026-11-20) | triage; .50 cal, mortar shells. Fictional, like the YX-100 |
+
+The candidates above came from upstream after our pin (compared 2026-11-20, see below).
+
+**Started 2026-11-26** (the user: "begin porting in the other pending vehicles and normalise and improve them as per
+the aesthetic vehicle guidelines"). The candidates come from a second pin, the Fabric port's `1.21-Fabric` branch at
+`c5189d1` (2026-11-25): `fetch_sbw.py --pin 2026-11`, which maps its moved asset layout back to the old one. Triage
+renders and measurements of all fourteen candidate models are in the session's scratch folder; the figures that set
+each refit are below.
+
+| Candidate | Measured (blocks, W × H × L) | Real | Scale | Notes |
+| --- | --- | --- | --- | --- |
+| Pickup (four versions) | 3.03 × 2.4 × 6.84 | 5.22 m long | 0.76 | memes taken out (figurine, name, plates) |
+| Ju-87 | span 12.95, length 10.48 | span 13.8 m, length 11.1 m | ~1.0 | close to 1:1 already |
+| LAV-25, LAV-AD | 3.3 × 5.6 × 8.0 | 2.5 × 6.4 m | ~0.8 | the LAV-AD's Stingers as the Igla's guidance |
+| M2 Bradley | 3.74 × 5.37 × 8.08 | 3.6 × 6.55 m | ~0.81 | TOW pod: the TOW's wire guidance |
+| M1A2, T-90A, ZTZ-99A | 4.6 × 5.5 × 12–14 | 3.5–3.7 m wide | ~0.78 | all three beside the YX-100 (the user, 2026-11-26) |
+| AC-130H | span 56.2, length 42.7 | span 40.4 m, length 29.8 m | ~0.72 | side-firing guns: a new orbit-and-fire mode |
+| Kirov | 27.6 × 35.8 × 50.4 | fictional | keep | an airship: a new flight model |
+| KV-16 | 1.69 × 1.26 × 1.97 | fictional | keep | a small toy-like biplane drone with two guns |
+
+Order, by what each reuses: the pickup first (every system exists), then the LAV-25 and LAV-AD (the LAV hull, the
+autocannon, the Igla's seeker), the Bradley (the BMP-2's tracks and turret, the TOW), the Ju-87 (the bush plane's
+flight, bombs), the AC-130H, then the three MBTs, and the Kirov and KV-16 last.
 
 Out: Mle1934 (dropped at triage), all standalone explosives, Prism Tank (a Command & Conquer unit), Annihilator and
-swarm drone (sci-fi), wheelchair and "Beast Senpai" (memes), mounting guns on Create-built ships.
+swarm drone (sci-fi), wheelchair, "Beast Senpai", Air Sheep and Happiest Ghast (memes and jokes), FH-77BW Archer
+(a second self-propelled howitzer; the PLZ-05 and Create Big Cannons cover it; user, 2026-11-20), Tiny Speedboat
+(an unarmed boat; jegn's speedboat covers it), mounting guns on Create-built ships.
+
+### Upstream since our pin (checked 2026-11-20)
+
+Our pin is the Fabric port 0.8.8, commit `952d73c` (2026-06-29). Upstream since then:
+
+- **19 new vehicles**: the candidates and the out-of-scope ones listed above.
+- **Removed**: the FPV drone's vehicle code. jegn has its own drone, so nothing changes for us.
+- **Changed**: AH-6, BMP-2, HPJ-11, laser tower, LAV-150, Mi-28 and waveforce tower lost their own classes and are
+  now data files run by one shared `BasicGeoVehicleEntity`. Ours were built from the old code and don't break; this
+  only matters when pulling upstream fixes for them.
+- The upstream Fabric port has caught up (the same 32 vehicle classes), so moving the pin forward needs no separate
+  port step. The SBW permission ([PERMISSION.md](PERMISSION.md)) covers their assets, the new ones included.
 
 **Animations** are those of the vehicles in scope: SBW's state-driven bones (turret, barrel, tracks, wheels, recoil
 shake, weapon station) and the `fire` clips as one-shots.
@@ -157,4 +206,13 @@ chassis), so schedule both plans together rather than running them separately.
 
 ## Open questions
 
-None open at plan level. Per-vehicle questions live in each brief.
+None at plan level. Settled for the upstream candidates (2026-11-26):
+
+- **Which, and in what order:** all of them, the J-16 once upstream finishes it, in the order under "Upstream since
+  our pin" (the user: "begin porting in the other pending vehicles").
+- **The real MBTs:** the M1A2, T-90A and ZTZ-99A join the fleet **beside** the YX-100, which stays (the user,
+  2026-11-26).
+- **The pin:** the candidates come from a second pin (`fetch_sbw.py --pin 2026-11`); the vehicles already ported keep
+  theirs.
+
+Per-vehicle questions live in each brief.

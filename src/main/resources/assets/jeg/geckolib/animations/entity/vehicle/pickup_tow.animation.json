@@ -1,0 +1,13 @@
+{
+  "format_version": "1.8.0",
+  "animations": {
+    "animation.pickup_tow.idle": {
+      "loop": true,
+      "bones": {}
+    },
+    "animation.pickup_tow.rest": {
+      "loop": true,
+      "bones": {}
+    }
+  }
+}

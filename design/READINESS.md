@@ -68,6 +68,7 @@ Each vehicle's status lists the sounds to listen to.
 | A-10 | `a10` | reference; audited 2026-11-18: `A10Flight`, `A10Taxi`, `AircraftNightLights` pass with `-PwithPack` after the fleet-wide changes (HUD, masses, wrecks, sounds); nothing regressed | **Ready for human testing** |
 | AH-6 | `ah6` | reference; audited 2026-11-18: `HelicopterStartup`, `HelicopterWeapons`, `HeliWreck` pass with `-PwithPack` after the fleet-wide changes (HUD, masses, wrecks, sounds); nothing regressed | **Ready for human testing** |
 | Mi-28 | `mi28` | reference; audited 2026-11-18: `HelicopterStartup`, `HelicopterWeapons`, `Mi28GunnerAim`, `HeliWreck` pass with `-PwithPack` after the fleet-wide changes (HUD, masses, wrecks, sounds); nothing regressed | **Ready for human testing** |
+| 4x4 pickup and technicals | `pickup`, `pickup_hmg`, `pickup_rocket`, `pickup_tow` | SBW candidate, pass 1 2026-11-26 ([brief](pickup/BRIEF.md), [status](pickup/IMPLEMENTATION_STATUS.md)): refit at 1:1, lights, real engine, cab and door recordings, doors, weapons played in the pack | In progress |
 | BD-40 | `bulldozer` | reference; lane lock, ripper restock, new HUD (2026-11-17/18); audited 2026-11-18: `BulldozerBank`, `BulldozerCutTurn`, `BulldozerAudio`, `BulldozerLaneLock`, `BulldozerRipperLane` pass with `-PwithPack` after the fleet-wide changes (HUD, masses, wrecks, sounds); nothing regressed | **Ready for human testing** |
 
 ## For the user's test

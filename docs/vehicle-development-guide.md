@@ -115,7 +115,7 @@ tracker is `design/READINESS.md` ("The user's fleet review"); "how" names the sh
 | Damage | **Explosions are the realistic blast** of the A-10 and helicopters (fireball, real smoke column, debris), never the classic JEG burst | all | `RealisticBlast.explode` / `show` |
 | Damage | **Smoke looks like smoke** (soft, volumetric, drifting) and never hides the target from its own gunner | LAV-150, Type-63 | rockets blow their smoke out behind the launcher (`ShellGunEntity.fireShell`); smoke screens (dischargers, grenades, smoke shells) are one billowing lit cloud per canister (`SmokeScreenPayload` -> `MissileBlastRenderer`'s smoke), never vanilla campfire smoke. **All other vehicle smoke and flame** (damage by hull left, burning wrecks, jet trails, gun gas, exhausts, flare trails) goes through `SmokeFx.emit` (kinds GREY, DARK, BLACK, FIRE, WHITE); a shell gun's muzzle blast and barrel wisps are drawn from its `GunReportPayload` (`MissileBlastRenderer.gunFired`). No `ParticleTypes.*SMOKE*` or campfire smoke on a vehicle (`SmokeFxClientGameTest`) |
 | HUD | **Cards hold their size**: a card never shrinks back after a reading grows it, numbers have a digit of headroom, numbers sit against the right edge (`HudPanel`); F1 hides the vehicle HUD | all | `HudPanel.width`, `numeric` |
-| HUD | **Minimal and single**: show only what this seat needs now, each fact once; readouts in fixed-width cards (the m/s card grew with its digits); nothing flashes; every mark on screen is explained by its shape (the yellow bore marker was not) | all | `VehicleHudOverlay`: one status card headed by the vehicle's name (the user wants the name kept, 2026-11-19) with `HudPanel.reading` rows (a speed under bars reads in the bars' column, `readingAfterBars`: set against the card's edge it sat apart, 2026-11-26), the weapon list for weapons, the crew list only when it matters, the bore marker a ring labelled GUN; switches drawn in the HUD style, never vanilla buttons |
+| HUD | **Minimal and single**: show only what this seat needs now, each fact once; readouts in fixed-width cards (the m/s card grew with its digits); nothing flashes; every mark on screen is explained by its shape (the yellow bore marker was not) | all | `VehicleHudOverlay`: one status card headed by the vehicle's name (the user wants the name kept, 2026-11-19) with `HudPanel.reading` rows (a speed under bars reads in the bars' column, `readingAfterBars`: set against the card's edge it sat apart, 2026-11-26), the weapon list for weapons (a land vehicle's single gun too: the 12.7 mm technical's gunner saw no rounds left, 2026-11-26), the crew list only when it matters, the bore marker a ring labelled GUN; switches drawn in the HUD style, never vanilla buttons |
 | Interaction | **The helm has live instruments**, in the vehicle's own style, as the helicopters' cockpits do: no blank dash | speedboat | `SpeedboatCockpitLayer` (textures `design/speedboat/make_console.py`); draw in the dash's own bone frame (`inDash`), or it sinks into the dash when the hull pitches |
 | Interaction | **A right-click on any visible part boards it, every time**, whatever is in hand | all | the gun mod's own right-click (aim) never swallows a click on a vehicle (`FabricClientBootstrap` UseEntityCallback) |
 | Defences | **Automatic mode is a visible switch** (the hold's screen, the HUD's key chip), heard when thrown, engages hostile mobs only (a monster's mount included: a chicken jockey) and needs no ammunition; a mounted gun on a crewed vehicle gets one too, for when nobody is at it | HPJ-11, sentry, speedboat | `VehicleMenu.BUTTON_TOGGLE_AUTO` and the screen's switch; `AutoDefenceEntity.unmannedFireIsFree`; `Hpj11Entity.targetPriority` takes hostile mobs after air threats |
@@ -878,6 +878,28 @@ across the cabin floor. Check every pose in game.
   moves, played by the client from the synced angle (`Ch47CabinAudio`); track the last angle yourself, since the
   entity's own "previous" value is overwritten by the time the client's tick sees it. Add a lock clunk at each stop, a
   slide at the start, and a latch or step thud when the motion completes. Don't use vanilla door or piston sounds.
+
+### Technicals: weapons in a pickup's bed (2026-11-26)
+
+The 4x4 pickup and its three technicals (`design/pickup/`) are the worked example of a light civilian chassis carrying a
+weapon:
+- **Clear the cab at the lowest forward elevation.** A weapon low in the bed fires into its own roof when laid ahead.
+  SBW's TOW stood its tripod on the bed floor, its tube 0.26 blocks under the roof: the refit puts it on a pedestal half
+  a block up (`refit.py raise_tow`). The rocket pod lays from 10 degrees up, where a ripple over the cab clears it.
+  `PickupClientGameTest` fires both straight ahead and checks the truck takes no damage.
+- **A driver who drives keeps the cab's view.** A seat whose `zoom_camera` has `use_fixed_camera_pos` always looks
+  through that camera in first person. The rocket technical's driver lays the pod from the cab, by the fire-control
+  panel, so their seat has no fixed camera; the standing gunners at the 12.7 mm and the TOW have one at their sight.
+- **A real-size cab is lower than a seated Minecraft body.** The pickup's cab is 1.2 blocks inside, and a seated
+  player is about 1.4 tall from the hips up. Put the seat where the eye sits at a real seated height (about 1.35 above
+  the ground in a pickup: seat `y` -0.25 with the floor at 0.53). The legs then sit below the floor, hidden by the doors,
+  and the head stays under the roof from every side.
+- **One engine's recordings for a family.** The four pickups share `sounds/vehicle/pickup/`
+  (`GroundVehicleAudio.soundFamily`), and the cab doors play a real door's latch and slam as they swing.
+- **Take the memes out in the refit.** SBW's pickup carried a meme figurine on its dashboard, its meme name on the
+  doors and tailgate and a meme number plate. `refit.py strip` drops the figurine's bones and the decal faces by the
+  texture region they show, and repaints the badge and plates before the rebake. `rebake_imported(..., boost=)` gives a
+  bone's faces more texels so a plate's lettering stays legible.
 
 ### Retiring a vehicle
 

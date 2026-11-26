@@ -1,0 +1,22 @@
+{
+  "syllabic": {
+    "start": 0.104,
+    "idle": 0.096,
+    "load": 0.113,
+    "cab": 0.136
+  },
+  "catch_seconds": 1.4,
+  "seconds": {
+    "engine_start": 6.0,
+    "engine_start_cab": 6.0,
+    "engine_stop": 3.97,
+    "engine_stop_cab": 3.97,
+    "engine_idle": 16.0,
+    "engine_cab_idle": 16.0,
+    "engine_load": 16.0,
+    "engine_cab": 18.0,
+    "engine_distant": 16.0,
+    "door_open": 1.3,
+    "door_close": 1.1
+  }
+}

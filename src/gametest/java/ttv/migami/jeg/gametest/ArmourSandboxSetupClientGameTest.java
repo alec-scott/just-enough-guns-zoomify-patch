@@ -30,6 +30,7 @@ import ttv.migami.jeg.vehicle.entity.base.VehicleEntity;
  * howitzer and the Type-63), and the mortar and TOW set up, and the HPJ-11 and a sentry at the end of the row. East of
  * it a lake (3 deep, its surface level with the ground) with a sand beach one block high at its far end, and the
  * speedboat on it. West of the row, on a runway south: the bush plane, A-10, AH-6 and Mi-28; north of the lake the BD-40.
+ * Behind the armour, at z -14: the 4x4 pickup and its 12.7 mm, rocket and TOW technicals.
  * The whole fleet, for the user's test of every vehicle together (2026-11-18). Every vehicle is charged and its hold
  * carries full stacks of
  * each ammunition its weapons take. The player carries a spyglass (the observer), mortar rounds, a spare mortar and
@@ -111,7 +112,10 @@ public class ArmourSandboxSetupClientGameTest implements FabricClientGameTest {
         // the A-10, clear of its wing, on the same runway.
         Object[][] others = {
                 {ModEntities.TOM6.get(), -128.5D, 0.5D}, {ModEntities.A10.get(), -112.5D, 0.5D}, {ModEntities.AH6.get(), -92.5D, 0.5D},
-                {ModEntities.MI28.get(), -82.5D, 0.5D}, {ModEntities.BULLDOZER.get(), 76.5D, -26.5D}};
+                {ModEntities.MI28.get(), -82.5D, 0.5D}, {ModEntities.BULLDOZER.get(), 76.5D, -26.5D},
+                // The pickup and its technicals (2026-11-26), a second row behind the armour, facing south.
+                {ModEntities.PICKUP.get(), 4.5D, -14.5D}, {ModEntities.PICKUP_HMG.get(), 12.5D, -14.5D},
+                {ModEntities.PICKUP_ROCKET.get(), 20.5D, -14.5D}, {ModEntities.PICKUP_TOW.get(), 28.5D, -14.5D}};
         for (Object[] entry : others) {
             @SuppressWarnings("unchecked")
             EntityType<? extends VehicleEntity> type = (EntityType<? extends VehicleEntity>) entry[0];

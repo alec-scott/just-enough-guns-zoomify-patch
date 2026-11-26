@@ -1,0 +1,7 @@
+{
+  "format_version": "1.8.0",
+  "animations": {
+    "animation.pickup_rocket.idle": {"loop": true, "bones": {}},
+    "animation.pickup_rocket.rest": {"loop": true, "bones": {}}
+  }
+}

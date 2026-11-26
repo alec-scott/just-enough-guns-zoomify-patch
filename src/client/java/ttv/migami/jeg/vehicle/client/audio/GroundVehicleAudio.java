@@ -29,6 +29,12 @@ import ttv.migami.jeg.vehicle.util.GroundVehicleSounds;
 public final class GroundVehicleAudio {
     private static final Map<Integer, Group> GROUPS = new HashMap<>();
     private static final Map<Integer, Boolean> LAST_RUNNING = new HashMap<>();
+    /**
+     * The pickup's cab doors, heard as they swing (the renderer's VehicleDoors: open over 10 ticks while someone boards
+     * or leaves, held 40, shut over 15): per vehicle, the passenger count last seen and the tick the slam is due.
+     */
+    private static final Map<Integer, int[]> DOORS = new HashMap<>();
+    private static final int DOOR_SLAM_TICKS = 62;
     private static final String[] LOOPS = {"engine_idle", "engine_load", "engine_cab", "engine_cab_idle", "engine_distant", "tracks", "tyres", "hull"};
     private static final double SOUND_SPEED = 343.0D / 20.0D;
     private static final int HISTORY = 70;
@@ -97,6 +103,7 @@ public final class GroundVehicleAudio {
         var seen = new HashSet<Integer>();
         for (var entity : mc.level.entitiesForRendering()) {
             if (!(entity instanceof VehicleEntity vehicle)) continue;
+            if (vehicle.vehicleDataId().getPath().startsWith("pickup")) cabDoors(mc, vehicle);
             GroundVehicleSounds profile = vehicle.groundSounds();
             if (profile == null || distanceSq(vehicle) > AircraftSoundRange.MAX_RANGE * AircraftSoundRange.MAX_RANGE) continue;
             Group group = GROUPS.get(vehicle.getId());
@@ -177,6 +184,10 @@ public final class GroundVehicleAudio {
             var entity = mc.level.getEntity(id);
             return entity == null || entity.isRemoved();
         });
+        DOORS.keySet().removeIf(id -> {
+            var entity = mc.level.getEntity(id);
+            return entity == null || entity.isRemoved();
+        });
     }
 
     /**
@@ -193,6 +204,7 @@ public final class GroundVehicleAudio {
         GROUPS.values().forEach(g -> g.stop(mc));
         GROUPS.clear();
         LAST_RUNNING.clear();
+        DOORS.clear();
     }
 
     /** For game tests: the one-shots (engine_start, engine_stop) a vehicle is playing now, by name. */
@@ -234,10 +246,38 @@ public final class GroundVehicleAudio {
                 || vehicle.vehicleData().amphibious().swims();
     }
 
+    /** Vehicles that share one engine's recordings: the pickup and its technicals. */
+    private static String soundFamily(String id) {
+        return id.startsWith("pickup") ? "pickup" : id;
+    }
+
+    /** A door's latch as the doors swing open for someone boarding or leaving, and its slam as they shut. */
+    private static void cabDoors(Minecraft mc, VehicleEntity vehicle) {
+        int count = vehicle.getPassengers().size();
+        int[] state = DOORS.computeIfAbsent(vehicle.getId(), id -> new int[]{count, Integer.MIN_VALUE});
+        if (count != state[0]) {
+            // Already open (a second person within the hold): no second latch, the slam waits for the last.
+            if (state[1] == Integer.MIN_VALUE) {
+                door(mc, vehicle, "door_open");
+            }
+            state[0] = count;
+            state[1] = vehicle.tickCount + DOOR_SLAM_TICKS;
+        } else if (state[1] != Integer.MIN_VALUE && vehicle.tickCount >= state[1]) {
+            door(mc, vehicle, "door_close");
+            state[1] = Integer.MIN_VALUE;
+        }
+    }
+
+    private static void door(Minecraft mc, VehicleEntity vehicle, String kind) {
+        SoundEvent sound = ModSounds.ALL.get(Reference.id("vehicle." + soundFamily(vehicle.vehicleDataId().getPath()) + "." + kind)).get();
+        mc.level.playLocalSound(vehicle.getX(), vehicle.getY() + 1.0D, vehicle.getZ(), sound, SoundSource.NEUTRAL, 1.0F,
+                0.96F + vehicle.getRandom().nextFloat() * 0.08F, false);
+    }
+
     private static SoundEvent sound(VehicleEntity vehicle, String kind) {
         String id = kind.equals("tracks") ? "vehicle.tracks.clank" : kind.equals("tyres") ? "vehicle.tyres.gravel"
                 : kind.equals("hull") ? "vehicle.water.hull"
-                : "vehicle." + vehicle.vehicleDataId().getPath() + "." + kind;
+                : "vehicle." + soundFamily(vehicle.vehicleDataId().getPath()) + "." + kind;
         return ModSounds.ALL.get(Reference.id(id)).get();
     }
 
