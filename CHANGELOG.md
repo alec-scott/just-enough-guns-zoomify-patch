@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.7.2+mc26.1.2.yftm.26 - 2026-11-26
+
+### Added
+- A 4x4 pickup and three technicals built on it: a 12.7 mm machine gun, a 107 mm rocket pod and a TOW launcher. Cab doors that swing and slam, lights, real engine and cab sounds, and recipes. The TOW sits on a pedestal and the rocket pod lays from 10 degrees, so they fire clear of the cab.
+
+### Changed
+- Vehicles are lit vertex by vertex: a vehicle nosed into a hangar is dark under the roof and lit where it sticks out into daylight, instead of being lit all one way from its centre. Lamps and LambDynamicLights still light the inside.
+- Only white vehicle lamps light the world; coloured position lights and beacons keep their glow without tinting the ground yellow-orange under shaders.
+- Performance: vehicle data, hitboxes and model lookups are cached instead of rebuilt every frame and tick, and the sentry and HPJ-11 stop scanning when already locked on and check the nearest, highest-priority targets first. Less work for both the client and the server with many vehicles around.
+
 ## 1.7.2+mc26.1.2.yftm.24 - 2026-11-20
 
 ### Added
