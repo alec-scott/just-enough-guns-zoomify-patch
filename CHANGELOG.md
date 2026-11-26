@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.7.2+mc26.1.2.yftm.27 - 2026-11-26
+
+### Fixed
+- Mobs riding in a vehicle's cab (the pickup's passenger seat, cockpits) no longer have their heads through the roof: they sit no higher than a player would.
+- Mobs riding in the pickup's bed, and at the technicals' guns, sit on the bed instead of floating above it.
+- The pickup's cab doors open only when someone gets in or out of the cab, not when a gunner climbs into the bed.
+- A rocket ripple's backblast no longer fills the chase camera with smoke; it thins out near the camera and stays full for anyone watching from the side.
+
 ## 1.7.2+mc26.1.2.yftm.26 - 2026-11-26
 
 ### Added
