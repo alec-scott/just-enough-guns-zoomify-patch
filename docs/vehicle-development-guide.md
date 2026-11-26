@@ -1207,7 +1207,27 @@ preview Ogg (`-hq.ogg`, better than the MP3), and drop an original WAV or FLAC i
   pass vanished wherever Voxy LOD terrain was behind it: the A-10's nozzle glow, the cockpit screens (`RenderTypes.eyes`),
   held items' enchantment glint. Fixed in the user's Photon fork (`Marco-Cigna/photon`, branch `yftm`, a backport of
   upstream #609), with a lit enchantment glint. Test vehicle glows against distant ground (from altitude) as well as
-  against the sky.
+  against the sky. The pack takes the fork from its GitHub releases (`photon-yftm.zip`, a fixed name so Iris keeps
+  players' options); a Photon fault goes there, not into a workaround here.
+- **Screens and other `eyes` quads under Photon on 26.1** go through its translucent pass, which lights them as a
+  surface (sun with shadows, sky, block light) and adds their emission on top; they aren't purely emissive as they
+  were before 26.1. In practice the emission wins: the A-10's displays held steady from dawn to dusk under the canopy
+  frame's shadow (2026-11-26). Still check screens at noon and at night, from the seat, and keep their colours deep.
+- **What neither JEG nor Photon can do (don't chase these as bugs).**
+  - *Coloured light from a moving thing.* LambDynamicLights only raises the world's block-light level, which has no
+    colour, and Photon tints it like a torch. A red or green lamp can glow and tint its own airframe (drawn spill), but
+    the ground round it can only be lit warm white, so coloured lamps don't light the world at all (above). Photon's
+    Colored Lights only covers placed blocks and held items; real coloured lamps would need a ray-traced lighting mod
+    such as Photonics, which isn't in the pack.
+  - *Light inside the model.* A walk-in room or cabin is part of the model, not blocks, so the world's light there is
+    the outdoor light at that spot. Interior lamps are drawn and given to the blocks aboard by the vehicle itself
+    (`CabinBlockEffects.light`, the FSV-6's room lamp); keep doing that.
+- **Material maps (LabPBR), not used yet.** Photon reads `_n`/`_s` maps for normals, metal reflections, roughness and
+  emission, but only with its Normal Mapping and Specular Mapping options on, which are off by default and off in the
+  user's settings. For the pack as set up they would change nothing, and every vehicle texture (and every repaint)
+  would need its maps kept in step. Try one only if the pack turns Specular Mapping on for everyone: pilot it on one
+  vehicle (the A-10), compare look and `/jegfps` against the current build, then decide for the fleet. Lamps and
+  screens stay drawn either way, so the look without a shader pack is unchanged.
 - **Frame rate in the pack client.** `/jegfps <seconds>` (`DevKeysClient`) prints the average and slowest second and
   the median and 99th-percentile frame time. Set `inactivityFpsLimit:"minimized"`, `maxFps:260` and
   `enableVsync:false` in `build/run/packClient/options.txt` first: mcpfabric's input doesn't count as a player's, so
