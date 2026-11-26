@@ -210,6 +210,14 @@ public final class SupportVehicleEntity extends VehicleEntity {
     // ---- Hitboxes: the deployed set once the sides are out; while deploying or deployed, only the cab and front
     // wheels make the entity's own box, so the room's floor and walls (shell blocks) take clicks and walking.
 
+    @Override protected int boundsStateKey() {
+        int key = this.isPacked() ? 1 : 0;
+        if (this.deployProgress() >= SupportRig.SLIDES_OUT) {
+            key |= 2;
+        }
+        return key;
+    }
+
     @Override protected List<OBBInfo.Box> obbBoxes() {
         OBBInfo deployed = this.vehicleData().deployedObb();
         if (deployed != null && this.deployProgress() >= SupportRig.SLIDES_OUT) {
@@ -226,10 +234,20 @@ public final class SupportVehicleEntity extends VehicleEntity {
         return this.isPacked() ? this.obbBoxes() : this.cabBoxes();
     }
 
+    private List<OBBInfo.Box> cachedCabSource;
+    private List<OBBInfo.Box> cachedCabBoxes;
+
     private List<OBBInfo.Box> cabBoxes() {
         // The cab and the front wheels are everything ahead of the van body (data +Z is forward).
-        List<OBBInfo.Box> cab = this.obbBoxes().stream().filter(box -> box.z() - box.halfDepth() > 1.5).toList();
-        return cab.isEmpty() ? this.obbBoxes() : cab;
+        List<OBBInfo.Box> source = this.obbBoxes();
+        if (source == this.cachedCabSource && this.cachedCabBoxes != null) {
+            return this.cachedCabBoxes;
+        }
+        List<OBBInfo.Box> cab = source.stream().filter(box -> box.z() - box.halfDepth() > 1.5).toList();
+        List<OBBInfo.Box> result = cab.isEmpty() ? source : cab;
+        this.cachedCabSource = source;
+        this.cachedCabBoxes = result;
+        return result;
     }
 
     @Override public boolean preciseHitbox() { return true; }

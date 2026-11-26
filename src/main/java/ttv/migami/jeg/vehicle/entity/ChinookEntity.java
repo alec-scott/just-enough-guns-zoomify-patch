@@ -679,6 +679,19 @@ public final class ChinookEntity extends VehicleEntity implements CabinVehicle {
      * and keep people out (generate.py's "ramp" and "crew door" rows).
      */
     @Override
+    protected int boundsStateKey() {
+        float angle = this.rampAngle(1.0F);
+        int key = angle < 45.0F ? 1 : 0;
+        if (this.doorOpen(1.0F) > 0.5F) {
+            key |= 2;
+        }
+        if (Math.abs(angle - RAMP_LEVEL) < 3.0F) {
+            key |= 4;
+        }
+        return key;
+    }
+
+    @Override
     protected List<ttv.migami.jeg.vehicle.data.subdata.OBBInfo.Box> obbBoxes() {
         List<ttv.migami.jeg.vehicle.data.subdata.OBBInfo.Box> boxes = super.obbBoxes();
         float angle = this.rampAngle(1.0F);

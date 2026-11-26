@@ -41,6 +41,9 @@ import ttv.migami.jeg.vehicle.data.subdata.VehicleWeaponInfo;
 public final class VehicleDataManager {
     private static final Gson GSON = new Gson();
     private static volatile Map<Identifier, VehicleData> data = defaultsOnly();
+    private static volatile Map<String, VehicleData> dataByString = indexByString(data);
+    private static volatile VehicleData defaultFallback = data.get(DefaultVehicleData.TEST_WHEEL.id());
+    private static volatile int version = 1;
     private static volatile Map<Identifier, String> syncedJson = Map.of();
 
     private VehicleDataManager() {}
@@ -49,8 +52,38 @@ public final class VehicleDataManager {
         return new Loader();
     }
 
+    public static int version() {
+        return version;
+    }
+
     public static VehicleData get(Identifier id) {
-        return data.getOrDefault(id, data.get(DefaultVehicleData.TEST_WHEEL.id()));
+        VehicleData found = data.get(id);
+        return found != null ? found : defaultFallback;
+    }
+
+    /** Fast lookup by serialized id string (avoids parsing an {@link Identifier} on every tick/frame). */
+    public static VehicleData getByString(String id) {
+        VehicleData found = dataByString.get(id);
+        if (found != null) {
+            return found;
+        }
+        return get(Identifier.parse(id));
+    }
+
+    private static void publish(Map<Identifier, VehicleData> loaded) {
+        Map<Identifier, VehicleData> immutable = Map.copyOf(loaded);
+        data = immutable;
+        dataByString = indexByString(immutable);
+        defaultFallback = immutable.get(DefaultVehicleData.TEST_WHEEL.id());
+        version++;
+    }
+
+    private static Map<String, VehicleData> indexByString(Map<Identifier, VehicleData> map) {
+        Map<String, VehicleData> byString = new HashMap<>(map.size() * 2);
+        for (Map.Entry<Identifier, VehicleData> entry : map.entrySet()) {
+            byString.put(entry.getKey().toString(), entry.getValue());
+        }
+        return Map.copyOf(byString);
     }
 
     public static VehicleData testVehicle() {
@@ -76,7 +109,7 @@ public final class VehicleDataManager {
                 JustEnoughGuns.LOGGER.error("Failed to apply synced vehicle data {}: {}", entry.getKey(), exception.getMessage());
             }
         }
-        data = Map.copyOf(loaded);
+        publish(loaded);
     }
 
     private static Map<Identifier, VehicleData> defaultsOnly() {
@@ -126,7 +159,7 @@ public final class VehicleDataManager {
                     JustEnoughGuns.LOGGER.error("Failed to load vehicle data {}: {}", entry.getKey(), exception.getMessage());
                 }
             }
-            data = Map.copyOf(loaded);
+            publish(loaded);
             syncedJson = Map.copyOf(raw);
             JustEnoughGuns.LOGGER.info("Loaded {} JEG vehicle data entries", data.size());
         }

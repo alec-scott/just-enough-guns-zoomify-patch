@@ -204,10 +204,13 @@ public abstract class AutoDefenceEntity extends VehicleEntity {
         }
         if (--this.searchCooldown <= 0) {
             this.searchCooldown = SEARCH_INTERVAL;
-            Entity best = this.findTarget();
-            // Something more urgent takes over from what it has.
-            if (best != null && (this.target == null || this.targetPriority(best) < this.targetPriority(this.target))) {
-                this.target = best;
+            int currentPriority = this.target == null ? Integer.MAX_VALUE : this.targetPriority(this.target);
+            // Nothing can outrank priority 0, so skip the full area scan while already locked onto a top-priority target.
+            if (currentPriority > 0) {
+                Entity best = this.findTarget(currentPriority);
+                if (best != null) {
+                    this.target = best;
+                }
             }
         }
         this.entityData.set(DATA_TRACKED, this.target == null ? -1 : this.target.getId());
@@ -259,13 +262,28 @@ public abstract class AutoDefenceEntity extends VehicleEntity {
     }
 
     @Nullable
-    private Entity findTarget() {
+    private Entity findTarget(int betterThanPriority) {
         double range = this.searchRange();
-        return this.level().getEntities(this, this.getBoundingBox().inflate(range), entity -> this.targetPriority(entity) >= 0
-                        && entity.distanceToSqr(this) <= range * range && this.canSee(entity))
-                .stream()
-                .min(Comparator.<Entity>comparingInt(this::targetPriority).thenComparingDouble(entity -> entity.distanceToSqr(this)))
-                .orElse(null);
+        double rangeSq = range * range;
+        var candidates = this.level().getEntities(this, this.getBoundingBox().inflate(range), entity -> {
+            int priority = this.targetPriority(entity);
+            return priority >= 0 && priority < betterThanPriority && entity.distanceToSqr(this) <= rangeSq;
+        });
+        if (candidates.isEmpty()) {
+            return null;
+        }
+        // Check highest-priority and closest candidates first so we only raycast line-of-sight until a visible target is found.
+        if (candidates.size() > 1) {
+            candidates.sort(Comparator.<Entity>comparingInt(this::targetPriority)
+                    .thenComparingDouble(entity -> entity.distanceToSqr(this)));
+        }
+        for (int i = 0, n = candidates.size(); i < n; i++) {
+            Entity candidate = candidates.get(i);
+            if (this.canSee(candidate)) {
+                return candidate;
+            }
+        }
+        return null;
     }
 
     protected boolean canSee(Entity entity) {

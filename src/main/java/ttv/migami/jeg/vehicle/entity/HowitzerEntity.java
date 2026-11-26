@@ -229,6 +229,11 @@ public final class HowitzerEntity extends ShellGunEntity implements FireMissions
     }
 
     @Override
+    protected int boundsStateKey() {
+        return this.deployProgress() >= HowitzerRig.TRAILS_END ? 1 : 0;
+    }
+
+    @Override
     protected List<OBBInfo.Box> obbBoxes() {
         OBBInfo deployed = this.vehicleData().deployedObb();
         if (deployed != null && this.deployProgress() >= HowitzerRig.TRAILS_END) {

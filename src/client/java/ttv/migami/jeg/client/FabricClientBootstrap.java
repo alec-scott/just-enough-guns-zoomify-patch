@@ -243,6 +243,8 @@ public final class FabricClientBootstrap {
 
         KeyBindings.init();
         ParticleFactoryRegistry.init();
+        net.fabricmc.fabric.api.resource.ResourceManagerHelper.get(net.minecraft.server.packs.PackType.CLIENT_RESOURCES)
+                .registerReloadListener(ttv.migami.jeg.vehicle.client.resource.DefaultVehicleResource.reloadListener());
         UseItemCallback.EVENT.register((player, world, hand) -> {
             ItemStack held = player.getItemInHand(hand);
             if (held.getItem() instanceof GunItem) {

@@ -699,9 +699,60 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
 
     /** Box covering every part, for entity-collision searches and render culling. */
     public AABB partBounds() {
+        double x = this.getX();
+        double y = this.getY();
+        double z = this.getZ();
+        float yaw = this.getYRot();
+        float tYaw = this.turretYaw();
+        float tPitch = this.turretPitch();
+        AABB bb = this.getBoundingBox();
+        VehicleData data = this.vehicleData();
+        int stateKey = this.boundsStateKey();
+        if (this.cachedPartBounds != null
+                && this.cachedPartBoundsBb == bb
+                && this.cachedPartBoundsData == data
+                && this.cachedPartBoundsStateKey == stateKey
+                && this.cachedPartBoundsX == x
+                && this.cachedPartBoundsY == y
+                && this.cachedPartBoundsZ == z
+                && this.cachedPartBoundsYaw == yaw
+                && this.cachedPartBoundsTurretYaw == tYaw
+                && this.cachedPartBoundsTurretPitch == tPitch) {
+            return this.cachedPartBounds;
+        }
         AABB envelope = this.obbEnvelopeBox(this.position());
-        return envelope == null ? this.getBoundingBox() : this.getBoundingBox().minmax(envelope);
+        AABB result = envelope == null ? bb : bb.minmax(envelope);
+        this.cachedPartBounds = result;
+        this.cachedPartBoundsBb = bb;
+        this.cachedPartBoundsData = data;
+        this.cachedPartBoundsStateKey = stateKey;
+        this.cachedPartBoundsX = x;
+        this.cachedPartBoundsY = y;
+        this.cachedPartBoundsZ = z;
+        this.cachedPartBoundsYaw = yaw;
+        this.cachedPartBoundsTurretYaw = tYaw;
+        this.cachedPartBoundsTurretPitch = tPitch;
+        return result;
     }
+
+    /** Extra state key for caching {@link #partBounds()}; override when {@link #envelopeBoxes()} varies with state. */
+    protected int boundsStateKey() {
+        return 0;
+    }
+
+    @Nullable
+    private AABB cachedPartBounds;
+    @Nullable
+    private AABB cachedPartBoundsBb;
+    @Nullable
+    private VehicleData cachedPartBoundsData;
+    private int cachedPartBoundsStateKey;
+    private double cachedPartBoundsX;
+    private double cachedPartBoundsY;
+    private double cachedPartBoundsZ;
+    private float cachedPartBoundsYaw;
+    private float cachedPartBoundsTurretYaw;
+    private float cachedPartBoundsTurretPitch;
 
     private boolean usesHullBlockCollisionBox() {
         // A jet's wings span eighteen blocks: its block box is the fuselage, and JetFlight checks the wingtips itself.
@@ -907,8 +958,23 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
         this.entityData.set(DATA_PAINT, color == null ? -1 : color.getId());
     }
 
+    @Nullable
+    private String cachedVehicleId;
+    private int cachedVehicleDataVersion = -1;
+    @Nullable
+    private VehicleData cachedVehicleData;
+
     public VehicleData vehicleData() {
-        return VehicleDataManager.get(Identifier.parse(this.entityData.get(DATA_VEHICLE_ID)));
+        String id = this.entityData.get(DATA_VEHICLE_ID);
+        int version = VehicleDataManager.version();
+        if (this.cachedVehicleData != null && version == this.cachedVehicleDataVersion && id.equals(this.cachedVehicleId)) {
+            return this.cachedVehicleData;
+        }
+        VehicleData resolved = VehicleDataManager.getByString(id);
+        this.cachedVehicleId = id;
+        this.cachedVehicleDataVersion = version;
+        this.cachedVehicleData = resolved;
+        return resolved;
     }
 
     public Identifier vehicleDataId() {
@@ -8962,7 +9028,14 @@ public class VehicleEntity extends Entity implements MenuProvider, ExtendedMenuP
      * box round it as posed. Used for the block and entity envelopes, which only take hull-aligned boxes.
      */
     protected java.util.List<OBBInfo.Box> posedHullBoxes(java.util.List<OBBInfo.Box> boxes, boolean includeBarrel) {
-        if (boxes.stream().allMatch(OBBInfo.Box::followsHull)) {
+        boolean allHull = true;
+        for (int i = 0, n = boxes.size(); i < n; i++) {
+            if (!boxes.get(i).followsHull()) {
+                allHull = false;
+                break;
+            }
+        }
+        if (allHull) {
             return boxes;
         }
         java.util.ArrayList<OBBInfo.Box> posed = new java.util.ArrayList<>(boxes.size());

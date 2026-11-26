@@ -1,12 +1,18 @@
 package ttv.migami.jeg.vehicle.client.resource;
 
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import net.fabricmc.fabric.api.resource.SimpleSynchronousResourceReloadListener;
 import net.minecraft.client.Minecraft;
 import net.minecraft.resources.Identifier;
+import net.minecraft.server.packs.resources.ResourceManager;
 import ttv.migami.jeg.Reference;
 import ttv.migami.jeg.vehicle.data.subdata.VehicleType;
 import ttv.migami.jeg.vehicle.entity.base.VehicleEntity;
 
 public final class DefaultVehicleResource {
+    private static volatile ResourceManager cachedResourceManager;
+    private static final Map<Identifier, Boolean> EXISTS_CACHE = new ConcurrentHashMap<>();
     private static final String MODEL_ROOT = "entity/vehicle/";
     private static final String MODEL_LOD_ROOT = MODEL_ROOT + "lod/";
     private static final String TEXTURE_ROOT = "textures/entity/vehicle/";
@@ -130,8 +136,28 @@ public final class DefaultVehicleResource {
         return distance <= LOD_2_DISTANCE ? 1 : 2;
     }
 
+    public static SimpleSynchronousResourceReloadListener reloadListener() {
+        return new SimpleSynchronousResourceReloadListener() {
+            @Override
+            public Identifier getFabricId() {
+                return Reference.id("vehicle_resource_cache");
+            }
+
+            @Override
+            public void onResourceManagerReload(ResourceManager resourceManager) {
+                EXISTS_CACHE.clear();
+                cachedResourceManager = resourceManager;
+            }
+        };
+    }
+
     private static boolean exists(Identifier id) {
-        return Minecraft.getInstance().getResourceManager().getResource(id).isPresent();
+        ResourceManager manager = Minecraft.getInstance().getResourceManager();
+        if (manager != cachedResourceManager) {
+            EXISTS_CACHE.clear();
+            cachedResourceManager = manager;
+        }
+        return EXISTS_CACHE.computeIfAbsent(id, key -> manager.getResource(key).isPresent());
     }
 
     private static boolean modelExists(Identifier id) {
