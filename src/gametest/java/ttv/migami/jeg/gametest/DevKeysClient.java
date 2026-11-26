@@ -70,8 +70,55 @@ public final class DevKeysClient implements ClientModInitializer {
                 LiteralArgumentBuilder.<FabricClientCommandSource>literal("jegsounds")
                         .then(RequiredArgumentBuilder.<FabricClientCommandSource, Integer>argument("ticks", IntegerArgumentType.integer(1, 2400))
                                 .executes(DevKeysClient::sounds))));
+        ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) -> dispatcher.register(
+                LiteralArgumentBuilder.<FabricClientCommandSource>literal("jegfps")
+                        .then(RequiredArgumentBuilder.<FabricClientCommandSource, Integer>argument("seconds", IntegerArgumentType.integer(1, 120))
+                                .executes(DevKeysClient::fps))));
         ClientTickEvents.START_CLIENT_TICK.register(DevKeysClient::moveCursor);
         ClientTickEvents.END_CLIENT_TICK.register(DevKeysClient::tick);
+        ClientTickEvents.END_CLIENT_TICK.register(DevKeysClient::sampleFps);
+    }
+
+    // /jegfps <seconds>: the game's frame rate over that long, for comparing settings (shader options) by play-test,
+    // since mcpfabric reports none and the F3 overlay can't be opened through a key binding. Averages the game's own
+    // per-second counter and takes the last frame's time each tick for the slow frames.
+    private static int fpsTicksLeft;
+    private static final java.util.List<Integer> FPS_SAMPLES = new java.util.ArrayList<>();
+    private static final java.util.List<Long> FRAME_NS_SAMPLES = new java.util.ArrayList<>();
+    private static int lastFpsSecond = -1;
+
+    private static int fps(CommandContext<FabricClientCommandSource> context) {
+        fpsTicksLeft = IntegerArgumentType.getInteger(context, "seconds") * 20;
+        FPS_SAMPLES.clear();
+        FRAME_NS_SAMPLES.clear();
+        lastFpsSecond = -1;
+        context.getSource().sendFeedback(Component.literal("[jegfps] sampling " + fpsTicksLeft / 20 + " s"));
+        return 1;
+    }
+
+    private static void sampleFps(Minecraft client) {
+        if (fpsTicksLeft <= 0) {
+            return;
+        }
+        fpsTicksLeft--;
+        FRAME_NS_SAMPLES.add(client.getFrameTimeNs());
+        int second = fpsTicksLeft / 20;
+        if (second != lastFpsSecond) {
+            lastFpsSecond = second;
+            FPS_SAMPLES.add(client.getFps());
+        }
+        if (fpsTicksLeft == 0 && client.player != null) {
+            double avg = FPS_SAMPLES.stream().mapToInt(Integer::intValue).average().orElse(0);
+            int min = FPS_SAMPLES.stream().mapToInt(Integer::intValue).min().orElse(0);
+            java.util.List<Long> sorted = new java.util.ArrayList<>(FRAME_NS_SAMPLES);
+            sorted.sort(null);
+            double p99ms = sorted.isEmpty() ? 0 : sorted.get(Math.min(sorted.size() - 1, (int) (sorted.size() * 0.99))) / 1.0e6;
+            double medianMs = sorted.isEmpty() ? 0 : sorted.get(sorted.size() / 2) / 1.0e6;
+            String line = String.format(java.util.Locale.ROOT, "[jegfps] avg %.1f fps, min %d fps, frame median %.2f ms, p99 %.2f ms (%d s)",
+                    avg, min, medianMs, p99ms, FPS_SAMPLES.size());
+            client.gui.getChat().addClientSystemMessage(Component.literal(line));
+            org.slf4j.LoggerFactory.getLogger("jegfps").info(line);
+        }
     }
 
     private static int press(CommandContext<FabricClientCommandSource> context, int ticks) {
